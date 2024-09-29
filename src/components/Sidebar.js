@@ -13,7 +13,7 @@ const Sidebar = () => {
     {
       name: 'DASHBOARD',
       subItems: [
-        { name: 'Analytics', path: '/dashboard/analytics' },
+        { name: 'Analytics', path: '/dashboard/treasury' },
         { name: 'Redemptions', path: '/dashboard/redemptions' },
       ],
     },
