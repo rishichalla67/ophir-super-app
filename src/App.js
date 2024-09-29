@@ -1,24 +1,29 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import Home from './pages/Home';
+import Redeem from './pages/Redeem'; // Add this import
+import { WalletProvider } from './context/WalletContext';
+import { SidebarProvider } from './context/SidebarContext';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <SidebarProvider>
+      <WalletProvider>
+        <Router>
+          <div className="App">
+            <Navbar />
+            <Sidebar />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/redeem" element={<Redeem />} /> {/* Add this line */}
+              {/* Add more routes for other pages */}
+            </Routes>
+          </div>
+        </Router>
+      </WalletProvider>
+    </SidebarProvider>
   );
 }
 
