@@ -25,7 +25,9 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen global-bg flex flex-col items-center justify-center text-white">
+    <div className={`min-h-screen global-bg flex flex-col items-center justify-center text-white transition-all duration-300 ease-in-out ${
+      isSidebarOpen ? 'md:pl-64' : ''
+    }`}>
       <main className="flex flex-col items-center justify-center flex-1 px-4 sm:px-6 lg:px-8">
         <img
           src="https://raw.githubusercontent.com/cosmos/chain-registry/master/migaloo/images/ophir.png"
