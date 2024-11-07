@@ -8,6 +8,9 @@ import { WalletProvider } from './context/WalletContext';
 import { SidebarProvider } from './context/SidebarContext';
 import RedeemAnalytics from './pages/RedeemAnalytics';
 import AnalyticsDashboard from './pages/TreasuryAnalytics';
+import Bonds from './pages/Bonds';
+import CreateBonds from './pages/CreateBonds'; // Add this import
+import BuyBonds from './pages/BuyBonds'; // Add this import
 
 function App() {
   return (
@@ -19,9 +22,12 @@ function App() {
             <Sidebar />
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/redeem" element={<Redeem />} /> {/* Add this line */}
-              <Route path="/dashboard/redemptions" element={<RedeemAnalytics />} /> {/* Add this line */}
-              <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} /> {/* Add this line */}
+              <Route path="/redeem" element={<Redeem />} />
+              <Route path="/dashboard/redemptions" element={<RedeemAnalytics />} />
+              <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} />
+              <Route path="/bonds" element={<Bonds />} />
+              <Route path="/bonds/create" element={<CreateBonds />} />
+              <Route path="/bonds/buy/:bondId" element={<BuyBonds />} />
               {/* Add more routes for other pages */}
             </Routes>
           </div>

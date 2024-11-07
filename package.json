@@ -9,6 +9,7 @@
     "@cosmwasm/ts-codegen": "^0.35.7",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
+    "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.1.5",
     "@keplr-wallet/stores": "^0.12.72",
     "@keplr-wallet/types": "^0.12.72",

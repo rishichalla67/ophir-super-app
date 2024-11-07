@@ -18,7 +18,7 @@ const Sidebar = () => {
       ],
     },
     { name: 'REDEEM', path: '/redeem' },
-    { name: 'BOND MARKET', path: '/bond-market' },
+    { name: 'BONDS', path: '/bonds' },
     { name: 'OTC MARKET', path: '/otc-market' },
     { name: 'LENDING', path: '/lending' },
   ];
