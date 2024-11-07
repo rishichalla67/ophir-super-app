@@ -29,7 +29,7 @@ const Home = () => {
       className={`min-h-screen global-bg text-white p-8 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`} 
       style={{ paddingTop: "12dvh" }}
     >
-      <h1 className="text-4xl font-bold mb-4">Ophir <span className="text-ophir-gold">BANK</span></h1>
+      <h1 className="text-4xl font-bold mb-4">Bank of <span className="text-ophir-gold">OPHIR</span></h1>
       <p className="text-xl mb-8">Your gateway to financial freedom</p>
 
       <h2 className="text-2xl font-bold mb-4">Featured</h2>
