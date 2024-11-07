@@ -14,12 +14,14 @@ import ConfirmationModal from "../components/ConfirmationModal";
 import { ArrowLeftIcon } from "@heroicons/react/24/solid";
 import "../App.css";
 import { useWallet } from '../context/WalletContext'; 
+import { useSidebar } from '../context/SidebarContext';
 
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 
 const ADDITIONAL_MINUTES_BUFFER = 5; // Easily adjustable buffer time in minutes
 
 const CreateBonds = () => {
+  const { isSidebarOpen } = useSidebar();
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const [isTestnet, setIsTestnet] = useState(true);
   const [rpc, setRPC] = useState(migalooTestnetRPC);
@@ -462,8 +464,10 @@ const CreateBonds = () => {
   };
 
   return (
-    <div className="global-bg text-white min-h-screen w-full pt-20 p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className={`global-bg text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
+      isSidebarOpen ? 'md:pl-64' : ''
+    }`}>
+      <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
         <button
           onClick={handleGoBack}
           className="ml-4 mb-4 flex items-center text-gray-300 hover:text-white transition duration-300"
