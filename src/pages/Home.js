@@ -40,19 +40,14 @@ const Home = () => {
           of gold. We have no respect for the currency of men.
         </p>
         <a
-          href="/swap"
+          href="https://app.whitewhale.money/migaloo/swap?from=WHALE&to=OPHIR"
+          target="_blank"
           rel="noopener noreferrer"
           className="landing-button font-medium py-2 px-4 hover:bg-yellow-500"
         >
           Buy $OPHIR
         </a>
-        <a
-          href="/seekers"
-          rel="noopener noreferrer"
-          className="landing-button mt-3 font-medium py-2 px-4 hover:bg-yellow-500"
-        >
-          $OPHIR Seeker's Round
-        </a>
+        
         <div
           onClick={() => (window.location.href = "/analytics")}
           style={{
