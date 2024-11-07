@@ -19,8 +19,8 @@ const Sidebar = () => {
     },
     { name: 'REDEEM', path: '/redeem' },
     { name: 'BONDS', path: '/bonds' },
-    { name: 'OTC MARKET', path: '/otc-market' },
-    { name: 'LENDING', path: '/lending' },
+    // { name: 'OTC MARKET', path: '/otc-market' },
+    // { name: 'LENDING', path: '/lending' },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
