@@ -25,46 +25,53 @@ const Home = () => {
   };
 
   return (
-    <div 
-      className={`min-h-screen global-bg text-white p-8 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`} 
-      style={{ paddingTop: "12dvh" }}
-    >
-      <h1 className="text-4xl font-bold mb-4">Bank of <span className="text-ophir-gold">OPHIR</span></h1>
-      <p className="text-xl mb-8">Your gateway to financial freedom</p>
-
-      <h2 className="text-2xl font-bold mb-4">Featured</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        {featuredItems.map((item) => (
-          <div 
-            key={item.title} 
-            className="bg-gray-800 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => handleCardClick(item.link)}
+    <div className="min-h-screen global-bg flex flex-col items-center justify-center text-white">
+      <main className="flex flex-col items-center justify-center flex-1 px-4 sm:px-6 lg:px-8">
+        <img
+          src="https://raw.githubusercontent.com/cosmos/chain-registry/master/migaloo/images/ophir.png"
+          alt="Ophir DAO"
+          className="w-32 h-32 mb-4"
+        />
+        <h1 className="text-4xl font-bold mb-4">Ophir DAO</h1>
+        <p className="mx-auto w-4/5 text-center text-gray-400 mb-4 text-base sm:text-lg lg:text-xl">
+          Cosmos Treasury DAO established on Migaloo. We are seeking a lost city
+          of gold. We have no respect for the currency of men.
+        </p>
+        <a
+          href="/swap"
+          rel="noopener noreferrer"
+          className="landing-button font-medium py-2 px-4 hover:bg-yellow-500"
+        >
+          Buy $OPHIR
+        </a>
+        <a
+          href="/seekers"
+          rel="noopener noreferrer"
+          className="landing-button mt-3 font-medium py-2 px-4 hover:bg-yellow-500"
+        >
+          $OPHIR Seeker's Round
+        </a>
+        <div
+          onClick={() => (window.location.href = "/analytics")}
+          style={{
+            cursor: "pointer",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            width: "60%",
+          }}
+        >
+          {/* <p
+            className="text-yellow-400 text-lg pt-4 font-roboto"
+            style={{ textAlign: "center", margin: 0 }}
           >
-            <img src={item.image} alt={item.title} className="w-full h-48 object-cover" />
-            <div className="p-4">
-              <h3 className="text-xl font-bold">{item.title}</h3>
-              <span className="inline-block bg-ophir-gold text-black px-2 py-1 rounded-full text-sm mt-2">
-                {item.tag}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <h2 className="text-2xl font-bold mb-4">Ophir services</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {services.map((service) => (
-          <div key={service.title} className="bg-gray-800 rounded-lg overflow-hidden">
-            <img src={service.image} alt={service.title} className="w-full h-48 object-cover" />
-            <div className="p-4">
-              <h3 className="text-xl font-bold">{service.title}</h3>
-              <span className="inline-block bg-ophir-gold text-black px-2 py-1 rounded-full text-sm mt-2">
-                {service.tag}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+            Total Treasury Value:{" "}
+            {totalTreasuryValue
+              ? `$${totalTreasuryValue}`
+              : `$${placeholderValue}`}
+          </p> */}
+        </div>
+      </main>
     </div>
   );
 };
