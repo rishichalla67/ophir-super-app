@@ -483,7 +483,7 @@ const CreateBonds = () => {
   };
 
   return (
-    <div className={`global-bg text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
+    <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
     }`}>
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">

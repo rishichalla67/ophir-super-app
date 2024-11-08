@@ -334,7 +334,7 @@ const AnalyticsDashboard = () => {
     if (!ophirStats && showProgressBar) {
         return (
           <>
-            <div className="global-bg flex flex-col justify-center items-center h-screen">
+            <div className="global-bg-new flex flex-col justify-center items-center h-screen">
                 <div className="text-white mb-4">Fetching On-Chain Data...</div>
                 <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
             </div>
@@ -414,7 +414,7 @@ const AnalyticsDashboard = () => {
   return (
     <>
         {ophirStats && ophirTreasury && priceData &&
-            <div className={`pt-12 page-wrapper global-bg text-white min-h-screen transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
+            <div className={`pt-12 page-wrapper global-bg-new text-white min-h-screen transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
                 <Snackbar open={alertInfo.open} autoHideDuration={6000} onClose={() => setAlertInfo({ ...alertInfo, open: false })}
                     anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
                     {alertInfo.htmlContent ? (
