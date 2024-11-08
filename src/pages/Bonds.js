@@ -35,7 +35,8 @@ const Bonds = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  
+  const [userBonds, setUserBonds] = useState([]);
+
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
@@ -116,6 +117,64 @@ const Bonds = () => {
     }
   };
 
+  const fetchUserBonds = async () => {
+    if (!connectedWalletAddress) return;
+
+    try {
+      console.log('🔍 Fetching bonds for address:', connectedWalletAddress);
+      
+      const message = { 
+        bond_purchases: { 
+          buyer: connectedWalletAddress 
+        } 
+      };
+      
+      console.log('📤 Query message:', message);
+      console.log('📍 Contract address:', contractAddress);
+      console.log('🔗 RPC endpoint:', rpc);
+      
+      const data = await queryContract(message);
+      console.log('📦 Query response:', data);
+      
+      if (data && Array.isArray(data.bond_purchases)) {
+        const transformedBonds = data.bond_purchases.map(purchase => ({
+          ...purchase,
+          purchase_time: convertContractTimeToDate(purchase.purchase_time),
+          amount: purchase.amount,
+          claimed_amount: purchase.claimed_amount,
+          bond_id: purchase.bond_id,
+          nft_token_id: purchase.nft_token_id
+        }));
+        console.log('✨ Transformed bonds:', transformedBonds);
+        setUserBonds(transformedBonds);
+      } else {
+        console.warn('⚠️ Unexpected data structure:', data);
+        setUserBonds([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching user bonds:', {
+        error,
+        message: error.message,
+        contractAddress,
+        rpc,
+        walletAddress: connectedWalletAddress
+      });
+      
+      // More specific error message based on the error type
+      let errorMessage = "Failed to fetch your bonds";
+      if (error.message.includes("not found")) {
+        errorMessage = "Contract not found. Please check the network settings.";
+      } else if (error.message.includes("denomination")) {
+        errorMessage = "Invalid denomination in the contract response.";
+      } else if (error.message.includes("parsing")) {
+        errorMessage = "Error parsing contract response.";
+      }
+      
+      showAlert(errorMessage, "error");
+      setUserBonds([]);
+    }
+  };
+
   useEffect(() => {
     const rpcEndpoint = isTestnet ? migalooTestnetRPC : migalooRPC;
     setRPC(rpcEndpoint);
@@ -123,7 +182,10 @@ const Bonds = () => {
 
   useEffect(() => {
     fetchData();
-  }, [rpc]);
+    if (connectedWalletAddress) {
+      fetchUserBonds();
+    }
+  }, [rpc, connectedWalletAddress]);
 
   const getTokenSymbol = (denom) => {
     if (!denom) return '';
@@ -468,6 +530,90 @@ const Bonds = () => {
     );
   };
 
+  const handleClaim = async (bondId) => {
+    try {
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const msg = {
+        claim: {
+          bond_id: bondId
+        }
+      };
+
+      const response = await client.execute(
+        connectedWalletAddress,
+        contractAddress,
+        msg,
+        "auto"
+      );
+
+      if (response.code === 0) {
+        showAlert("Successfully claimed bond rewards!", "success");
+        fetchUserBonds(); // Refresh user bonds
+      }
+    } catch (error) {
+      console.error("Error claiming bond:", error);
+      showAlert(`Failed to claim: ${error.message}`, "error");
+    }
+  };
+
+  const UserBondsSection = () => {
+    if (!connectedWalletAddress || userBonds.length === 0) return null;
+
+    return (
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {userBonds.map((purchase, index) => {
+            const canClaim = purchase.claimed_amount === "0";
+            const purchaseDate = new Date(parseInt(purchase.purchase_time) / 1_000_000);
+
+            return (
+              <div key={index} className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+                <div className="flex flex-col mb-4">
+                  <h3 className="font-semibold">Bond #{purchase.bond_id}</h3>
+                  <div className="text-sm text-gray-400">
+                    <div>Amount: {formatAmount(purchase.amount)}</div>
+                    <div>Purchased: {formatDate(purchaseDate)}</div>
+                    {purchase.nft_token_id !== "0" && (
+                      <div>NFT Token ID: {purchase.nft_token_id}</div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex justify-between items-center mt-4">
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {canClaim ? 'Unclaimed' : 'Claimed'}
+                  </span>
+                  
+                  <button
+                    onClick={() => handleClaim(purchase.bond_id)}
+                    disabled={!canClaim}
+                    className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
+                      canClaim 
+                        ? 'landing-button hover:bg-yellow-500' 
+                        : 'bg-gray-600 cursor-not-allowed'
+                    }`}
+                  >
+                    {canClaim ? 'Claim' : 'Claimed'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -518,6 +664,8 @@ const Bonds = () => {
             </Link>
           </div>
         </div>
+
+        <UserBondsSection />
 
         {isLoading ? (
           <div className="flex flex-col justify-center items-center h-[calc(100vh-200px)]">

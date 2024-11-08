@@ -254,29 +254,45 @@ const CreateBonds = () => {
       // Calculate the fee in uwhale (25 WHALE)
       const whaleFee = "25000000"; // 25 WHALE in uwhale
 
-      // Calculate the total supply in the smallest unit of the token
-      const tokenDecimals = tokenMappings[token_denom]?.decimals || 6; // Default to 6 if not found
-      const adjustedTotalSupply =
-        BigInt(total_supply) * BigInt(10 ** tokenDecimals);
+      // Validate token_denom and total_supply before creating funds array
+      if (!token_denom || !total_supply) {
+        throw new Error("Token denom and total supply are required");
+      }
 
-      // Prepare the funds array
-      const funds = [
-        { denom: token_denom, amount: adjustedTotalSupply.toString() },
-        // { denom: "uwhale", amount: whaleFee },
-      ];
+      // Ensure tokenDecimals is valid
+      const tokenDecimals = tokenMappings[token_denom]?.decimals;
+      if (typeof tokenDecimals !== 'number') {
+        throw new Error("Invalid token decimals configuration");
+      }
+
+      // Calculate the total supply in the smallest unit of the token
+      const adjustedTotalSupply = BigInt(
+        Math.round(parseFloat(total_supply) * Math.pow(10, tokenDecimals))
+      ).toString();
+
+      // Prepare the funds array with validation
+      const funds = [{
+        denom: token_denom,
+        amount: adjustedTotalSupply
+      }];
 
       const fee = {
         amount: [{ denom: "uwhale", amount: "50000" }],
         gas: "500000",
       };
 
+      // Validate funds array before executing
+      if (!funds || !funds.length || !funds[0].amount) {
+        throw new Error("Invalid funds configuration");
+      }
+
       const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
         message,
         fee,
-        `Create Bond: ${fullBondDenomName}`, // memo
-        funds // Add the funds array here
+        `Create Bond: ${fullBondDenomName}`,
+        funds
       );
 
       console.log(result);
@@ -347,7 +363,10 @@ const CreateBonds = () => {
       navigate("/bonds");
     } catch (error) {
       console.error("Error creating bond:", error);
-      showAlert(`Error creating bond. ${error.message}`, "error");
+      showAlert(
+        `Error creating bond: ${error.message || "Unknown error occurred"}`, 
+        "error"
+      );
     } finally {
       setIsLoading(false);
     }

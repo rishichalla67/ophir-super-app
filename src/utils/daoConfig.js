@@ -31,9 +31,7 @@ export const daoConfig = {
     BONDS_NFT_CONTRACT_ADDRESS: "",
 
     BONDS_CONTRACT_ADDRESS_TESTNET:
-      "migaloo1lfaj8anjjuuuv7l5k3ugwhg3gmsxnq9vgn00eruc7uakd7clquqqqncpzp",
+      "migaloo15s44hwneggndkzl34qedzt3qz8r8nqp5lkdndt34h5vdwj8zt3tqj9320m",
     BONDS_NFT_CONTRACT_ADDRESS_TESTNET:
-      "migaloo14ke63efdjcjh2w6f4q7h4au5ccuktfw0t7ajtx8n6zu0wpr00a8skdv03n",
-
-
+      "migaloo1c8m0y0ds0ajhcmmpks3yqxugjaua74nftg3nvhxwju6w8mghrelq9ccj7g",
 };

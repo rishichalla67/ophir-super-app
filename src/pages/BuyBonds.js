@@ -14,6 +14,7 @@ import 'react-circular-progressbar/dist/styles.css';
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Dialog } from '@headlessui/react'
+import { BigInt } from 'big-integer';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -42,6 +43,7 @@ const BuyBonds = () => {
   const [walletBalances, setWalletBalances] = useState({});
   const [userBondPurchase, setUserBondPurchase] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isClaimLoading, setIsClaimLoading] = useState(false);
 
   const migalooRPC = "https://migaloo-rpc.polkachu.com/";
   const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -94,7 +96,9 @@ const BuyBonds = () => {
       return queryResponse;
     } catch (error) {
       console.error("Error querying contract:", error);
-      showAlert(`Error querying contract: ${error.message}`, "error");
+      if (!error.message.includes('No bond purchase found') && !error.message.includes('Invalid type')) {
+        showAlert(`Error querying contract: ${error.message}`, "error");
+      }
       throw error;
     }
   };
@@ -223,7 +227,7 @@ const BuyBonds = () => {
         setUserBondPurchase(bondPurchase);
         console.log('Updated userBondPurchase state:', bondPurchase);
     } catch (error) {
-      console.error("Error fetching user bond purchase:", error);
+    //   console.error("Error fetching user bond purchase:", error);
     }
   };
 
@@ -362,6 +366,21 @@ const BuyBonds = () => {
     }
   };
 
+  const calculateUnclaimedAmount = (total, claimed) => {
+    if (!total || !claimed) return '0';
+    try {
+      // Check if BigInt is available and the values are valid
+      if (typeof BigInt !== 'undefined') {
+        return (BigInt(total) - BigInt(claimed)).toString();
+      }
+      // Fallback to regular number calculation
+      return (parseInt(total) - parseInt(claimed)).toString();
+    } catch (error) {
+      // If any error occurs, fallback to regular number calculation
+      return (parseInt(total) - parseInt(claimed)).toString();
+    }
+  };
+
   const CountdownRenderer = ({ days, hours, minutes, seconds, completed }) => {
     if (completed) {
       return <span>Bond is now active!</span>;
@@ -442,6 +461,70 @@ const BuyBonds = () => {
         showAlert(`Error checking balances: ${error.message}`, "error");
       }
     }
+  };
+
+  const handleClaimRewards = async () => {
+    setIsClaimLoading(true);
+    try {
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const claimMsg = {
+        claim_rewards: {
+          bond_id: parseInt(bondId)
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
+        connectedWalletAddress,
+        contractAddress,
+        claimMsg,
+        fee,
+        "Claim Bond Rewards"
+      );
+
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        showAlert(
+          `Rewards claimed successfully!`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh data
+        await Promise.all([
+          fetchUserBondPurchase(connectedWalletAddress),
+          checkBalances()
+        ]);
+      }
+    } catch (error) {
+      console.error("Error claiming rewards:", error);
+      showAlert(`Error claiming rewards: ${error.message}`, "error");
+    } finally {
+      setIsClaimLoading(false);
+    }
+  };
+
+  const isClaimable = (bond, userBondPurchase) => {
+    if (!bond || !userBondPurchase || !userBondPurchase.amount || !userBondPurchase.claimed_amount) {
+      return false;
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    const claimStartTime = Math.floor(parseInt(bond.claim_start_time) / 1_000_000_000);
+    const claimEndTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    
+    const hasUnclaimedAmount = parseInt(userBondPurchase.amount) > parseInt(userBondPurchase.claimed_amount);
+    
+    return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
   };
 
   if (!bond) {
@@ -727,6 +810,59 @@ const BuyBonds = () => {
                 )}
               </button>
             </div>
+          </div>
+        )}
+
+        {userBondPurchase && isClaimable(bond, userBondPurchase) && (
+          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 mt-6 shadow-xl border border-gray-700">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Claim Rewards</h2>
+              <div className="text-sm text-gray-400">
+                Maturity Date: {formatDate(bond.claim_end_time)}
+              </div>
+            </div>
+
+            <div className="bg-gray-900/30 rounded-lg p-4 space-y-3 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Total Amount:</span>
+                <span className="text-white font-medium">
+                  {formatAmount(userBondPurchase.amount)} {bondSymbol}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Claimed Amount:</span>
+                <span className="text-white font-medium">
+                  {formatAmount(userBondPurchase.claimed_amount)} {bondSymbol}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Available to Claim:</span>
+                <span className="text-yellow-400 font-bold">
+                  {formatAmount(calculateUnclaimedAmount(
+                    userBondPurchase.amount,
+                    userBondPurchase.claimed_amount
+                  ))} {bondSymbol}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClaimRewards}
+              disabled={isClaimLoading}
+              className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
+            >
+              {isClaimLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Claiming...</span>
+                </>
+              ) : (
+                'Claim Rewards'
+              )}
+            </button>
           </div>
         )}
 
