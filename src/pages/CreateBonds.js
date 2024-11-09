@@ -862,7 +862,7 @@ const CreateBonds = () => {
 
         <button
           onClick={handleSubmit}
-          className={`px-6 py-2 rounded-md transition duration-300 ${
+          className={`px-6 py-2 rounded-md transition duration-300 mb-5 ${
             isFormValid()
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-600 cursor-not-allowed text-gray-300'
@@ -873,7 +873,7 @@ const CreateBonds = () => {
         </button>
 
         {!isFormValid() && (
-          <p className="text-red-400 mt-2 text-sm">
+          <p className="text-red-400 mt-2 text-sm mb-3">
             Please fill in all required fields before submitting.
           </p>
         )}
