@@ -36,6 +36,7 @@ const Bonds = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [userBonds, setUserBonds] = useState([]);
+  const [claimingBondId, setClaimingBondId] = useState(null);
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -124,7 +125,7 @@ const Bonds = () => {
       console.log('🔍 Fetching bonds for address:', connectedWalletAddress);
       
       const message = { 
-        bond_purchases: { 
+        get_bonds_by_user: { 
           buyer: connectedWalletAddress 
         } 
       };
@@ -143,7 +144,7 @@ const Bonds = () => {
           amount: purchase.amount,
           claimed_amount: purchase.claimed_amount,
           bond_id: purchase.bond_id,
-          nft_token_id: purchase.nft_token_id
+        //   nft_token_id: purchase.nft_token_id
         }));
         console.log('✨ Transformed bonds:', transformedBonds);
         setUserBonds(transformedBonds);
@@ -160,7 +161,6 @@ const Bonds = () => {
         walletAddress: connectedWalletAddress
       });
       
-      // More specific error message based on the error type
       let errorMessage = "Failed to fetch your bonds";
       if (error.message.includes("not found")) {
         errorMessage = "Contract not found. Please check the network settings.";
@@ -243,7 +243,7 @@ const Bonds = () => {
 
   const handleBondClick = (bondId) => {
     if (!bondId) return;
-    navigate(`/bonds/buy/${bondId}`);
+    navigate(`/bonds/${bondId}`);
   };
 
   const sortedBonds = useMemo(() => {
@@ -532,6 +532,8 @@ const Bonds = () => {
 
   const handleClaim = async (bondId) => {
     try {
+      setClaimingBondId(bondId);
+
       if (!connectedWalletAddress) {
         showAlert("Please connect your wallet first", "error");
         return;
@@ -540,27 +542,59 @@ const Bonds = () => {
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
       
-      const msg = {
-        claim: {
-          bond_id: bondId
+      const claimMsg = {
+        claim_rewards: {
+          bond_id: parseInt(bondId)
         }
       };
 
-      const response = await client.execute(
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
-        msg,
-        "auto"
+        claimMsg,
+        fee,
+        "Claim Bond Rewards"
       );
 
-      if (response.code === 0) {
-        showAlert("Successfully claimed bond rewards!", "success");
-        fetchUserBonds(); // Refresh user bonds
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        showAlert(
+          `Rewards claimed successfully!`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh data
+        await fetchUserBonds();
       }
     } catch (error) {
-      console.error("Error claiming bond:", error);
-      showAlert(`Failed to claim: ${error.message}`, "error");
+      console.error("Error claiming rewards:", error);
+      showAlert(`Error claiming rewards: ${error.message}`, "error");
+    } finally {
+      setClaimingBondId(null);
     }
+  };
+
+  const isClaimable = (bond, userBond) => {
+    if (!bond || !userBond || !userBond.amount || !userBond.claimed_amount) {
+      return false;
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    const claimStartTime = Math.floor(parseInt(bond.claim_start_time) / 1_000_000_000);
+    const claimEndTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    
+    const hasUnclaimedAmount = parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
+    
+    return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
   };
 
   const UserBondsSection = () => {
@@ -569,43 +603,123 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        
+        {/* Desktop view */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-800">
+                <th className="text-left py-2">Bond ID</th>
+                <th className="text-center py-2">Amount</th>
+                <th className="text-center py-2">Purchase Date</th>
+                {/* <th className="text-center py-2">NFT Token ID</th> */}
+                <th className="text-center py-2">Status</th>
+                <th className="text-right py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userBonds.map((purchase, index) => {
+                const canClaim = purchase.claimed_amount === "0";
+                const purchaseDate = purchase.purchase_time instanceof Date 
+                  ? purchase.purchase_time 
+                  : new Date(Number(purchase.purchase_time) / 1_000_000);
+
+                return (
+                  <tr key={index} className="border-b border-gray-800">
+                    <td className="py-4">Bond #{purchase.bond_id}</td>
+                    <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
+                    <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
+                    {/* <td className="py-4 text-center">
+                      {purchase.nft_token_id !== "0" ? purchase.nft_token_id : "-"}
+                    </td> */}
+                    <td className="py-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-sm ${
+                        canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {canClaim ? 'Unclaimed' : 'Claimed'}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right">
+                      <button
+                        onClick={() => handleClaim(purchase.bond_id)}
+                        disabled={!isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) || claimingBondId === purchase.bond_id}
+                        className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
+                          isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase)
+                            ? 'landing-button hover:bg-yellow-500' 
+                            : 'bg-gray-600 cursor-not-allowed'
+                        }`}
+                      >
+                        {claimingBondId === purchase.bond_id ? (
+                          <div className="flex items-center justify-center">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Claiming...
+                          </div>
+                        ) : isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) ? 'Claim' : 'Claimed'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile view */}
+        <div className="md:hidden space-y-4">
           {userBonds.map((purchase, index) => {
             const canClaim = purchase.claimed_amount === "0";
-            const purchaseDate = new Date(parseInt(purchase.purchase_time) / 1_000_000);
-
+            const purchaseDate = purchase.purchase_time instanceof Date 
+              ? purchase.purchase_time 
+              : new Date(Number(purchase.purchase_time) / 1_000_000);
+            
             return (
-              <div key={index} className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
-                <div className="flex flex-col mb-4">
-                  <h3 className="font-semibold">Bond #{purchase.bond_id}</h3>
-                  <div className="text-sm text-gray-400">
-                    <div>Amount: {formatAmount(purchase.amount)}</div>
-                    <div>Purchased: {formatDate(purchaseDate)}</div>
-                    {purchase.nft_token_id !== "0" && (
-                      <div>NFT Token ID: {purchase.nft_token_id}</div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-center mt-4">
-                  <span className={`px-3 py-1 rounded-full text-sm ${
+              <div 
+                key={index}
+                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-gray-400">Bond #{purchase.bond_id}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
                     canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                   }`}>
                     {canClaim ? 'Unclaimed' : 'Claimed'}
                   </span>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Amount:</span>
+                    <span>{formatAmount(purchase.amount)}</span>
+                  </div>
                   
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Purchase Date:</span>
+                    <span>{formatDate(purchaseDate)}</span>
+                  </div>
+                  
+                  {/* {purchase.nft_token_id !== "0" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">NFT ID:</span>
+                      <span>{purchase.nft_token_id}</span>
+                    </div>
+                  )} */}
+                </div>
+
+                {isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
                   <button
                     onClick={() => handleClaim(purchase.bond_id)}
-                    disabled={!canClaim}
-                    className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
-                      canClaim 
-                        ? 'landing-button hover:bg-yellow-500' 
-                        : 'bg-gray-600 cursor-not-allowed'
-                    }`}
+                    disabled={claimingBondId === purchase.bond_id}
+                    className="w-full mt-3 landing-button px-4 py-1.5 rounded-md 
+                      hover:bg-yellow-500 transition duration-300 text-sm disabled:opacity-50"
                   >
-                    {canClaim ? 'Claim' : 'Claimed'}
+                    {claimingBondId === purchase.bond_id ? (
+                      <div className="flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Claiming...
+                      </div>
+                    ) : 'Claim'}
                   </button>
-                </div>
+                )}
               </div>
             );
           })}

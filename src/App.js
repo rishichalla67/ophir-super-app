@@ -27,7 +27,7 @@ function App() {
               <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} />
               <Route path="/bonds" element={<Bonds />} />
               <Route path="/bonds/create" element={<CreateBonds />} />
-              <Route path="/bonds/buy/:bondId" element={<BuyBonds />} />
+              <Route path="/bonds/:bondId" element={<BuyBonds />} />
               {/* Add more routes for other pages */}
             </Routes>
           </div>
