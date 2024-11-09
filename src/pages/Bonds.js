@@ -37,6 +37,9 @@ const Bonds = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [userBonds, setUserBonds] = useState([]);
   const [claimingBondId, setClaimingBondId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [denomFilter, setDenomFilter] = useState('all');
+  const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -243,7 +246,7 @@ const Bonds = () => {
 
   const handleBondClick = (bondId) => {
     if (!bondId) return;
-    navigate(`/bonds/${bondId}`);
+    navigate(`/bonds/buy/${bondId}`);
   };
 
   const sortedBonds = useMemo(() => {
@@ -302,12 +305,33 @@ const Bonds = () => {
     debouncedSetSearchTerm(e.target.value);
   };
 
+  const getUniquePurchaseDenoms = useMemo(() => {
+    const denoms = new Set(bonds.map(bond => bond.purchase_denom));
+    return Array.from(denoms);
+  }, [bonds]);
+
   const filteredBonds = useMemo(() => {
-    return sortedBonds.filter((bond) =>
-      (bond.bond_denom_name?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase()) ||
-      (bond.bond_id?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase())
-    );
-  }, [sortedBonds, debouncedSearchTerm]);
+    return sortedBonds.filter((bond) => {
+      // Search term filter
+      const matchesSearch = (
+        (bond.bond_denom_name?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase()) ||
+        (bond.bond_id?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase())
+      );
+
+      // Status filter
+      const status = getBondStatus(bond);
+      const matchesStatus = statusFilter === 'all' || status.toLowerCase() === statusFilter.toLowerCase();
+
+      // Denom filter
+      const matchesDenom = denomFilter === 'all' || bond.purchase_denom === denomFilter;
+
+      // User bonds filter
+      const matchesUserBonds = !showUserBondsOnly || 
+        userBonds.some(userBond => userBond.bond_id === bond.bond_id);
+
+      return matchesSearch && matchesStatus && matchesDenom && matchesUserBonds;
+    });
+  }, [sortedBonds, debouncedSearchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -728,6 +752,71 @@ const Bonds = () => {
     );
   };
 
+  const FiltersSection = () => {
+    return (
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-wrap gap-4">
+          {/* Search input */}
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              placeholder="Search bonds..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:border-yellow-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Status filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-500 focus:outline-none"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="ended">Ended</option>
+            <option value="matured">Matured</option>
+            <option value="sold out">Sold Out</option>
+          </select>
+
+          {/* Denom filter */}
+          <select
+            value={denomFilter}
+            onChange={(e) => setDenomFilter(e.target.value)}
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-500 focus:outline-none"
+          >
+            <option value="all">All Tokens</option>
+            {getUniquePurchaseDenoms.map(denom => (
+              <option key={denom} value={denom}>
+                {getTokenSymbol(denom)}
+              </option>
+            ))}
+          </select>
+
+          {/* User bonds filter - only show if user has bonds */}
+          {userBonds.length > 0 && (
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showUserBondsOnly}
+                onChange={(e) => setShowUserBondsOnly(e.target.checked)}
+                className="form-checkbox h-4 w-4 text-yellow-500 rounded border-gray-600 focus:ring-yellow-500"
+              />
+              <span className="text-white">Show my bonds only</span>
+            </label>
+          )}
+        </div>
+
+        {/* Filter stats */}
+        <div className="text-sm text-gray-400">
+          Showing {filteredBonds.length} of {bonds.length} bonds
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -788,15 +877,7 @@ const Bonds = () => {
           </div>
         ) : (
           <>
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search bonds..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full p-2 rounded-md bg-gray-700 text-white"
-              />
-            </div>
+            <FiltersSection />
 
             <div className="hidden md:block">
               {renderBondTable()}

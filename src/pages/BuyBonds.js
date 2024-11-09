@@ -44,6 +44,9 @@ const BuyBonds = () => {
   const [userBondPurchase, setUserBondPurchase] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isClaimLoading, setIsClaimLoading] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [isWithdrawLoading, setIsWithdrawLoading] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState(0);
 
   const migalooRPC = "https://migaloo-rpc.polkachu.com/";
   const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -527,6 +530,135 @@ const BuyBonds = () => {
     return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
   };
 
+  const handleWithdrawRewards = async () => {
+    setIsWithdrawLoading(true);
+    try {
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const withdrawMsg = {
+        withdraw: {
+          bond_id: parseInt(bondId)
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      console.log('Executing withdrawal with:', {
+        withdrawMsg,
+        fee
+      });
+
+      const result = await client.execute(
+        connectedWalletAddress,
+        contractAddress,
+        withdrawMsg,
+        fee,
+        `Withdraw Bond: ${bondId}`
+      );
+
+      // Refresh data
+      const [bondDetails] = await Promise.all([
+        fetchBondDetails(),
+        fetchUserBalance(connectedWalletAddress, bond.purchase_denom),
+        fetchUserBondPurchase(connectedWalletAddress),
+        checkBalances()
+      ]);
+
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+
+        // Check if bond is now closed
+        if (bondDetails?.bond_offer?.closed) {
+          showAlert(
+            `Withdrawal successful and bond has been closed! Transaction Hash: ${result.transactionHash}`,
+            "success",
+            `<div>
+              <p class="mb-2">✅ Bond #${bondId} has been successfully closed.</p>
+              <a href="${txnUrl}" target="_blank" class="text-yellow-400 hover:text-yellow-300">View Transaction</a>
+            </div>`
+          );
+        } else {
+          showAlert(
+            `Withdrawal successful! Transaction Hash: ${result.transactionHash}`,
+            "success",
+            `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          );
+        }
+      } else {
+        showAlert("Withdrawal successful!", "success");
+      }
+
+      // Close the modal after successful withdrawal
+      setShowWithdrawModal(false);
+
+    } catch (error) {
+      console.error("Error withdrawing rewards:", error);
+      showAlert(`Error withdrawing rewards: ${error.message}`, "error");
+    } finally {
+      setIsWithdrawLoading(false);
+    }
+  };
+
+  const canWithdraw = () => {
+    if (!bond) return false;
+    
+    const now = Math.floor(Date.now() / 1000);
+    const maturityTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+    
+    // Add check for bond.closed
+    return connectedWalletAddress && 
+           now > maturityTime && 
+           hasRemainingSupply && 
+           !bond.closed; // Don't show withdraw if bond is closed
+  };
+
+  const calculateWithdrawAmount = () => {
+    if (!bond) {
+      console.log('Missing bond data');
+      return {
+        bondTokens: '0',
+        purchaseTokens: '0'
+      };
+    }
+    
+    console.log('Bond data for withdrawal calculation:', {
+      totalAmount: bond.total_amount,
+      remainingSupply: bond.remaining_supply,
+      price: bond.price
+    });
+
+    // Calculate unclaimed bond tokens (remaining supply)
+    const remainingBonds = parseInt(bond.remaining_supply) / 1000000;
+    
+    // Calculate refund in purchasing token (whale)
+    const purchasePrice = parseFloat(bond.price);
+    const refundAmount = remainingBonds * purchasePrice;
+    
+    console.log('Withdrawal calculation:', {
+      remainingBonds,
+      purchasePrice,
+      refundAmount,
+      calculation: `${remainingBonds} * ${purchasePrice} = ${refundAmount}`
+    });
+
+    const result = {
+      bondTokens: remainingBonds.toFixed(6),
+      purchaseTokens: refundAmount.toFixed(6)
+    };
+
+    console.log('Final result:', result);
+    
+    return result;
+  };
+
   if (!bond) {
     return (<>
       <div className="global-bg flex flex-col justify-center items-center h-screen">
@@ -555,6 +687,32 @@ const BuyBonds = () => {
       isSidebarOpen ? 'md:pl-64' : ''
     }`}>
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
+        {canWithdraw() && (
+          <div className="mb-6 p-4 bg-green-800/80 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg md:text-2xl font-bold text-yellow-400">Withdraw Rewards</h2>
+                <p className="text-sm md:text-base text-gray-300">
+                  You can withdraw{' '}
+                  <span className="font-bold">
+                    {calculateWithdrawAmount().bondTokens} {bondSymbol}
+                  </span>
+                  {' '}and{' '}
+                  <span className="font-bold">
+                    {calculateWithdrawAmount().purchaseTokens} {purchasingSymbol}
+                  </span>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowWithdrawModal(true)}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"
+              >
+                Withdraw
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <button
             onClick={handleGoBack}
@@ -565,8 +723,10 @@ const BuyBonds = () => {
           </button>
         </div>
 
-        <h1 className="text-xl md:text-3xl font-bold mb-4 md:mb-8 h1-color">{bond.bond_denom_name} Details</h1>
-        
+        <h1 className="text-xl md:text-3xl font-bold mb-4 md:mb-8 h1-color">
+          {bond.bond_denom_name} Details
+        </h1>
+
         <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
@@ -914,6 +1074,60 @@ const BuyBonds = () => {
                   className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"
                 >
                   Confirm
+                </button>
+              </div>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+
+        <Dialog
+          open={showWithdrawModal}
+          onClose={() => setShowWithdrawModal(false)}
+          className="relative z-50"
+        >
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+          
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="bg-gray-800 rounded-lg p-6 max-w-sm w-full border border-gray-700">
+              <Dialog.Title className="text-xl font-bold text-yellow-400 mb-4">
+                Confirm Withdrawal
+              </Dialog.Title>
+              
+              <div className="space-y-4">
+                <div className="bg-gray-900/50 p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">You will withdraw:</p>
+                  <p className="text-lg font-bold">
+                    {calculateWithdrawAmount().bondTokens} {bondSymbol}
+                  </p>
+                  <p className="text-lg font-bold">
+                    {calculateWithdrawAmount().purchaseTokens} {purchasingSymbol}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowWithdrawModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWithdrawRewards}
+                  disabled={isWithdrawLoading}
+                  className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"
+                >
+                  {isWithdrawLoading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-black mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Withdrawing...</span>
+                    </>
+                  ) : (
+                    'Confirm Withdrawal'
+                  )}
                 </button>
               </div>
             </Dialog.Panel>
