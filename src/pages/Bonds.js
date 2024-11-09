@@ -359,12 +359,17 @@ const Bonds = () => {
     const status = getBondStatus(bond);
     const bondImage = getTokenImage(bondSymbol);
     const purchasingImage = getTokenImage(purchasingSymbol);
+    const isMatured = status === 'Matured';
     
     return (
       <div 
-        className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
-          hover:bg-gray-700/80 transition duration-300 shadow-lg hover:shadow-xl 
-          border border-gray-700/50 hover:border-gray-600/50"
+        className={`backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
+          transition duration-300 shadow-lg hover:shadow-xl 
+          border border-gray-700/50 hover:border-gray-600/50
+          ${isMatured 
+            ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
+            : 'bg-gray-800/80 hover:bg-gray-700/80'
+          }`}
         onClick={() => handleBondClick(bond.bond_id)}
       >
         <div className="flex justify-between items-start mb-4">
@@ -494,11 +499,17 @@ const Bonds = () => {
             const purchasingSymbol = getTokenSymbol(bond.purchase_denom);
             const bondImage = getTokenImage(bondSymbol);
             const purchasingImage = getTokenImage(purchasingSymbol);
+            const status = getBondStatus(bond);
+            const isMatured = status === 'Matured';
 
             return (
               <tr 
                 key={index} 
-                className="border-b border-gray-800 cursor-pointer hover:bg-gray-700 transition duration-300"
+                className={`border-b border-gray-800 cursor-pointer transition duration-300
+                  ${isMatured 
+                    ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
+                    : 'hover:bg-gray-700'
+                  }`}
                 onClick={() => handleBondClick(bond.bond_id)}
               >
                 <td className="py-4">
