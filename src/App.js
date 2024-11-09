@@ -11,6 +11,7 @@ import AnalyticsDashboard from './pages/TreasuryAnalytics';
 import Bonds from './pages/Bonds';
 import CreateBonds from './pages/CreateBonds'; // Add this import
 import BuyBonds from './pages/BuyBonds'; // Add this import
+import ResaleBonds from './pages/ResaleBonds'; // Add this import
 
 function App() {
   return (
@@ -28,6 +29,8 @@ function App() {
               <Route path="/bonds" element={<Bonds />} />
               <Route path="/bonds/create" element={<CreateBonds />} />
               <Route path="/bonds/:bondId" element={<BuyBonds />} />
+              <Route path="/bonds/resale" element={<ResaleBonds />} />
+              {/* <Route path="/bonds/resale" element={< />} /> */}
               {/* Add more routes for other pages */}
             </Routes>
           </div>

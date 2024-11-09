@@ -21,6 +21,7 @@ const Sidebar = () => {
     { name: 'BONDS', path: '/bonds' },
     // { name: 'OTC MARKET', path: '/otc-market' },
     // { name: 'LENDING', path: '/lending' },
+    { name: 'Bond Resale', path: '/bonds/resale'},
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);

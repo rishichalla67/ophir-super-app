@@ -305,28 +305,26 @@ const Bonds = () => {
 
   const filteredBonds = useMemo(() => {
     return sortedBonds.filter((bond) => {
-      const bondId = String(bond.bond_id || '');
-      
-      // Search term filter
+      const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm === '' || (
-        (bond.bond_denom_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        bondId.includes(searchTerm.toLowerCase())
+        (bond.bond_name?.toLowerCase() || '').includes(searchLower) ||
+        (bond.bond_id?.toString() || '').includes(searchLower) ||
+        (bond.description?.toLowerCase() || '').includes(searchLower) ||
+        (getTokenSymbol(bond.token_denom)?.toLowerCase() || '').includes(searchLower) ||
+        (getTokenSymbol(bond.purchase_denom)?.toLowerCase() || '').includes(searchLower)
       );
 
-      // Status filter
       const status = getBondStatus(bond);
       const matchesStatus = statusFilter === 'all' || status.toLowerCase() === statusFilter.toLowerCase();
 
-      // Denom filter
       const matchesDenom = denomFilter === 'all' || bond.purchase_denom === denomFilter;
 
-      // User bonds filter
       const matchesUserBonds = !showUserBondsOnly || 
         userBonds.some(userBond => userBond.bond_id === bond.bond_id);
 
       return matchesSearch && matchesStatus && matchesDenom && matchesUserBonds;
     });
-  }, [sortedBonds, searchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
+  }, [sortedBonds, searchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus, getTokenSymbol]);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -762,20 +760,38 @@ const Bonds = () => {
         <div className="flex flex-wrap gap-4">
           {/* Search input */}
           <div className="flex-1 min-w-[200px]">
-            <input
-              type="text"
-              placeholder="Search bonds..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="w-full p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:border-yellow-500 focus:outline-none"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search bonds..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full p-2 pl-10 rounded-md bg-gray-700 text-white border border-gray-600 
+                  focus:border-yellow-500 focus:outline-none transition duration-300"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
           </div>
 
           {/* Status filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-500 focus:outline-none"
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
+              focus:border-yellow-500 focus:outline-none transition duration-300"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
