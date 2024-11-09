@@ -34,7 +34,6 @@ const Bonds = () => {
   const [bonds, setBonds] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [userBonds, setUserBonds] = useState([]);
   const [claimingBondId, setClaimingBondId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -246,7 +245,7 @@ const Bonds = () => {
 
   const handleBondClick = (bondId) => {
     if (!bondId) return;
-    navigate(`/bonds/buy/${bondId}`);
+    navigate(`/bonds/${bondId}`);
   };
 
   const sortedBonds = useMemo(() => {
@@ -295,15 +294,32 @@ const Bonds = () => {
     return null;
   };
 
-  const debouncedSetSearchTerm = useCallback(
-    debounce((value) => setDebouncedSearchTerm(value), 300),
-    []
+  const debouncedSearchTerm = useMemo(
+    () => debounce((term) => {
+      const searchTerm = term.toLowerCase();
+      const filtered = sortedBonds.filter((bond) => {
+        const bondId = String(bond.bond_id || '');
+        return (
+          (bond.bond_denom_name?.toLowerCase() || '').includes(searchTerm) ||
+          bondId.toLowerCase().includes(searchTerm)
+        );
+      });
+      // Update filtered bonds here if needed
+    }, 300),
+    [sortedBonds]
   );
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    debouncedSetSearchTerm(e.target.value);
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchTerm(value);
+    debouncedSearchTerm(value);
   };
+
+  useEffect(() => {
+    return () => {
+      debouncedSearchTerm.cancel();
+    };
+  }, [debouncedSearchTerm]);
 
   const getUniquePurchaseDenoms = useMemo(() => {
     const denoms = new Set(bonds.map(bond => bond.purchase_denom));
@@ -312,10 +328,12 @@ const Bonds = () => {
 
   const filteredBonds = useMemo(() => {
     return sortedBonds.filter((bond) => {
+      const bondId = String(bond.bond_id || '');
+      
       // Search term filter
-      const matchesSearch = (
-        (bond.bond_denom_name?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase()) ||
-        (bond.bond_id?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase())
+      const matchesSearch = searchTerm === '' || (
+        (bond.bond_denom_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        bondId.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
       // Status filter
@@ -331,7 +349,7 @@ const Bonds = () => {
 
       return matchesSearch && matchesStatus && matchesDenom && matchesUserBonds;
     });
-  }, [sortedBonds, debouncedSearchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
+  }, [sortedBonds, searchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -640,67 +658,65 @@ const Bonds = () => {
         <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
         
         {/* Desktop view */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-gray-400 border-b border-gray-800">
-                <th className="text-left py-2">Bond ID</th>
-                <th className="text-center py-2">Amount</th>
-                <th className="text-center py-2">Purchase Date</th>
-                {/* <th className="text-center py-2">NFT Token ID</th> */}
-                <th className="text-center py-2">Status</th>
-                <th className="text-right py-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {userBonds.map((purchase, index) => {
-                const canClaim = purchase.claimed_amount === "0";
-                const purchaseDate = purchase.purchase_time instanceof Date 
-                  ? purchase.purchase_time 
-                  : new Date(Number(purchase.purchase_time) / 1_000_000);
+        <div className="hidden md:block">
+          <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+            <table className="w-full">
+              <thead className="sticky top-0 backdrop-blur-sm z-10">
+                <tr className="text-gray-400 border-b border-gray-800">
+                  <th className="text-left py-2">Bond ID</th>
+                  <th className="text-center py-2">Amount</th>
+                  <th className="text-center py-2">Purchase Date</th>
+                  <th className="text-center py-2">Status</th>
+                  <th className="text-right py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userBonds.map((purchase, index) => {
+                  const canClaim = purchase.claimed_amount === "0";
+                  const purchaseDate = purchase.purchase_time instanceof Date 
+                    ? purchase.purchase_time 
+                    : new Date(Number(purchase.purchase_time) / 1_000_000);
 
-                return (
-                  <tr key={index} className="border-b border-gray-800">
-                    <td className="py-4">Bond #{purchase.bond_id}</td>
-                    <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
-                    <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
-                    {/* <td className="py-4 text-center">
-                      {purchase.nft_token_id !== "0" ? purchase.nft_token_id : "-"}
-                    </td> */}
-                    <td className="py-4 text-center">
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {canClaim ? 'Unclaimed' : 'Claimed'}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right">
-                      <button
-                        onClick={() => handleClaim(purchase.bond_id)}
-                        disabled={!isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) || claimingBondId === purchase.bond_id}
-                        className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
-                          isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase)
-                            ? 'landing-button hover:bg-yellow-500' 
-                            : 'bg-gray-600 cursor-not-allowed'
-                        }`}
-                      >
-                        {claimingBondId === purchase.bond_id ? (
-                          <div className="flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Claiming...
-                          </div>
-                        ) : isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) ? 'Claim' : 'Claimed'}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={index} className="border-b border-gray-800">
+                      <td className="py-4">Bond #{purchase.bond_id}</td>
+                      <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
+                      <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
+                      <td className="py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-sm ${
+                          canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {canClaim ? 'Unclaimed' : 'Claimed'}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        <button
+                          onClick={() => handleClaim(purchase.bond_id)}
+                          disabled={!isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) || claimingBondId === purchase.bond_id}
+                          className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
+                            isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase)
+                              ? 'landing-button hover:bg-yellow-500' 
+                              : 'bg-gray-600 cursor-not-allowed'
+                          }`}
+                        >
+                          {claimingBondId === purchase.bond_id ? (
+                            <div className="flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                              Claiming...
+                            </div>
+                          ) : isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) ? 'Claim' : 'Claimed'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Mobile view */}
-        <div className="md:hidden space-y-4">
+        <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {userBonds.map((purchase, index) => {
             const canClaim = purchase.claimed_amount === "0";
             const purchaseDate = purchase.purchase_time instanceof Date 
