@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { debounce } from 'lodash';
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { tokenMappings } from "../utils/tokenMappings";
@@ -294,32 +293,10 @@ const Bonds = () => {
     return null;
   };
 
-  const debouncedSearchTerm = useMemo(
-    () => debounce((term) => {
-      const searchTerm = term.toLowerCase();
-      const filtered = sortedBonds.filter((bond) => {
-        const bondId = String(bond.bond_id || '');
-        return (
-          (bond.bond_denom_name?.toLowerCase() || '').includes(searchTerm) ||
-          bondId.toLowerCase().includes(searchTerm)
-        );
-      });
-      // Update filtered bonds here if needed
-    }, 300),
-    [sortedBonds]
-  );
-
   const handleSearchChange = (event) => {
     const value = event.target.value;
     setSearchTerm(value);
-    debouncedSearchTerm(value);
   };
-
-  useEffect(() => {
-    return () => {
-      debouncedSearchTerm.cancel();
-    };
-  }, [debouncedSearchTerm]);
 
   const getUniquePurchaseDenoms = useMemo(() => {
     const denoms = new Set(bonds.map(bond => bond.purchase_denom));
@@ -333,7 +310,7 @@ const Bonds = () => {
       // Search term filter
       const matchesSearch = searchTerm === '' || (
         (bond.bond_denom_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        bondId.toLowerCase().includes(searchTerm.toLowerCase())
+        bondId.includes(searchTerm.toLowerCase())
       );
 
       // Status filter
@@ -510,7 +487,7 @@ const Bonds = () => {
           </tr>
         </thead>
         <tbody>
-          {filteredBonds.map((bond, index) => {
+          {filteredBonds.map((bond) => {
             if (!bond) return null;
             
             const bondSymbol = getTokenSymbol(bond.token_denom);
@@ -522,7 +499,7 @@ const Bonds = () => {
 
             return (
               <tr 
-                key={index} 
+                key={bond.bond_id}
                 className={`border-b border-gray-800 cursor-pointer transition duration-300
                   ${isMatured 
                     ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
@@ -543,7 +520,7 @@ const Bonds = () => {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 text-center">{getBondStatus(bond)}</td>
+                <td className="py-4 text-center">{status}</td>
                 <td className="py-4 text-center">
                   <div>
                     {formatAmount(bond.total_amount)}
@@ -567,7 +544,7 @@ const Bonds = () => {
                   </div>
                 </td>
                 <td className="py-4 text-center">
-                  {getBondStatus(bond) === 'Upcoming' 
+                  {status === 'Upcoming' 
                     ? formatDate(bond.start_time)
                     : formatDate(bond.maturity_date)
                   }
@@ -671,14 +648,14 @@ const Bonds = () => {
                 </tr>
               </thead>
               <tbody>
-                {userBonds.map((purchase, index) => {
+                {userBonds.map((purchase) => {
                   const canClaim = purchase.claimed_amount === "0";
                   const purchaseDate = purchase.purchase_time instanceof Date 
                     ? purchase.purchase_time 
                     : new Date(Number(purchase.purchase_time) / 1_000_000);
 
                   return (
-                    <tr key={index} className="border-b border-gray-800">
+                    <tr key={purchase.bond_id} className="border-b border-gray-800">
                       <td className="py-4">Bond #{purchase.bond_id}</td>
                       <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
                       <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
@@ -717,7 +694,7 @@ const Bonds = () => {
 
         {/* Mobile view */}
         <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-          {userBonds.map((purchase, index) => {
+          {userBonds.map((purchase) => {
             const canClaim = purchase.claimed_amount === "0";
             const purchaseDate = purchase.purchase_time instanceof Date 
               ? purchase.purchase_time 
@@ -725,7 +702,7 @@ const Bonds = () => {
             
             return (
               <div 
-                key={index}
+                key={purchase.bond_id}
                 className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
               >
                 <div className="flex justify-between items-start mb-2">
@@ -911,8 +888,8 @@ const Bonds = () => {
             </div>
 
             <div className="md:hidden">
-              {filteredBonds.map((bond, index) => (
-                <BondCard key={index} bond={bond} />
+              {filteredBonds.map((bond) => (
+                <BondCard key={bond.bond_id} bond={bond} />
               ))}
             </div>
           </>

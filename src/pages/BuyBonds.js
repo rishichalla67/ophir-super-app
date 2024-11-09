@@ -638,15 +638,21 @@ const BuyBonds = () => {
     // Calculate unclaimed bond tokens (remaining supply)
     const remainingBonds = parseInt(bond.remaining_supply) / 1000000;
     
+    // Calculate sold bonds
+    const totalBonds = parseInt(bond.total_amount) / 1000000;
+    const soldBonds = totalBonds - remainingBonds;
+    
     // Calculate refund in purchasing token (whale)
+    // The refund should be based on the sold bonds, not the remaining bonds
     const purchasePrice = parseFloat(bond.price);
-    const refundAmount = remainingBonds * purchasePrice;
+    const refundAmount = soldBonds * purchasePrice;
     
     console.log('Withdrawal calculation:', {
       remainingBonds,
+      soldBonds,
       purchasePrice,
       refundAmount,
-      calculation: `${remainingBonds} * ${purchasePrice} = ${refundAmount}`
+      calculation: `${soldBonds} * ${purchasePrice} = ${refundAmount}`
     });
 
     const result = {
