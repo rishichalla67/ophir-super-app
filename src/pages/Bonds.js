@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { debounce } from 'lodash';
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { tokenMappings } from "../utils/tokenMappings";
@@ -34,8 +33,11 @@ const Bonds = () => {
   const [bonds, setBonds] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [userBonds, setUserBonds] = useState([]);
+  const [claimingBondId, setClaimingBondId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [denomFilter, setDenomFilter] = useState('all');
+  const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -124,7 +126,7 @@ const Bonds = () => {
       console.log('🔍 Fetching bonds for address:', connectedWalletAddress);
       
       const message = { 
-        bond_purchases: { 
+        get_bonds_by_user: { 
           buyer: connectedWalletAddress 
         } 
       };
@@ -143,7 +145,7 @@ const Bonds = () => {
           amount: purchase.amount,
           claimed_amount: purchase.claimed_amount,
           bond_id: purchase.bond_id,
-          nft_token_id: purchase.nft_token_id
+        //   nft_token_id: purchase.nft_token_id
         }));
         console.log('✨ Transformed bonds:', transformedBonds);
         setUserBonds(transformedBonds);
@@ -160,7 +162,6 @@ const Bonds = () => {
         walletAddress: connectedWalletAddress
       });
       
-      // More specific error message based on the error type
       let errorMessage = "Failed to fetch your bonds";
       if (error.message.includes("not found")) {
         errorMessage = "Contract not found. Please check the network settings.";
@@ -243,7 +244,7 @@ const Bonds = () => {
 
   const handleBondClick = (bondId) => {
     if (!bondId) return;
-    navigate(`/bonds/buy/${bondId}`);
+    navigate(`/bonds/${bondId}`);
   };
 
   const sortedBonds = useMemo(() => {
@@ -292,22 +293,38 @@ const Bonds = () => {
     return null;
   };
 
-  const debouncedSetSearchTerm = useCallback(
-    debounce((value) => setDebouncedSearchTerm(value), 300),
-    []
-  );
-
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    debouncedSetSearchTerm(e.target.value);
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchTerm(value);
   };
 
+  const getUniquePurchaseDenoms = useMemo(() => {
+    const denoms = new Set(bonds.map(bond => bond.purchase_denom));
+    return Array.from(denoms);
+  }, [bonds]);
+
   const filteredBonds = useMemo(() => {
-    return sortedBonds.filter((bond) =>
-      (bond.bond_denom_name?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase()) ||
-      (bond.bond_id?.toLowerCase() || '').includes(debouncedSearchTerm.toLowerCase())
-    );
-  }, [sortedBonds, debouncedSearchTerm]);
+    return sortedBonds.filter((bond) => {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = searchTerm === '' || (
+        (bond.bond_name?.toLowerCase() || '').includes(searchLower) ||
+        (bond.bond_id?.toString() || '').includes(searchLower) ||
+        (bond.description?.toLowerCase() || '').includes(searchLower) ||
+        (getTokenSymbol(bond.token_denom)?.toLowerCase() || '').includes(searchLower) ||
+        (getTokenSymbol(bond.purchase_denom)?.toLowerCase() || '').includes(searchLower)
+      );
+
+      const status = getBondStatus(bond);
+      const matchesStatus = statusFilter === 'all' || status.toLowerCase() === statusFilter.toLowerCase();
+
+      const matchesDenom = denomFilter === 'all' || bond.purchase_denom === denomFilter;
+
+      const matchesUserBonds = !showUserBondsOnly || 
+        userBonds.some(userBond => userBond.bond_id === bond.bond_id);
+
+      return matchesSearch && matchesStatus && matchesDenom && matchesUserBonds;
+    });
+  }, [sortedBonds, searchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus, getTokenSymbol]);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -335,12 +352,17 @@ const Bonds = () => {
     const status = getBondStatus(bond);
     const bondImage = getTokenImage(bondSymbol);
     const purchasingImage = getTokenImage(purchasingSymbol);
+    const isMatured = status === 'Matured';
     
     return (
       <div 
-        className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
-          hover:bg-gray-700/80 transition duration-300 shadow-lg hover:shadow-xl 
-          border border-gray-700/50 hover:border-gray-600/50"
+        className={`backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
+          transition duration-300 shadow-lg hover:shadow-xl 
+          border border-gray-700/50 hover:border-gray-600/50
+          ${isMatured 
+            ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
+            : 'bg-gray-800/80 hover:bg-gray-700/80'
+          }`}
         onClick={() => handleBondClick(bond.bond_id)}
       >
         <div className="flex justify-between items-start mb-4">
@@ -463,18 +485,24 @@ const Bonds = () => {
           </tr>
         </thead>
         <tbody>
-          {filteredBonds.map((bond, index) => {
+          {filteredBonds.map((bond) => {
             if (!bond) return null;
             
             const bondSymbol = getTokenSymbol(bond.token_denom);
             const purchasingSymbol = getTokenSymbol(bond.purchase_denom);
             const bondImage = getTokenImage(bondSymbol);
             const purchasingImage = getTokenImage(purchasingSymbol);
+            const status = getBondStatus(bond);
+            const isMatured = status === 'Matured';
 
             return (
               <tr 
-                key={index} 
-                className="border-b border-gray-800 cursor-pointer hover:bg-gray-700 transition duration-300"
+                key={bond.bond_id}
+                className={`border-b border-gray-800 cursor-pointer transition duration-300
+                  ${isMatured 
+                    ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
+                    : 'hover:bg-gray-700'
+                  }`}
                 onClick={() => handleBondClick(bond.bond_id)}
               >
                 <td className="py-4">
@@ -490,7 +518,7 @@ const Bonds = () => {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 text-center">{getBondStatus(bond)}</td>
+                <td className="py-4 text-center">{status}</td>
                 <td className="py-4 text-center">
                   <div>
                     {formatAmount(bond.total_amount)}
@@ -514,7 +542,7 @@ const Bonds = () => {
                   </div>
                 </td>
                 <td className="py-4 text-center">
-                  {getBondStatus(bond) === 'Upcoming' 
+                  {status === 'Upcoming' 
                     ? formatDate(bond.start_time)
                     : formatDate(bond.maturity_date)
                   }
@@ -532,6 +560,8 @@ const Bonds = () => {
 
   const handleClaim = async (bondId) => {
     try {
+      setClaimingBondId(bondId);
+
       if (!connectedWalletAddress) {
         showAlert("Please connect your wallet first", "error");
         return;
@@ -540,27 +570,59 @@ const Bonds = () => {
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
       
-      const msg = {
-        claim: {
-          bond_id: bondId
+      const claimMsg = {
+        claim_rewards: {
+          bond_id: parseInt(bondId)
         }
       };
 
-      const response = await client.execute(
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
-        msg,
-        "auto"
+        claimMsg,
+        fee,
+        "Claim Bond Rewards"
       );
 
-      if (response.code === 0) {
-        showAlert("Successfully claimed bond rewards!", "success");
-        fetchUserBonds(); // Refresh user bonds
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        showAlert(
+          `Rewards claimed successfully!`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh data
+        await fetchUserBonds();
       }
     } catch (error) {
-      console.error("Error claiming bond:", error);
-      showAlert(`Failed to claim: ${error.message}`, "error");
+      console.error("Error claiming rewards:", error);
+      showAlert(`Error claiming rewards: ${error.message}`, "error");
+    } finally {
+      setClaimingBondId(null);
     }
+  };
+
+  const isClaimable = (bond, userBond) => {
+    if (!bond || !userBond || !userBond.amount || !userBond.claimed_amount) {
+      return false;
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    const claimStartTime = Math.floor(parseInt(bond.claim_start_time) / 1_000_000_000);
+    const claimEndTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    
+    const hasUnclaimedAmount = parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
+    
+    return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
   };
 
   const UserBondsSection = () => {
@@ -569,46 +631,207 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {userBonds.map((purchase, index) => {
-            const canClaim = purchase.claimed_amount === "0";
-            const purchaseDate = new Date(parseInt(purchase.purchase_time) / 1_000_000);
+        
+        {/* Desktop view */}
+        <div className="hidden md:block">
+          <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+            <table className="w-full">
+              <thead className="sticky top-0 backdrop-blur-sm z-10">
+                <tr className="text-gray-400 border-b border-gray-800">
+                  <th className="text-left py-2">Bond ID</th>
+                  <th className="text-center py-2">Amount</th>
+                  <th className="text-center py-2">Purchase Date</th>
+                  <th className="text-center py-2">Status</th>
+                  <th className="text-right py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userBonds.map((purchase) => {
+                  const canClaim = purchase.claimed_amount === "0";
+                  const purchaseDate = purchase.purchase_time instanceof Date 
+                    ? purchase.purchase_time 
+                    : new Date(Number(purchase.purchase_time) / 1_000_000);
 
+                  return (
+                    <tr key={purchase.bond_id} className="border-b border-gray-800">
+                      <td className="py-4">Bond #{purchase.bond_id}</td>
+                      <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
+                      <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
+                      <td className="py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-sm ${
+                          canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {canClaim ? 'Unclaimed' : 'Claimed'}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        <button
+                          onClick={() => handleClaim(purchase.bond_id)}
+                          disabled={!isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) || claimingBondId === purchase.bond_id}
+                          className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
+                            isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase)
+                              ? 'landing-button hover:bg-yellow-500' 
+                              : 'bg-gray-600 cursor-not-allowed'
+                          }`}
+                        >
+                          {claimingBondId === purchase.bond_id ? (
+                            <div className="flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                              Claiming...
+                            </div>
+                          ) : isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) ? 'Claim' : 'Claimed'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Mobile view */}
+        <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+          {userBonds.map((purchase) => {
+            const canClaim = purchase.claimed_amount === "0";
+            const purchaseDate = purchase.purchase_time instanceof Date 
+              ? purchase.purchase_time 
+              : new Date(Number(purchase.purchase_time) / 1_000_000);
+            
             return (
-              <div key={index} className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
-                <div className="flex flex-col mb-4">
-                  <h3 className="font-semibold">Bond #{purchase.bond_id}</h3>
-                  <div className="text-sm text-gray-400">
-                    <div>Amount: {formatAmount(purchase.amount)}</div>
-                    <div>Purchased: {formatDate(purchaseDate)}</div>
-                    {purchase.nft_token_id !== "0" && (
-                      <div>NFT Token ID: {purchase.nft_token_id}</div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-center mt-4">
-                  <span className={`px-3 py-1 rounded-full text-sm ${
+              <div 
+                key={purchase.bond_id}
+                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-gray-400">Bond #{purchase.bond_id}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
                     canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                   }`}>
                     {canClaim ? 'Unclaimed' : 'Claimed'}
                   </span>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Amount:</span>
+                    <span>{formatAmount(purchase.amount)}</span>
+                  </div>
                   
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Purchase Date:</span>
+                    <span>{formatDate(purchaseDate)}</span>
+                  </div>
+                  
+                  {/* {purchase.nft_token_id !== "0" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">NFT ID:</span>
+                      <span>{purchase.nft_token_id}</span>
+                    </div>
+                  )} */}
+                </div>
+
+                {isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
                   <button
                     onClick={() => handleClaim(purchase.bond_id)}
-                    disabled={!canClaim}
-                    className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
-                      canClaim 
-                        ? 'landing-button hover:bg-yellow-500' 
-                        : 'bg-gray-600 cursor-not-allowed'
-                    }`}
+                    disabled={claimingBondId === purchase.bond_id}
+                    className="w-full mt-3 landing-button px-4 py-1.5 rounded-md 
+                      hover:bg-yellow-500 transition duration-300 text-sm disabled:opacity-50"
                   >
-                    {canClaim ? 'Claim' : 'Claimed'}
+                    {claimingBondId === purchase.bond_id ? (
+                      <div className="flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Claiming...
+                      </div>
+                    ) : 'Claim'}
                   </button>
-                </div>
+                )}
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  };
+
+  const FiltersSection = () => {
+    return (
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-wrap gap-4">
+          {/* Search input */}
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search bonds..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full p-2 pl-10 rounded-md bg-gray-700 text-white border border-gray-600 
+                  focus:border-yellow-500 focus:outline-none transition duration-300"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+          </div>
+
+          {/* Status filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
+              focus:border-yellow-500 focus:outline-none transition duration-300"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="ended">Ended</option>
+            <option value="matured">Matured</option>
+            <option value="sold out">Sold Out</option>
+          </select>
+
+          {/* Denom filter */}
+          <select
+            value={denomFilter}
+            onChange={(e) => setDenomFilter(e.target.value)}
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-500 focus:outline-none"
+          >
+            <option value="all">All Tokens</option>
+            {getUniquePurchaseDenoms.map(denom => (
+              <option key={denom} value={denom}>
+                {getTokenSymbol(denom)}
+              </option>
+            ))}
+          </select>
+
+          {/* User bonds filter - only show if user has bonds */}
+          {userBonds.length > 0 && (
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showUserBondsOnly}
+                onChange={(e) => setShowUserBondsOnly(e.target.checked)}
+                className="form-checkbox h-4 w-4 text-yellow-500 rounded border-gray-600 focus:ring-yellow-500"
+              />
+              <span className="text-white">Show my bonds only</span>
+            </label>
+          )}
+        </div>
+
+        {/* Filter stats */}
+        <div className="text-sm text-gray-400">
+          Showing {filteredBonds.length} of {bonds.length} bonds
         </div>
       </div>
     );
@@ -674,23 +897,15 @@ const Bonds = () => {
           </div>
         ) : (
           <>
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search bonds..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full p-2 rounded-md bg-gray-700 text-white"
-              />
-            </div>
+            <FiltersSection />
 
             <div className="hidden md:block">
               {renderBondTable()}
             </div>
 
             <div className="md:hidden">
-              {filteredBonds.map((bond, index) => (
-                <BondCard key={index} bond={bond} />
+              {filteredBonds.map((bond) => (
+                <BondCard key={bond.bond_id} bond={bond} />
               ))}
             </div>
           </>

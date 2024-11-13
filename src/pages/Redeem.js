@@ -840,9 +840,9 @@ const Redeem = () => {
                             ].includes(key)
                         )
                         .map(([asset, amount]) => {
-                          const price = ophirPrices[asset] || 0; // Get the price of the asset, default to 0 if not found
-                          const value = amount * price; // Calculate the value by multiplying the amount by the price
-                          return { asset, amount, value }; // Return an object with asset, amount, and value
+                          const price = ophirPrices[asset] || 0;
+                          const value = amount * price;
+                          return { asset, amount, value };
                         })
                         .map(({ asset, amount, value }) => (
                           <tr key={asset}>
@@ -853,7 +853,7 @@ const Redeem = () => {
                               {amount.toFixed(5)}
                             </td>
                             <td className="px-4 py-2 text-sm sm:text-base text-center">
-                              ${value.toFixed(2)}
+                              {value > 0 ? `$${value.toFixed(2)}` : 'N/A'}
                             </td>
                           </tr>
                         ))
@@ -867,18 +867,16 @@ const Redeem = () => {
                             ].includes(key)
                         )
                         .map(([asset, amount]) => {
-                          const price = ophirPrices[asset] || 0; // Get the price of the asset, default to 0 if not found
-                          const value = amount * price; // Calculate the value by multiplying the amount by the price
-                          return { asset, amount, value }; // Return an object with asset, amount, and value
+                          const price = ophirPrices[asset] || 0;
+                          const value = amount * price;
+                          return { asset, amount, value };
                         })
-                        .filter(({ value }) => value > 0.001) // Filter out any values that are 0.01
-                        .sort((a, b) => b.value - a.value) // Sort by value in descending order
+                        .sort((a, b) => b.value - a.value)
                         .map(({ asset, amount, value }) => (
                           <tr key={asset}>
                             {Array.isArray(tokenImages[asset]) ? (
                               <div className="flex items-center">
                                 {tokenImages[asset].map((imgUrl, index) => {
-                                  // Calculate size based on the number of images
                                   const sizeClass = `h-5 w-5 md:h-8 md:w-8`;
                                   return (
                                     <img
@@ -889,9 +887,7 @@ const Redeem = () => {
                                     />
                                   );
                                 })}
-                                <span className="text-sm sm:text-base">
-                                  {asset}
-                                </span>
+                                <span className="text-sm sm:text-base">{asset}</span>
                               </div>
                             ) : (
                               <div className="flex items-center py-1 align">
@@ -900,18 +896,15 @@ const Redeem = () => {
                                   alt={asset}
                                   className="h-5 w-5 sm:h-7 sm:w-7 md:h-9 md:w-9 mr-2"
                                 />
-                                <span className="text-sm sm:text-base">
-                                  {asset}
-                                </span>
+                                <span className="text-sm sm:text-base">{asset}</span>
                               </div>
                             )}
                             <td className="px-4 py-2 text-sm sm:text-base">
                               {amount.toFixed(asset === "wBTC" ? 8 : 6)}
                             </td>
                             <td className="px-4 py-2 text-sm sm:text-base">
-                              ${value.toFixed(2)}
-                            </td>{" "}
-                            {/* Display the value with 2 or 10 decimal places based on asset type */}
+                              {value > 0 ? `$${value.toFixed(2)}` : 'N/A'}
+                            </td>
                           </tr>
                         ))}
                 </tbody>
@@ -938,7 +931,7 @@ const Redeem = () => {
                         ((totalValueInfo.totalValue -
                           ophirPrices["ophir"] * ophirAmount) /
                           (ophirPrices["ophir"] * ophirAmount)) *
-                          100 >=
+                        100 >=
                         0
                           ? "text-green-500"
                           : "text-red-500"

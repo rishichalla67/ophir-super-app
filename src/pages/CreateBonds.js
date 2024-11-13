@@ -15,10 +15,20 @@ import { ArrowLeftIcon } from "@heroicons/react/24/solid";
 import "../App.css";
 import { useWallet } from '../context/WalletContext'; 
 import { useSidebar } from '../context/SidebarContext';
+import Tooltip from '@mui/material/Tooltip';
+import InfoIcon from '@mui/icons-material/Info';
 
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 
 const ADDITIONAL_MINUTES_BUFFER = 5; // Easily adjustable buffer time in minutes
+
+const PRESET_DURATIONS = [
+  { label: '24h Bond', days: 1 },
+  { label: '7d Bond', days: 7 },
+  { label: '30d Bond', days: 30 },
+  { label: '90d Bond', days: 90 },
+  { label: '1y Bond', days: 365 },
+];
 
 const CreateBonds = () => {
   const { isSidebarOpen } = useSidebar();
@@ -482,6 +492,43 @@ const CreateBonds = () => {
     );
   };
 
+  const LabelWithTooltip = ({ label, tooltip, required }) => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-medium">
+        {label} {required && <span className="text-red-500">*</span>}
+      </span>
+      <Tooltip title={tooltip} arrow placement="top">
+        <InfoIcon className="h-4 w-4 text-gray-400 cursor-help" />
+      </Tooltip>
+    </div>
+  );
+
+  const handlePresetDuration = (days) => {
+    const now = new Date();
+    
+    // Start time: 1 hour from now
+    const startDate = new Date(now);
+    startDate.setHours(startDate.getHours() + 1);
+    
+    // End time: Start time + selected days
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + days);
+    
+    // Maturity time: End time + 1 hour
+    const maturityDate = new Date(endDate);
+    maturityDate.setHours(maturityDate.getHours() + 1);
+    
+    setFormData(prev => ({
+      ...prev,
+      start_time: startDate.toISOString().split('T')[0],
+      start_time_hour: startDate.toTimeString().slice(0, 5),
+      end_time: endDate.toISOString().split('T')[0],
+      end_time_hour: endDate.toTimeString().slice(0, 5),
+      maturity_date: maturityDate.toISOString().split('T')[0],
+      maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+    }));
+  };
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -512,10 +559,31 @@ const CreateBonds = () => {
               Your current timezone: {userTimezone}. All times will be converted
               to UTC for submission.
             </p> */}
+            <div className="mb-6">
+              <div className="flex justify-end">
+                <LabelWithTooltip
+                  label="Preset Durations"
+                  tooltip="Quick options to set standard bond durations"
+                />
+              </div>
+              <div className="flex justify-end flex-wrap gap-2">
+                {PRESET_DURATIONS.map((duration) => (
+                  <button
+                    key={duration.days}
+                    onClick={() => handlePresetDuration(duration.days)}
+                    className="px-4 py-2 text-sm rounded-md bg-[#2c2d3a] hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
+                  >
+                    {duration.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Bond Start Date and Time <span className="text-red-500">*</span>
-              </label>
+              <LabelWithTooltip
+                label="Bond Start Date and Time"
+                tooltip="The time range when users can purchase the bond. This defines when your bond sale begins."
+                required
+              />
               <div className="flex space-x-2 mobile-date-time">
                 <input
                   type="date"
@@ -535,9 +603,11 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Bond End Date and Time
-              </label>
+              <LabelWithTooltip
+                label="Bond End Date and Time"
+                tooltip="The deadline for purchasing the bond. After this time, no new purchases will be accepted."
+                required
+              />
               <div className="flex space-x-2 mobile-date-time">
                 <input
                   type="date"
@@ -557,9 +627,11 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Bond Maturity Date
-              </label>
+              <LabelWithTooltip
+                label="Bond Maturity Date"
+                tooltip="The date and time when users can claim their tokens from the bond. This must be after the bond end date."
+                required
+              />
               <div className="flex space-x-2 mobile-date-time">
                 <input
                   type="date"
@@ -581,11 +653,15 @@ const CreateBonds = () => {
             <div className="flex flex-col space-y-4">
               <div className="flex space-x-4 mobile-input-group">
                 <div className="flex-1 mobile-full-width">
+                  <LabelWithTooltip
+                    label="List Asset"
+                    tooltip="The token you're offering in the bond. This is what buyers will receive when the bond matures."
+                    required
+                  />
                   <TokenDropdown
                     name="token_denom"
                     value={formData.token_denom}
                     onChange={handleInputChange}
-                    label={<>Token Denom <span className="text-red-500">*</span></>}
                     allowedDenoms={allowedDenoms}
                   />
                 </div>
@@ -621,11 +697,15 @@ const CreateBonds = () => {
             <div className="flex flex-col space-y-4">
               <div className="flex space-x-4 mobile-input-group">
                 <div className="flex-1 mobile-full-width">
+                  <LabelWithTooltip
+                    label="Sale Asset"
+                    tooltip="The token that users will pay with to purchase the bond."
+                    required
+                  />
                   <TokenDropdown
                     name="purchasing_denom"
                     value={formData.purchasing_denom}
                     onChange={handleInputChange}
-                    label="Purchasing Denom"
                     allowedDenoms={allowedDenoms}
                   />
                 </div>
@@ -647,9 +727,11 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Bond Denom Name
-              </label>
+              <LabelWithTooltip
+                label="Bond Denom"
+                tooltip="A unique identifier for your bond. The prefix 'ob' stands for 'Ophir Bond' followed by your token symbol and a number suffix to ensure uniqueness."
+                required
+              />
               <div className="flex items-center mobile-input-group">
                 <input
                   type="text"
@@ -780,7 +862,7 @@ const CreateBonds = () => {
 
         <button
           onClick={handleSubmit}
-          className={`px-6 py-2 rounded-md transition duration-300 ${
+          className={`px-6 py-2 rounded-md transition duration-300 mb-5 ${
             isFormValid()
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-600 cursor-not-allowed text-gray-300'
@@ -791,7 +873,7 @@ const CreateBonds = () => {
         </button>
 
         {!isFormValid() && (
-          <p className="text-red-400 mt-2 text-sm">
+          <p className="text-red-400 mt-2 text-sm mb-3">
             Please fill in all required fields before submitting.
           </p>
         )}
