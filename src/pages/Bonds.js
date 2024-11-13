@@ -455,8 +455,8 @@ const Bonds = () => {
     return (
       <table className="w-full">
         <thead>
-          <tr className="text-gray-400 border-b border-gray-800">
-            <th className="text-left py-2 w-1/4 cursor-pointer" onClick={() => requestSort('bond_denom_name')}>
+          <tr className="bond-table-header">
+            <th className="bond-table-left-border-radius text-left pl-4 py-2 w-1/4 cursor-pointer" onClick={() => requestSort('bond_denom_name')}>
               <span className="flex items-center">
                 Bond Name {renderSortIcon('bond_denom_name')}
               </span>
@@ -481,7 +481,7 @@ const Bonds = () => {
                 {sortConfig.key === 'start_time' ? 'Start Date' : 'Maturity Date'} {renderSortIcon('maturity_date')}
               </span>
             </th>
-            <th className="w-12"></th>
+            <th className="bond-table-right-border-radius w-12"></th>
           </tr>
         </thead>
         <tbody>
@@ -505,7 +505,7 @@ const Bonds = () => {
                   }`}
                 onClick={() => handleBondClick(bond.bond_id)}
               >
-                <td className="py-4">
+                <td className="py-4 pl-4">
                   <div className="flex items-center">
                     {bondImage && (
                       <div className="w-8 h-8 rounded-full mr-2 overflow-hidden">
@@ -547,7 +547,7 @@ const Bonds = () => {
                     : formatDate(bond.maturity_date)
                   }
                 </td>
-                <td className="py-4 text-center">
+                <td className="py-4 text-center pr-2 pl-2">
                   <button className="text-gray-400 hover:text-white transition duration-300">→</button>
                 </td>
               </tr>
@@ -637,7 +637,7 @@ const Bonds = () => {
           <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
             <table className="w-full">
               <thead className="sticky top-0 backdrop-blur-sm z-10">
-                <tr className="text-gray-400 border-b border-gray-800">
+                <tr className="text-gray-400 border-b border-gray-800 bond-table-header">
                   <th className="text-left py-2">Bond ID</th>
                   <th className="text-center py-2">Amount</th>
                   <th className="text-center py-2">Purchase Date</th>
@@ -767,7 +767,7 @@ const Bonds = () => {
                 value={searchTerm}
                 onChange={handleSearchChange}
                 className="w-full p-2 pl-10 rounded-md bg-gray-700 text-white border border-gray-600 
-                  focus:border-yellow-500 focus:outline-none transition duration-300"
+                  focus:border-yellow-200 focus:outline-none transition duration-300"
               />
               <svg
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
@@ -791,7 +791,7 @@ const Bonds = () => {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
-              focus:border-yellow-500 focus:outline-none transition duration-300"
+              focus:border-yellow-200 focus:outline-none transition duration-300"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -805,7 +805,7 @@ const Bonds = () => {
           <select
             value={denomFilter}
             onChange={(e) => setDenomFilter(e.target.value)}
-            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-500 focus:outline-none"
+            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-200 focus:outline-none"
           >
             <option value="all">All Tokens</option>
             {getUniquePurchaseDenoms.map(denom => (

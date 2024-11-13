@@ -31,6 +31,8 @@
   --side-and-navbar-bg-color: rgb(29, 28, 25);
   --navbar-border-color: rgb(148, 141, 104);
   --sidebar-border-color: rgba(148, 141, 104, 0.5);
+  --bond-table-header-bg-color: rgb(65, 62, 54);
+  --bond-table-header-border-color: rgb(199, 194, 170);
 }
 
 *{
@@ -525,8 +527,47 @@ tbody .table-box:last-of-type{
  background: var(--main-black);
 }
 
+/* bond page */
 
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
 
+table th {
+  padding: 10px;
+  background-color: var(--bond-table-header-bg-color);
+  color: var(--main-white);
+  border-top: 1px solid var(--bond-table-header-border-color);
+  border-bottom: 1px solid var(--bond-table-header-border-color);
+}
+
+/* Adding rounded corners */
+table th:first-child {
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+  border-left: 1px solid var(--bond-table-header-border-color);
+}
+
+table th:last-child {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  border-right: 1px solid var(--bond-table-header-border-color);
+}
+
+/* Using a pseudo-element to create inner borders */
+table th:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background-color: #333; /* same as border color */
+}
+
+/*end of bond page*/
 
 @media screen and (min-width: 1300px) {
 

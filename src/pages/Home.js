@@ -34,7 +34,7 @@ const Home = () => {
           alt="Ophir DAO"
           className="w-32 h-32 mb-4"
         />
-        <h1 className="text-4xl font-bold mb-4">Ophir BANK</h1>
+        <h1 className="text-4xl font-bold mb-4">BANK of Ophir</h1>
         <p className="mx-auto w-4/5 text-center text-gray-300 mb-4 text-base sm:text-lg lg:text-xl">
           Cosmos Treasury DAO established on Migaloo. We are seeking a lost city
           of gold. We have no respect for the currency of men.
