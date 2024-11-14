@@ -747,7 +747,7 @@ const Redeem = () => {
 
   return (
     <div 
-      className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`} 
+      className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`} 
       style={{ paddingTop: "12dvh" }}
     >
       <h1 className={`text-lg sm:text-3xl font-bold h1-color  sm:pt-0 cursor-pointer text-center`} onClick={() => setIsTestnet(!isTestnet)}>

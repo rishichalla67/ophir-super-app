@@ -16,6 +16,8 @@
   --main-grey: rgba(43, 43, 43, 1);
   --dark-grey: rgba(37, 37, 37, 1);
   --lighter-grey: rgba(55, 55, 55, 1);
+  --text-gray: rgb(216, 216, 216);
+  --text-gold-sidebar: rgb(209, 198, 139);
   --main-black: rgba(27, 27, 27, 1);
   --transparent-black: rgba(27, 27, 27, 0.5);
   --table-head-grey: rgba(43, 43, 43, 1);
@@ -25,6 +27,12 @@
   --transparent-amber: rgba(253, 212, 101, 0.2);
   --light-red: rgb(252, 84, 84);
   --transparent-red: rgba(252, 84, 84, 0.3);
+  --sidebar-focus-gold: rgb(41, 41, 33);
+  --side-and-navbar-bg-color: rgb(29, 28, 25);
+  --navbar-border-color: rgb(148, 141, 104);
+  --sidebar-border-color: rgba(148, 141, 104, 0.5);
+  --bond-table-header-bg-color: rgb(65, 62, 54);
+  --bond-table-header-border-color: rgb(199, 194, 170);
 }
 
 *{
@@ -74,8 +82,9 @@
 
 /*header css*/
 
-.nav-color{
-  background-color: var(--main-black);
+.navbar-bg{
+  background-color: var(--side-and-navbar-bg-color);
+  border-bottom: 1px solid var(--navbar-border-color);
 }
 
 .mobile-nav-round{
@@ -86,6 +95,10 @@
 
 .global-bg{
   background: radial-gradient(circle at top, rgb(51, 50, 46) 10%, rgb(27, 27, 27) 90%);
+}
+
+.global-bg-new{
+  background: linear-gradient(180deg, rgba(33,31,24,1) 0%, rgba(90,85,67,1) 75%, rgba(18,17,12,1) 100%);
 }
 
 /*landing page*/
@@ -99,6 +112,37 @@
 }
 
 /*end of landing page*/
+
+/*side bar*/
+
+.sidebar-open-button{
+  top: 5.7rem;
+  left: 1rem;
+  position: fixed;
+  z-index: 20;
+}
+
+.sidebar-bg{
+  background-color: var(--side-and-navbar-bg-color);
+  border-right: 0.1rem solid var(--sidebar-border-color);
+  height: 100vh;
+}
+
+.button-sidebar{
+  color: var(--text-gray);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.button-sidebar:focus{
+  color: var(--text-gold-sidebar);
+}
+
+.sidebar-item:focus-within{
+  background-color: var(--sidebar-focus-gold);
+}
+
+/*end of side bar*/
 
 /*seeker round page*/
 
@@ -483,8 +527,51 @@ tbody .table-box:last-of-type{
  background: var(--main-black);
 }
 
+/* bond page */
 
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
 
+table th {
+  padding: 10px;
+  background-color: var(--bond-table-header-bg-color);
+  color: var(--main-white);
+  border-top: 1px solid var(--bond-table-header-border-color);
+  border-bottom: 1px solid var(--bond-table-header-border-color);
+}
+
+/* Adding rounded corners */
+table th:first-child {
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+  border-left: 1px solid var(--bond-table-header-border-color);
+}
+
+table th:last-child {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  border-right: 1px solid var(--bond-table-header-border-color);
+}
+
+/* Using a pseudo-element to create inner borders */
+table th:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background-color: #333; /* same as border color */
+}
+
+table td{
+  border-bottom: 1px solid var(--bond-table-header-border-color);
+}
+
+/*end of bond page*/
 
 @media screen and (min-width: 1300px) {
 

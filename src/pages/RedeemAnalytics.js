@@ -65,7 +65,7 @@ const ToggleableAmount = ({ amount, value }) => {
 };
 
 const LoadingSpinner = () => (
-  <div className="global-bg flex flex-col justify-center items-center h-screen">
+  <div className="global-bg-new flex flex-col justify-center items-center h-screen">
     <div className="text-white mb-4">Fetching On-Chain Data...</div>
     <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
   </div>
@@ -282,7 +282,7 @@ const RedemptionAnalyticsDashboard = () => {
   };
 
   return (
-    <div className={`global-bg transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}>
+    <div className={`global-bg-new transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}>
       <div className="container main-container-margin-top mx-auto p-4">
         {/* {refreshing && <LoadingSpinner />} */}
         <div className="title flex flex-col sm:flex-row justify-between items-center sm:mb-6 mb-0">

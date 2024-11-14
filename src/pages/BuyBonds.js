@@ -667,7 +667,7 @@ const BuyBonds = () => {
 
   if (!bond) {
     return (<>
-      <div className="global-bg flex flex-col justify-center items-center h-screen">
+      <div className="global-bg-new flex flex-col justify-center items-center h-screen">
           <div className="text-white mb-4">Fetching Bond Data...</div>
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
       </div>
@@ -689,7 +689,7 @@ const BuyBonds = () => {
 
 
   return (
-    <div className={`global-bg text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
+    <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
     }`}>
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
