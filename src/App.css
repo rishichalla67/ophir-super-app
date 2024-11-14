@@ -567,6 +567,10 @@ table th:not(:last-child)::after {
   background-color: #333; /* same as border color */
 }
 
+table td{
+  border-bottom: 1px solid var(--bond-table-header-border-color);
+}
+
 /*end of bond page*/
 
 @media screen and (min-width: 1300px) {
