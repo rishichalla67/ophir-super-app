@@ -573,6 +573,23 @@ table td{
 
 /*end of bond page*/
 
+@media screen and (max-width: 800px) {
+
+  .sidebar {
+    min-width: 35vw;
+  }
+
+}
+
+@media screen and (max-width: 450px) {
+
+  .sidebar {
+    min-width: 50vw;
+  }
+
+}
+
+
 @media screen and (min-width: 1300px) {
 
 

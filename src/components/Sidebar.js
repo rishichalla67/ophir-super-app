@@ -55,7 +55,7 @@ const Sidebar = () => {
       >
         {isSidebarOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
       </button>
-      <div className={`sidebar-bg top-20 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
+      <div className={`sidebar-bg sidebar top-20 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
         <nav className="flex-grow">
           <ul className="flex flex-col items-end">
             {menuItems.map((item) => (
