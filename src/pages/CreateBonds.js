@@ -23,6 +23,7 @@ const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const ADDITIONAL_MINUTES_BUFFER = 5; // Easily adjustable buffer time in minutes
 
 const PRESET_DURATIONS = [
+  { label: 'Testing', minutes: { start: 5, end: 30, maturity: 180 } },
   { label: '24h Bond', days: 1 },
   { label: '7d Bond', days: 7 },
   { label: '30d Bond', days: 30 },
@@ -503,30 +504,45 @@ const CreateBonds = () => {
     </div>
   );
 
-  const handlePresetDuration = (days) => {
+  const handlePresetDuration = (preset) => {
     const now = new Date();
     
-    // Start time: 1 hour from now
-    const startDate = new Date(now);
-    startDate.setHours(startDate.getHours() + 1);
-    
-    // End time: Start time + selected days
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + days);
-    
-    // Maturity time: End time + 1 hour
-    const maturityDate = new Date(endDate);
-    maturityDate.setHours(maturityDate.getHours() + 1);
-    
-    setFormData(prev => ({
-      ...prev,
-      start_time: startDate.toISOString().split('T')[0],
-      start_time_hour: startDate.toTimeString().slice(0, 5),
-      end_time: endDate.toISOString().split('T')[0],
-      end_time_hour: endDate.toTimeString().slice(0, 5),
-      maturity_date: maturityDate.toISOString().split('T')[0],
-      maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
-    }));
+    if (preset.minutes) {
+      // Handle testing preset with minute-based durations
+      const startDate = new Date(now.getTime() + preset.minutes.start * 60000);
+      const endDate = new Date(now.getTime() + preset.minutes.end * 60000);
+      const maturityDate = new Date(now.getTime() + preset.minutes.maturity * 60000);
+      
+      setFormData(prev => ({
+        ...prev,
+        start_time: startDate.toISOString().split('T')[0],
+        start_time_hour: startDate.toTimeString().slice(0, 5),
+        end_time: endDate.toISOString().split('T')[0],
+        end_time_hour: endDate.toTimeString().slice(0, 5),
+        maturity_date: maturityDate.toISOString().split('T')[0],
+        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+      }));
+    } else {
+      // Handle existing day-based presets
+      const startDate = new Date(now);
+      startDate.setHours(startDate.getHours() + 1);
+      
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + preset.days);
+      
+      const maturityDate = new Date(endDate);
+      maturityDate.setHours(maturityDate.getHours() + 1);
+      
+      setFormData(prev => ({
+        ...prev,
+        start_time: startDate.toISOString().split('T')[0],
+        start_time_hour: startDate.toTimeString().slice(0, 5),
+        end_time: endDate.toISOString().split('T')[0],
+        end_time_hour: endDate.toTimeString().slice(0, 5),
+        maturity_date: maturityDate.toISOString().split('T')[0],
+        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+      }));
+    }
   };
 
   return (
@@ -569,8 +585,8 @@ const CreateBonds = () => {
               <div className="flex justify-end flex-wrap gap-2">
                 {PRESET_DURATIONS.map((duration) => (
                   <button
-                    key={duration.days}
-                    onClick={() => handlePresetDuration(duration.days)}
+                    key={duration.label}
+                    onClick={() => handlePresetDuration(duration)}
                     className="px-4 py-2 text-sm rounded-md bg-[#2c2d3a] hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
                   >
                     {duration.label}
