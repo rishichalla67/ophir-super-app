@@ -94,6 +94,8 @@ export function CryptoProvider({ children }) {
       localStorage.setItem('cryptoBalances', JSON.stringify(allBalances));
       localStorage.setItem('cryptoBalancesTimestamp', Date.now().toString());
       
+      console.log(allBalances);
+      
       setBalances(allBalances);
       setBalancesError(null);
     } catch (error) {
@@ -109,20 +111,27 @@ export function CryptoProvider({ children }) {
     return chainInfo[chainId] || null;
   };
 
-  // Initialize prices on component mount
+  // Add immediate data fetching using IIFE
   useEffect(() => {
-    fetchCoinPrices();
-    // Set up a refresh interval (e.g., every 1 minute)
-    const interval = setInterval(fetchCoinPrices, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    (async () => {
+      // Start both fetches immediately and concurrently
+      Promise.all([
+        fetchCoinPrices(),
+        fetchBalances()
+      ]).catch(error => {
+        console.error('Initial data fetch failed:', error);
+      });
 
-  useEffect(() => {
-    fetchBalances();
-    // Refresh balances every 5 minutes
-    const balanceInterval = setInterval(fetchBalances, 300000);
-    return () => clearInterval(balanceInterval);
-  }, []);
+      // Set up intervals after initial fetch
+      const priceInterval = setInterval(fetchCoinPrices, 60000);
+      const balanceInterval = setInterval(fetchBalances, 300000);
+
+      return () => {
+        clearInterval(priceInterval);
+        clearInterval(balanceInterval);
+      };
+    })();
+  }, []); // Single useEffect for both fetches
 
   const value = {
     prices,

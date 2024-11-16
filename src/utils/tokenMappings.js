@@ -176,7 +176,39 @@ export const tokenMappings = {
     decimals: 6,
   },
   "ukuji": {
-    symbol: "kujira",
+    symbol: "kuji",
     decimals: 6,
   },
+  "ibc/BB6BCDB515050BAE97516111873CCD7BCF1FD0CCB723CC12F3C4F704D6C646CE": {
+    symbol: "kuji",
+    decimals: 6,
+  },
+  "ibc/bb6bcdb515050bae97516111873ccd7bcf1fd0ccb723cc12f3c4f704d6c646ce": {
+    symbol: "kuji",
+    decimals: 6,
+  },
+  "uosmo": {
+    symbol: "osmo",
+    decimals: 6,
+  },
+  "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4": {
+    symbol: "usdc",
+    decimals: 6,
+  },
+  "ibc/498a0751c798a0d9a389aa3691123dada57daa4fe165d5c75894505b876ba6e4": {
+    symbol: "usdc",
+    decimals: 6,
+  },
+  "factory/kujira1jelmu9tdmr6hqg0d6qw4g6c9mwrexrzuryh50fwcavcpthp5m0uq20853h/urcpt":  { 
+    symbol: "xusdc", 
+    decimals: 6 
+  },
+  "factory/kujira1jelmu9tdmr6hqg0d6qw4g6c9mwrexrzuryh50fwcavcpthp5m0uq20853h/urcpt": {
+    symbol: "xusdc",
+    decimals: 6
+  },
+  "factory/kujira1w4yaama77v53fp0f9343t9w2f932z526vj970n2jv5055a7gt92sxgwypf/urcpt": {
+    symbol: "xusk",
+    decimals: 6
+  }
 };

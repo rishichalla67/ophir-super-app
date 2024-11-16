@@ -111,7 +111,10 @@ function TreasuryAnalytics() {
                 };
               }
               
-              const amount = parseFloat(coin.amount) / Math.pow(10, tokenInfo.decimals);
+              const amount = symbol === 'btc' 
+                ? parseFloat(coin.humanAmount || 0)
+                : parseFloat(coin.amount) / Math.pow(10, tokenInfo.decimals);
+              
               combinedAssets[symbol].totalAmount += amount;
               combinedAssets[symbol].locations.push({
                 chain,
@@ -125,7 +128,27 @@ function TreasuryAnalytics() {
       }
     });
     
-    return Object.values(combinedAssets);
+    return Object.values(combinedAssets)
+      .sort((a, b) => {
+        const getPrice = (symbol) => {
+          const lookupSymbols = {
+            'wbtc': ['wbtc', 'btc'],
+            // Add other token mappings if needed
+          };
+          
+          const alternatives = lookupSymbols[symbol.toLowerCase()] || [symbol.toLowerCase()];
+          for (const sym of alternatives) {
+            if (prices[sym] !== undefined) {
+              return prices[sym];
+            }
+          }
+          return 0;
+        };
+
+        const valueA = a.totalAmount * getPrice(a.symbol);
+        const valueB = b.totalAmount * getPrice(b.symbol);
+        return valueB - valueA;
+      });
   };
 
   const AssetDetailsModal = ({ asset, onClose }) => {
@@ -177,10 +200,7 @@ function TreasuryAnalytics() {
             <div className="bg-gray-700/50 rounded-lg p-4">
               <div className="text-gray-400 text-sm">Total Balance</div>
               <div className="text-white text-lg font-semibold">
-                {asset.totalAmount.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 6
-                })}
+                {Number(asset.totalAmount).toFixed(8)}
               </div>
             </div>
             <div className="bg-gray-700/50 rounded-lg p-4">
@@ -241,7 +261,22 @@ function TreasuryAnalytics() {
 
   const renderAssetRow = (asset) => {
     const imageUrl = tokenImages[asset.symbol];
-    const value = asset.totalAmount * (prices[asset.symbol.toLowerCase()] || 0);
+    const getAssetPrice = (symbol) => {
+      const lookupSymbols = {
+        'wbtc': ['wbtc', 'btc'],
+        // Add other token mappings if needed
+      };
+
+      const alternatives = lookupSymbols[symbol.toLowerCase()] || [symbol.toLowerCase()];
+      for (const sym of alternatives) {
+        if (prices[sym] !== undefined) {
+          return prices[sym];
+        }
+      }
+      return 0;
+    };
+
+    const value = asset.totalAmount * getAssetPrice(asset.symbol);
 
     return (
       <tr
@@ -273,10 +308,13 @@ function TreasuryAnalytics() {
           </div>
         </td>
         <td className="py-3 px-2 sm:px-6 text-right text-white text-sm sm:text-base">
-          {asset.totalAmount.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 6
-          })}
+          {asset.symbol.toLowerCase() === 'btc' 
+            ? Number(asset.totalAmount).toFixed(8)
+            : asset.totalAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 6
+              })
+          }
         </td>
         <td className="py-3 px-2 sm:px-6 text-right text-white text-sm sm:text-base">
           ${value.toLocaleString(undefined, {
@@ -330,10 +368,13 @@ function TreasuryAnalytics() {
           <div>
             <div className="text-gray-400 text-sm">Balance</div>
             <div className="text-white">
-              {asset.totalAmount.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 6
-              })}
+              {asset.symbol.toLowerCase() === 'btc'
+                ? Number(asset.totalAmount).toFixed(8)
+                : asset.totalAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 6
+                  })
+              }
             </div>
           </div>
           <div>

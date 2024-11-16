@@ -22,7 +22,7 @@ export const tokenImages = {
     "https://assets.coingecko.com/coins/images/31060/standard/ampKUJI_%281%29.png?1696529894",
   ampkuji:
     "https://assets.coingecko.com/coins/images/31060/standard/ampKUJI_%281%29.png?1696529894",
-  kujira: "https://assets.coingecko.com/coins/images/20685/standard/kuji-200x200.png?1696520085",
+  kuji: "https://assets.coingecko.com/coins/images/20685/standard/kuji-200x200.png?1696520085",
   wBTCaxl:
     "https://assets.coingecko.com/coins/images/28173/standard/wbtc-satoshi_D_3x.png?1696986732",
   wbtcaxl:
@@ -52,6 +52,7 @@ export const tokenImages = {
   ampusdc:
     "https://assets.coingecko.com/coins/images/6319/standard/usdc.png?1696506694",
   usdc: "https://assets.coingecko.com/coins/images/6319/standard/usdc.png?1696506694",
+  xusdc: "https://assets.coingecko.com/coins/images/6319/standard/usdc.png?1696506694",
   bluna:
     "https://assets.coingecko.com/coins/images/34613/standard/bLUNA.png?1711563039",
   bLuna:
@@ -120,6 +121,7 @@ export const tokenImages = {
   tia: "https://assets.coingecko.com/coins/images/31967/standard/tia.jpg?1696530772",
   uni: "https://assets.coingecko.com/coins/images/12504/standard/uni.jpg?1696512319",
   usk: "https://assets.coingecko.com/coins/images/27274/standard/usk.png?1696526326",
+  xusk: "https://assets.coingecko.com/coins/images/27274/standard/usk.png?1696526326",
   wbtc: "https://assets.coingecko.com/coins/images/7598/standard/wrapped_bitcoin_wbtc.png?1696507857",
   weth: "https://assets.coingecko.com/coins/images/32315/standard/weth_%281%29.png?1697365181",
   wink: "https://assets.coingecko.com/coins/images/31075/standard/WINK-Ticker-logo-color.png?1696529908",
