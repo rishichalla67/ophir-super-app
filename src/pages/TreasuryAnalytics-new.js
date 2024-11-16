@@ -4,6 +4,9 @@ import { useWallet } from '../context/WalletContext';
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { useState, useEffect } from 'react';
 import { tokenImages } from '../utils/tokenImages';
+import { daoConfig } from '../utils/daoConfig';
+import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
+import { useSidebar } from '../context/SidebarContext';
 
 function TreasuryAnalytics() {
   const { prices, loading, error, balances, balancesLoading, balancesError } = useCrypto();
@@ -12,6 +15,9 @@ function TreasuryAnalytics() {
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState(null);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [potentialRedemption, setPotentialRedemption] = useState({});
+  const [isPotentialRedemptionLoading, setIsPotentialRedemptionLoading] = useState(false);
+  const { isSidebarOpen } = useSidebar();
 
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
@@ -49,17 +55,68 @@ function TreasuryAnalytics() {
     return offlineSigner;
   };
 
-  const checkWalletBalances = async () => {
-    if (!connectedWalletAddress) return;
+  const queryPotentialRedemption = async (balance) => {
+    if (!balance || balance <= 0) return;
     
-    setWalletLoading(true);
+    setIsPotentialRedemptionLoading(true);
     try {
+      const message = {
+        get_redemptions: {
+          amount: (Number(balance) * 1000000).toString(),
+        },
+      };
+
       const signer = await getSigner();
-      const client = await SigningStargateClient.connectWithSigner(
-        "https://migaloo-testnet-rpc.polkachu.com:443",
+      const client = await SigningCosmWasmClient.connectWithSigner(
+        "https://migaloo-rpc.polkachu.com",
         signer
       );
+
+      const queryResponse = await client.queryContractSmart(
+        daoConfig["CONTRACT_ADDRESS"],
+        message
+      );
+
+      if (queryResponse && queryResponse.redemptions) {
+        const redemptionValues = queryResponse.redemptions.reduce((acc, redemption) => {
+          const tokenInfo = tokenMappings[redemption.denom] || {
+            symbol: redemption.denom,
+            decimals: 6,
+          };
+          const adjustedAmount = Number(redemption.amount) / Math.pow(10, tokenInfo.decimals);
+          acc[tokenInfo.symbol] = adjustedAmount;
+          return acc;
+        }, {});
+        setPotentialRedemption(redemptionValues);
+      }
+    } catch (error) {
+      console.error("Error querying potential redemption:", error);
+    } finally {
+      setIsPotentialRedemptionLoading(false);
+    }
+  };
+
+  const checkWalletBalances = async () => {
+    if (!connectedWalletAddress) {
+      console.log("No wallet connected, skipping balance check");
+      return;
+    }
+    
+    setWalletLoading(true);
+    console.log("Checking wallet balances for address:", connectedWalletAddress);
+    
+    try {
+      const signer = await getSigner();
+      console.log("Got signer successfully");
+
+      const client = await SigningStargateClient.connectWithSigner(
+        "https://migaloo-rpc.polkachu.com",
+        signer
+      );
+      console.log("Connected to Stargate client");
+
       const balances = await client.getAllBalances(connectedWalletAddress);
+      console.log("Raw balances received:", balances);
 
       const formattedBalances = balances.reduce((acc, balance) => {
         const tokenInfo = tokenMappings[balance.denom] || {
@@ -70,10 +127,23 @@ function TreasuryAnalytics() {
         acc[balance.denom] = amount;
         return acc;
       }, {});
-
+      
+      console.log("Formatted balances:", formattedBalances);
       setWalletBalances(formattedBalances);
+
+      const ophirDenom = daoConfig["OPHIR_DENOM"];
+      const ophirBalance = formattedBalances[ophirDenom] || 0;
+      console.log("OPHIR balance found:", ophirBalance, "for denom:", ophirDenom);
+
+      if (ophirBalance > 0) {
+        console.log("Querying potential redemption for OPHIR balance:", ophirBalance);
+        await queryPotentialRedemption(ophirBalance);
+      } else {
+        console.log("No OPHIR balance found, skipping redemption query");
+      }
+
     } catch (error) {
-      console.error("Error checking wallet balances:", error);
+      console.error("Error in checkWalletBalances:", error);
       setWalletError(error.message);
     } finally {
       setWalletLoading(false);
@@ -325,6 +395,20 @@ function TreasuryAnalytics() {
         <td className="hidden sm:table-cell py-3 px-2 sm:px-6 text-right text-gray-300">
           {/* Add rewards column if needed */}
         </td>
+        <td className="py-3 px-2 sm:px-6 text-right text-white text-sm sm:text-base">
+          {isPotentialRedemptionLoading ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mx-auto"/>
+          ) : potentialRedemption[asset.symbol] ? (
+            <div className="flex flex-col items-end">
+              <span>{potentialRedemption[asset.symbol].toFixed(6)}</span>
+              <span className="text-xs text-gray-400">
+                ${(potentialRedemption[asset.symbol] * (prices[asset.symbol.toLowerCase()] || 0)).toFixed(2)}
+              </span>
+            </div>
+          ) : (
+            '-'
+          )}
+        </td>
       </tr>
     );
   };
@@ -386,15 +470,47 @@ function TreasuryAnalytics() {
               })}
             </div>
           </div>
+          {!isPotentialRedemptionLoading && potentialRedemption[asset.symbol] && (
+            <div>
+              <div className="text-gray-400 text-sm">Potential Redemption</div>
+              <div className="flex flex-col">
+                <span className="text-white">{potentialRedemption[asset.symbol].toFixed(6)}</span>
+                <span className="text-xs text-gray-400">
+                  ${(potentialRedemption[asset.symbol] * (prices[asset.symbol.toLowerCase()] || 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+          {isPotentialRedemptionLoading && (
+            <div>
+              <div className="text-gray-400 text-sm">Potential Redemption</div>
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mx-auto"/>
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 p-4 mt-20">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6">Treasury Analytics</h1>
+    <div 
+      className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
+      style={{ paddingTop: "12dvh" }}
+    >
+      <div className="max-w-7xl mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Treasury Analytics</h1>
+          {connectedWalletAddress && !walletLoading && (
+            <div className="text-sm text-gray-400">
+              Your OPHIR Balance: {walletBalances[daoConfig["OPHIR_DENOM"]]?.toLocaleString() || '0'}
+              {walletLoading && (
+                <div className="inline-block ml-2">
+                  <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-gray-400"/>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         
         {/* Mobile View */}
         <div className="sm:hidden">
@@ -410,6 +526,7 @@ function TreasuryAnalytics() {
                 <th className="py-3 px-6 text-right font-semibold text-base">BALANCE</th>
                 <th className="py-3 px-6 text-right font-semibold text-base">VALUE</th>
                 <th className="py-3 px-6 text-right font-semibold text-base">REWARDS</th>
+                <th className="py-3 px-6 text-right font-semibold text-base">POTENTIAL REDEMPTION</th>
               </tr>
             </thead>
             <tbody>
