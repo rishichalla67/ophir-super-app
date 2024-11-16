@@ -5,7 +5,7 @@ import { useSidebar } from '../context/SidebarContext';
 
 const Sidebar = () => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState({});
   const navigate = useNavigate();
 
   const menuItems = [
@@ -18,10 +18,18 @@ const Sidebar = () => {
       ],
     },
     { name: 'REDEEM', path: '/redeem' },
-    { name: 'BONDS', path: '/bonds' },
+
+    {
+      name: 'BONDS',
+      subItems: [
+        { name: 'Home', path: '/bonds' },
+        { name: 'Resale', path: '/bonds/resale' },
+      ],
+    },
+    // { name: 'BONDS', path: '/bonds' },
     // { name: 'OTC MARKET', path: '/otc-market' },
     // { name: 'LENDING', path: '/lending' },
-    { name: 'Bond Resale', path: '/bonds/resale'},
+    // { name: 'BOND RESALE', path: '/bonds/resale'},
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -33,9 +41,12 @@ const Sidebar = () => {
     navigate(path);
   };
 
-  const toggleDashboard = (e) => {
+  const toggleDropdown = (e, name) => {
     e.stopPropagation();
-    setIsDashboardOpen(!isDashboardOpen);
+    setOpenDropdowns(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
   };
 
   useEffect(() => {
@@ -53,29 +64,29 @@ const Sidebar = () => {
         className="sidebar-open-button text-white"
         onClick={toggleSidebar}
       >
-        {isSidebarOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
+        {isSidebarOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
       </button>
-      <div className={`sidebar-bg top-20 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
+      <div className={`sidebar-bg top-20 w-44 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
         <nav className="flex-grow">
-          <ul className="flex flex-col items-end">
+          <ul className="flex flex-col">
             {menuItems.map((item) => (
-              <li key={item.name} className="pb-4 pt-4 w-full sidebar-item">
+              <li key={item.name} className="pb-2 pt-2 sm:pb-4 sm:pt-4 w-full sidebar-item text-right pr-4">
                 {item.subItems ? (
                   <div>
                     <button
-                      onClick={toggleDashboard}
-                      className="button-sidebar hover:text-ophir-gold flex items-center justify-center w-full"
+                      onClick={(e) => toggleDropdown(e, item.name)}
+                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
                     >
-                      {isDashboardOpen ? <FaChevronUp className="mr-2" /> : <FaChevronDown className="mr-2" />}
                       {item.name}
+                      {openDropdowns[item.name] ? <FaChevronUp className="ml-1 sm:ml-2" size={14} /> : <FaChevronDown className="ml-1 sm:ml-2" size={14} />}
                     </button>
-                    {isDashboardOpen && (
-                      <ul className="mt-2">
+                    {openDropdowns[item.name] && (
+                      <ul className="mt-1 sm:mt-2">
                         {item.subItems.map((subItem) => (
-                          <li key={subItem.name} className="mb-2">
+                          <li key={subItem.name} className="mb-1 sm:mb-2 text-right">
                             <button
                               onClick={() => handleItemClick(subItem.path)}
-                              className="button-sidebar hover:text-ophir-gold"
+                              className="button-sidebar text-sm sm:text-base hover:text-ophir-gold"
                             >
                               {subItem.name}
                             </button>
@@ -87,7 +98,7 @@ const Sidebar = () => {
                 ) : (
                   <button
                     onClick={() => handleItemClick(item.path)}
-                    className="button-sidebar hover:text-ophir-gold"
+                    className="button-sidebar text-sm sm:text-base hover:text-ophir-gold w-full text-right"
                   >
                     {item.name}
                   </button>
@@ -96,10 +107,10 @@ const Sidebar = () => {
             ))}
           </ul>
         </nav>
-        <div className="mt-auto mb-28">
+        <div className="mt-auto mb-20 sm:mb-28 text-right pr-4">
           <button
             onClick={() => handleItemClick('/about')}
-            className="button-sidebar hover:text-ophir-gold"
+            className="button-sidebar text-sm sm:text-base hover:text-ophir-gold"
           >
             ABOUT US
           </button>

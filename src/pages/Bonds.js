@@ -621,12 +621,19 @@ const Bonds = () => {
     const claimEndTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
     
     const hasUnclaimedAmount = parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
-    
-    return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
+    // now >= claimStartTime && now <= claimEndTime &&
+    return hasUnclaimedAmount;
   };
 
   const UserBondsSection = () => {
     if (!connectedWalletAddress || userBonds.length === 0) return null;
+
+    const isFullyClaimed = (purchase) => {
+      // Convert string amounts to BigInt for accurate comparison
+      const totalAmount = BigInt(purchase.amount || 0);
+      const claimedAmount = BigInt(purchase.claimed_amount || 0);
+      return claimedAmount >= totalAmount;
+    };
 
     return (
       <div className="mb-8">
@@ -647,7 +654,7 @@ const Bonds = () => {
               </thead>
               <tbody>
                 {userBonds.map((purchase) => {
-                  const canClaim = purchase.claimed_amount === "0";
+                  const fullyClaimed = isFullyClaimed(purchase);
                   const purchaseDate = purchase.purchase_time instanceof Date 
                     ? purchase.purchase_time 
                     : new Date(Number(purchase.purchase_time) / 1_000_000);
@@ -659,9 +666,9 @@ const Bonds = () => {
                       <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
                       <td className="py-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-sm ${
-                          canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                          !fullyClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                         }`}>
-                          {canClaim ? 'Unclaimed' : 'Claimed'}
+                          {!fullyClaimed ? 'Unclaimed' : 'Claimed'}
                         </span>
                       </td>
                       <td className="py-4 text-right">
@@ -693,22 +700,19 @@ const Bonds = () => {
         {/* Mobile view */}
         <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {userBonds.map((purchase) => {
-            const canClaim = purchase.claimed_amount === "0";
+            const fullyClaimed = isFullyClaimed(purchase);
             const purchaseDate = purchase.purchase_time instanceof Date 
               ? purchase.purchase_time 
               : new Date(Number(purchase.purchase_time) / 1_000_000);
             
             return (
-              <div 
-                key={purchase.bond_id}
-                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
-              >
+              <div key={purchase.bond_id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-gray-400">Bond #{purchase.bond_id}</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
-                    canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                    !fullyClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                   }`}>
-                    {canClaim ? 'Unclaimed' : 'Claimed'}
+                    {!fullyClaimed ? 'Unclaimed' : 'Claimed'}
                   </span>
                 </div>
                 

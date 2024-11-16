@@ -1,3 +1,28 @@
+// Add constants at the top of the file
+export const OPHIR = "factory/migaloo1t862qdu9mj5hr3j727247acypym3ej47axu22rrapm4tqlcpuseqltxwq5/ophir";
+export const WBTC = "ibc/6E5BF71FE1BEBBD648C8A7CB7A790AEF0081120B2E5746E6563FC95764716D61";
+export const LUNA = "ibc/4627AD2524E3E0523047E35BB76CC90E37D9D57ACF14F0FCBCEB2480705F3CB8";
+export const LAB_DENOM = "factory/osmo17fel472lgzs87ekt9dvk0zqyh5gl80sqp4sk4n/LAB";
+export const RSTK_DENOM = "ibc/04FAC73DFF7F1DD59395948F2F043B0BBF978AD4533EE37E811340F501A08FFB";
+export const ROAR_DENOM = "ibc/98BCD43F190C6960D0005BC46BB765C827403A361C9C03C2FF694150A30284B0";
+export const SHARK_DENOM = "ibc/64D56DF9EC69BE554F49EBCE0199611062FF1137EF105E2F645C1997344F3834";
+export const USDC_DENOM = "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4";
+export const AMP_WHALE = "factory/migaloo1436kxs0w2es6xlqpp9rd35e3d0cjnw4sv8j3a7483sgks29jqwgshqdky4/ampWHALE";
+export const B_WHALE = "factory/migaloo1mf6ptkssddfmxvhdx0ech0k03ktp6kf9yk59renau2gvht3nq2gqdhts4u/boneWhale";
+
+// Add constants for multipliers
+export const AMPROAR_ERIS_CONSTANT = 1.04;
+export const MOAR_ERIS_CONSTANT = 1.3984;
+export const MUSDC_ERIS_CONSTANT = 1.2124;
+export const AMPBTC_ERIS_CONSTANT = 1.029;
+export const BLUNA_CONSTANT = 1 / 0.79007;
+export const BOSMO_CONSTANT = 1 / 0.956234;
+export const AMPOSMO_ERIS_CONSTANT = 1.1318;
+export const AMPLUNA_ERIS_CONSTANT = 1.3356;
+export const AMPWHALET_ERIS_CONSTANT = 1.6386;
+export const BWHALET_CONSTANT = 1.5317;
+export const UNSOLD_OPHIR_FUZION_BONDS = 47175732.096;
+
 export const tokenMappings = {
   "ibc/517E13F14A1245D4DE8CF467ADD4DA0058974CDCC880FA6AE536DBCA1D16D84E": {
     symbol: "bWhale",
@@ -144,6 +169,14 @@ export const tokenMappings = {
   },
   "factory/migaloo1mf6ptkssddfmxvhdx0ech0k03ktp6kf9yk59renau2gvht3nq2gqdhts4u/boneWhale": {
     symbol: "bWhale",
+    decimals: 6,
+  },
+  "factory/kujira13x2l25mpkhwnwcwdzzd34cr8fyht9jlj7xu9g4uffe36g3fmln8qkvm3qn/ukart": {
+    symbol: "kart",
+    decimals: 6,
+  },
+  "ukuji": {
+    symbol: "kujira",
     decimals: 6,
   },
 };

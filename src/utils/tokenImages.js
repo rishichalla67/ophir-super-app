@@ -22,6 +22,7 @@ export const tokenImages = {
     "https://assets.coingecko.com/coins/images/31060/standard/ampKUJI_%281%29.png?1696529894",
   ampkuji:
     "https://assets.coingecko.com/coins/images/31060/standard/ampKUJI_%281%29.png?1696529894",
+  kujira: "https://assets.coingecko.com/coins/images/20685/standard/kuji-200x200.png?1696520085",
   wBTCaxl:
     "https://assets.coingecko.com/coins/images/28173/standard/wbtc-satoshi_D_3x.png?1696986732",
   wbtcaxl:
