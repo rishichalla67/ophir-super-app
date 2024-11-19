@@ -30,11 +30,11 @@ const Sidebar = () => {
       name: 'BONDS',
       icon: <FaHandHoldingUsd className="mr-2" size={16} />,
       subItems: [
-        { 
-          name: 'My Bonds', 
-          path: '/my-bonds',
-          icon: <FaStore className="mr-2" size={14} />
-        },
+        // { 
+        //   name: 'My Bonds', 
+        //   path: '/my-bonds',
+        //   icon: <FaStore className="mr-2" size={14} />
+        // },
         { 
           name: 'Browse', 
           path: '/bonds',
