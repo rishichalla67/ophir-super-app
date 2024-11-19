@@ -227,12 +227,30 @@ function TreasuryAnalytics() {
     const totalValue = asset.totalAmount * (prices[asset.symbol.toLowerCase()] || 0);
     const imageUrl = tokenImages[asset.symbol];
 
+    const formatLargeNumber = (num) => {
+      // For very large numbers (billions+), use K/M/B notation
+      if (num >= 1e9) {
+        return (num / 1e9).toFixed(2) + 'B';
+      }
+      if (num >= 1e6) {
+        return (num / 1e6).toFixed(2) + 'M';
+      }
+      if (num >= 1e3) {
+        return (num / 1e3).toFixed(2) + 'K';
+      }
+      // For smaller numbers, use locale string with appropriate decimals
+      return num.toLocaleString(undefined, {
+        maximumFractionDigits: num > 1000 ? 2 : 6,
+        minimumFractionDigits: 2
+      });
+    };
+
     return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-        <div className="bg-gray-800 rounded-lg w-[90%] sm:w-[80%] h-[80vh] flex flex-col">
-          {/* Header */}
-          <div className="p-4 sm:p-6 border-b border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-2 z-50">
+        <div className="bg-gray-800 rounded-lg w-[95%] sm:w-[80%] max-h-[90vh] sm:h-[80vh] flex flex-col">
+          {/* Header - Made more compact */}
+          <div className="p-3 sm:p-6 border-b border-gray-700 flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3">
               {Array.isArray(imageUrl) ? (
                 <div className="flex -space-x-2">
                   {imageUrl.map((url, i) => (
@@ -240,7 +258,7 @@ function TreasuryAnalytics() {
                       key={i}
                       src={url}
                       alt={asset.symbol}
-                      className="w-10 h-10 rounded-full border-2 border-gray-800"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-gray-800"
                     />
                   ))}
                 </div>
@@ -248,77 +266,65 @@ function TreasuryAnalytics() {
                 <img
                   src={imageUrl || 'https://d1nhio0ox7pgb.cloudfront.net/_img/g_collection_png/standard/32x32/symbol_questionmark.png'}
                   alt={asset.symbol}
-                  className="w-10 h-10 rounded-full"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
                 />
               )}
-              <h3 className="text-xl sm:text-2xl font-bold text-white capitalize">
-                {asset.symbol} Details
+              <h3 className="text-lg sm:text-2xl font-bold text-white capitalize">
+                {asset.symbol}
               </h3>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white p-2"
+              className="text-gray-400 hover:text-white p-1"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 sm:p-6">
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm">Total Balance</div>
-              <div className="text-white text-lg font-semibold">
-                {Number(asset.totalAmount).toFixed(8)}
+          {/* Summary Cards - Made into a more compact grid */}
+          <div className="grid grid-cols-3 gap-2 p-2 sm:p-6">
+            <div className="bg-gray-700/50 rounded-lg p-2 sm:p-4">
+              <div className="text-gray-400 text-xs sm:text-sm">Balance</div>
+              <div className="text-white text-sm sm:text-lg font-semibold">
+                {formatLargeNumber(Number(asset.totalAmount))}
               </div>
             </div>
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm">Total Value</div>
-              <div className="text-white text-lg font-semibold">
-                ${totalValue.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
+            <div className="bg-gray-700/50 rounded-lg p-2 sm:p-4">
+              <div className="text-gray-400 text-xs sm:text-sm">Value</div>
+              <div className="text-white text-sm sm:text-lg font-semibold truncate">
+                ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
             </div>
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-gray-400 text-sm">Current Price</div>
-              <div className="text-white text-lg font-semibold">
-                ${(prices[asset.symbol] || 0).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 6
-                })}
+            <div className="bg-gray-700/50 rounded-lg p-2 sm:p-4">
+              <div className="text-gray-400 text-xs sm:text-sm">Price</div>
+              <div className="text-white text-sm sm:text-lg font-semibold truncate">
+                ${(prices[asset.symbol] || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
               </div>
             </div>
           </div>
 
-          {/* Locations Table */}
-          <div className="flex-1 overflow-auto p-4 sm:p-6">
-            <div className="text-lg font-semibold text-white mb-4">Asset Locations</div>
-            <div className="space-y-3">
+          {/* Locations Table - Simplified for mobile */}
+          <div className="flex-1 overflow-auto p-2 sm:p-6">
+            <div className="text-sm sm:text-lg font-semibold text-white mb-2 sm:mb-4">Asset Locations</div>
+            <div className="space-y-2">
               {asset.locations.map((location, index) => (
                 <div
                   key={index}
-                  className="bg-gray-700/50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                  className="bg-gray-700/50 rounded-lg p-2 sm:p-4 flex justify-between items-center"
                 >
                   <div className="flex flex-col">
-                    <span className="text-white font-medium">{location.chain}</span>
-                    <span className="text-gray-400 text-sm">{location.walletType}</span>
+                    <span className="text-white text-sm sm:text-base font-medium">{location.chain}</span>
+                    <span className="text-gray-400 text-xs sm:text-sm">{location.walletType}</span>
                   </div>
-                  <div className="flex flex-col items-start sm:items-end">
-                    <span className="text-white">
-                      {location.amount.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 6
-                      })} {asset.symbol}
-                    </span>
-                    <span className="text-gray-400 text-sm">
-                      ${(location.amount * (prices[asset.symbol] || 0)).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })}
-                    </span>
+                  <div className="text-right">
+                    <div className="text-white text-sm sm:text-base">
+                      {location.amount.toFixed(4)}
+                    </div>
+                    <div className="text-gray-400 text-xs">
+                      ${(location.amount * (prices[asset.symbol] || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -547,3 +553,4 @@ function TreasuryAnalytics() {
 }
 
 export default TreasuryAnalytics;
+

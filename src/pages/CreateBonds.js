@@ -84,6 +84,7 @@ const CreateBonds = () => {
   const [userTimezone, setUserTimezone] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
+  const [customBondName, setCustomBondName] = useState("");
 
   const allowedDenoms = [
     "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
@@ -184,45 +185,52 @@ const CreateBonds = () => {
   const executeCreateBond = async () => {
     setIsLoading(true);
     try {
-      const {
-        start_time,
-        start_time_hour,
-        end_time,
-        end_time_hour,
-        maturity_date,
-        maturity_date_hour,
-        token_denom,
-        total_supply,
-        purchasing_denom,
-        price,
-        bond_denom_name,
-        bond_denom_suffix,
-        immediate_claim,
-        nft_metadata
-      } = formData;
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
 
-      // Ensure bond_denom_name is prefixed with "o"
-      const fullBondDenomName = `ob${(
-        tokenMappings[formData.token_denom]?.symbol || formData.token_denom
-      ).toUpperCase()}${bond_denom_suffix.toString()}`;
+      // Calculate minute offsets from current time
+      const now = new Date();
+      const startDate = new Date(`${formData.start_time}T${formData.start_time_hour}`);
+      const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
+      const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
 
-      const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET;
+      // Convert dates to timestamps for comparison
+      const endTimestamp = endDate.getTime();
+      const maturityTimestamp = maturityDate.getTime();
 
-      // Convert dates to UTC and add 4 hours plus buffer minutes
-      const convertToUTC = (date, time, addExtraHour = false) => {
-        const localDate = new Date(`${date}T${time}`);
-        const utcDate = new Date(
-          localDate.getTime() - localDate.getTimezoneOffset() * 60000
-        );
-        // Add 4 hours plus buffer minutes
-        utcDate.setHours(utcDate.getHours() + 4);
-        utcDate.setMinutes(utcDate.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
-        // Add extra hour if needed
-        if (addExtraHour) {
-          utcDate.setHours(utcDate.getHours() + 1);
+      // Validate dates with detailed error messages
+      if (endTimestamp <= startDate.getTime()) {
+        throw new Error("End date must be after start date");
+      }
+      if (maturityTimestamp <= endTimestamp) {
+        throw new Error(`Invalid maturity time: ${maturityDate.toLocaleString()} must be after end time: ${endDate.toLocaleString()}`);
+      }
+
+      // Calculate offsets in minutes (ceiling)
+      const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+      const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+      const maturityOffset = Math.ceil((maturityDate - now) / (1000 * 60));
+
+      // Query contract for timestamps
+      const timestampQuery = {
+        get_timestamp_offsets: {
+          start_offset: startOffset,
+          end_offset: endOffset,
+          mature_offset: maturityOffset
         }
-        return utcDate;
       };
+
+      const timestamps = await client.queryContractSmart(
+        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        timestampQuery
+      );
+
+      // Ensure we're working with BigInt for precise calculations
+      const purchaseEnd = BigInt(timestamps.end_time);
+      
+      // Add a larger buffer (e.g., 5 minutes worth of nanoseconds) to ensure clear separation
+      const FIVE_MINUTES_NS = BigInt(5 * 60 * 1000000000);
+      const claimStartTime = (purchaseEnd + FIVE_MINUTES_NS).toString();
 
       const message = {
         issue_bond: {
@@ -237,53 +245,49 @@ const CreateBonds = () => {
               )
             )
           },
-          purchase_start_time: String(Math.floor(
-            convertToUTC(start_time, start_time_hour).getTime() * 1_000_000
-          )),
-          purchase_end_time: String(Math.floor(
-            convertToUTC(end_time, end_time_hour).getTime() * 1_000_000
-          )),
-          claim_start_time: String(Math.floor(
-            convertToUTC(end_time, end_time_hour, true).getTime() * 1_000_000 // Add extra hour
-          )),
-          claim_end_time: String(Math.floor(
-            convertToUTC(maturity_date, maturity_date_hour, true).getTime() * 1_000_000 // Add extra hour
-          )),
-          immediate_claim,
+          purchase_start_time: timestamps.start_time.toString(),
+          purchase_end_time: timestamps.end_time.toString(),
+          claim_start_time: claimStartTime,
+          claim_end_time: timestamps.mature_time.toString(),
+          immediate_claim: formData.immediate_claim,
           description: formData.description,
           nft_metadata: {
-            name: nft_metadata.name || `${fullBondDenomName} Bond NFT`,
-            symbol: nft_metadata.symbol || fullBondDenomName,
+            name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
+            symbol: formData.nft_metadata.symbol || fullBondDenomName,
           }
         },
       };
 
-      const signer = await getSigner();
-
-      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      // Log timestamps for debugging
+      console.log('Timestamps:', {
+        purchase_start: timestamps.start_time,
+        purchase_end: timestamps.end_time,
+        claim_start: claimStartTime,
+        claim_end: timestamps.mature_time
+      });
 
       // Calculate the fee in uwhale (25 WHALE)
       const whaleFee = "25000000"; // 25 WHALE in uwhale
 
       // Validate token_denom and total_supply before creating funds array
-      if (!token_denom || !total_supply) {
+      if (!formData.token_denom || !formData.total_supply) {
         throw new Error("Token denom and total supply are required");
       }
 
       // Ensure tokenDecimals is valid
-      const tokenDecimals = tokenMappings[token_denom]?.decimals;
+      const tokenDecimals = tokenMappings[formData.token_denom]?.decimals;
       if (typeof tokenDecimals !== 'number') {
         throw new Error("Invalid token decimals configuration");
       }
 
       // Calculate the total supply in the smallest unit of the token
       const adjustedTotalSupply = BigInt(
-        Math.round(parseFloat(total_supply) * Math.pow(10, tokenDecimals))
+        Math.round(parseFloat(formData.total_supply) * Math.pow(10, tokenDecimals))
       ).toString();
 
       // Prepare the funds array with validation
       const funds = [{
-        denom: token_denom,
+        denom: formData.token_denom,
         amount: adjustedTotalSupply
       }];
 
@@ -299,7 +303,7 @@ const CreateBonds = () => {
 
       const result = await client.execute(
         connectedWalletAddress,
-        contractAddress,
+        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
         message,
         fee,
         `Create Bond: ${fullBondDenomName}`,
@@ -374,8 +378,10 @@ const CreateBonds = () => {
       navigate("/bonds");
     } catch (error) {
       console.error("Error creating bond:", error);
+      // Log the full error for debugging
+      console.error("Full error:", error);
       showAlert(
-        `Error creating bond: ${error.message || "Unknown error occurred"}`, 
+        `Error creating bond: ${error.message || "Unknown error occurred"}`,
         "error"
       );
     } finally {
@@ -414,12 +420,16 @@ const CreateBonds = () => {
   };
 
   useEffect(() => {
-    const name = `ob${(
-      tokenMappings[formData.token_denom]?.symbol || formData.token_denom
-    ).toUpperCase()}`;
-    const suffix = formData.bond_denom_suffix.toString();
-    setFullBondDenomName(`${name}${suffix}`);
-  }, [formData.bond_denom_name, formData.bond_denom_suffix]);
+    if (customBondName.trim()) {
+      setFullBondDenomName(customBondName);
+    } else {
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000); // Generate random 4-digit number
+      const defaultName = `ob${(
+        tokenMappings[formData.token_denom]?.symbol || formData.token_denom
+      ).toUpperCase()}${randomSuffix}`;
+      setFullBondDenomName(defaultName);
+    }
+  }, [customBondName, formData.token_denom]);
 
   useEffect(() => {
     // Get the user's timezone abbreviation and UTC offset
@@ -544,6 +554,22 @@ const CreateBonds = () => {
       }));
     }
   };
+
+  useEffect(() => {
+    const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
+    const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
+    
+    if (maturityDate <= endDate) {
+      const newMaturityDate = new Date(endDate);
+      newMaturityDate.setHours(endDate.getHours() + 1);
+      
+      setFormData(prev => ({
+        ...prev,
+        maturity_date: newMaturityDate.toISOString().split('T')[0],
+        maturity_date_hour: newMaturityDate.toTimeString().slice(0, 5)
+      }));
+    }
+  }, [formData.end_time, formData.end_time_hour]);
 
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
@@ -745,32 +771,23 @@ const CreateBonds = () => {
             <div>
               <LabelWithTooltip
                 label="Bond Denom"
-                tooltip="A unique identifier for your bond. The prefix 'ob' stands for 'Ophir Bond' followed by your token symbol and a number suffix to ensure uniqueness."
+                tooltip="Enter a custom name for your bond, or leave blank to use the default format (obTOKENXXXX)"
                 required
               />
               <div className="flex items-center mobile-input-group">
                 <input
                   type="text"
-                  name="bond_name"
-                  value={`ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}`}
-                  onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-l-md mobile-full-width"
-                  disabled={true}
-                />
-                <input
-                  type="number"
-                  name="bond_denom_suffix"
-                  value={formData.bond_denom_suffix}
-                  onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/4 px-3 py-2 rounded-r-md mobile-full-width"
-                  min="1"
-                  max="99"
-                  placeholder="01"
+                  value={customBondName}
+                  onChange={(e) => setCustomBondName(e.target.value)}
+                  className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md mobile-full-width"
+                  placeholder={`Default: ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}XXXX`}
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Use a number suffix (01-99) to ensure a unique name for your
-                bond denom.
+                {customBondName ? 
+                  "Using custom bond name" : 
+                  "Leave blank to use default format with random 4-digit suffix"
+                }
               </p>
             </div>
 

@@ -730,7 +730,7 @@ const BuyBonds = () => {
         </div>
 
         <h1 className="text-xl md:text-3xl font-bold mb-4 md:mb-8 h1-color">
-          {bond.bond_denom_name} Details
+          {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
         <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">

@@ -74,6 +74,7 @@ const AnalyticsDashboard = () => {
     const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
     const [runestoneData, setRunestoneData] = useState(null);
     const { isSidebarOpen } = useSidebar(); // Add this line
+    const [isLoading, setIsLoading] = useState(true); // Add this line
 
     useEffect(() => {
         const handleResize = () => {
@@ -192,6 +193,7 @@ const AnalyticsDashboard = () => {
     };
 
     const fetchData = async () => {
+        setIsLoading(true); // Add this line
         const cacheKey = 'ophirDataCache';
         const cachedData = localStorage.getItem(cacheKey);
         const now = new Date();
@@ -204,6 +206,7 @@ const AnalyticsDashboard = () => {
                 setOphirStats(stats);
                 setOphirTreasury(treasury);
                 setPriceData(prices);
+                setIsLoading(false); // Add this line
                 return;
             }
         }
@@ -212,6 +215,17 @@ const AnalyticsDashboard = () => {
             const statsResponse = await axios.get(`${prodUrl}/ophir/stats`);
             const treasuryResponse = await axios.get(`${prodUrl}/ophir/treasury`);
             const pricesResponse = await axios.get(`${prodUrl}/ophir/prices`);
+            
+            // Add debug logging
+            console.log('Price data:', pricesResponse.data);
+            
+            // Ensure wBTC price exists
+            if (!pricesResponse.data.wBTC && !pricesResponse.data.wbtc) {
+                console.error('Missing wBTC price data');
+                showAlert('Missing Bitcoin price data', 'error');
+            }
+
+            setPriceData(pricesResponse.data);
             getRedemptionPrice(pricesResponse.data);
             const dataToCache = {
                 stats: statsResponse.data,
@@ -228,8 +242,10 @@ const AnalyticsDashboard = () => {
             setOphirStats(statsResponse.data);
             setOphirTreasury(treasuryResponse.data);
             setPriceData(pricesResponse.data);
+            setIsLoading(false); // Add this line
         } catch (error) {
             console.error('Error fetching data:', error);
+            setIsLoading(false); // Add this line
         }
         
     };
@@ -255,7 +271,7 @@ const AnalyticsDashboard = () => {
     };
 
 
-    function sortAssetsByValue(data, prices, order = 'ascending') {
+    function sortAssetsByValue(data, prices, order = 'descending') {
         // Calculate total value for each asset
         const calculatedValues = Object.entries(data).map(([key, asset]) => {
             if (!asset || asset.balance === undefined || asset.rewards === undefined) {
@@ -331,14 +347,12 @@ const AnalyticsDashboard = () => {
     }
 
 
-    if (!ophirStats && showProgressBar) {
+    if (isLoading) {
         return (
-          <>
-            <div className="global-bg-new flex flex-col justify-center items-center h-screen">
-                <div className="text-white mb-4">Fetching On-Chain Data...</div>
+            <div className={`global-bg-new flex flex-col justify-center items-center min-h-screen transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
+                <div className="text-white mb-4">Loading Treasury Data...</div>
                 <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
             </div>
-          </>
         );
     }
 
