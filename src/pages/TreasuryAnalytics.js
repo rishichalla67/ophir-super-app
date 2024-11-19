@@ -426,22 +426,9 @@ const AnalyticsDashboard = () => {
     };
 
   return (
-    <>
-        {ophirStats && ophirTreasury && priceData &&
-            <div className={`pt-12 page-wrapper global-bg-new text-white min-h-screen transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
-                <Snackbar open={alertInfo.open} autoHideDuration={6000} onClose={() => setAlertInfo({ ...alertInfo, open: false })}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
-                    {alertInfo.htmlContent ? (
-                        <SnackbarContent
-                            style={{color: 'black', backgroundColor: alertInfo.severity === 'error' ? '#ffcccc' : '#ccffcc' }} // Adjusted colors to be less harsh
-                            message={<span dangerouslySetInnerHTML={{ __html: alertInfo.htmlContent }} />}
-                        />
-                    ) : (
-                        <Alert onClose={() => setAlertInfo({ ...alertInfo, open: false })} severity={alertInfo.severity} sx={{ width: '100%' }}>
-                            {alertInfo.message}
-                        </Alert>
-                    )}
-                </Snackbar>
+    <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}>
+        {ophirStats && ophirTreasury && priceData && (
+            <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
                 <div className="p-3">
                     <div className="title text-3xl font-bold text-white">Ophir Statistics</div>
                     <div className="tot-treasury-wrapper">
@@ -519,8 +506,8 @@ const AnalyticsDashboard = () => {
                 {renderTabContent()}
                 <Modal isOpen={isModalOpen} onClose={toggleModal} data={modalData} />
             </div>
-        }
-    </>
+        )}
+    </div>
   );
 };
 
