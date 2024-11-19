@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaChevronDown, FaChevronUp } from 'react-icons/fa'; // Make sure to install react-icons
+import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch } from 'react-icons/fa'; // Make sure to install react-icons
 import { useSidebar } from '../context/SidebarContext';
 
 const Sidebar = () => {
@@ -8,28 +8,45 @@ const Sidebar = () => {
   const [openDropdowns, setOpenDropdowns] = useState({});
   const navigate = useNavigate();
 
-  const menuItems = [
-    { name: 'HOME', path: '/' },
+  const menuItems = [    
     {
-      name: 'DASHBOARD',
+      name: 'DASHBOARDS',
+      icon: <FaChartBar className="mr-2" size={16} />,
       subItems: [
-        { name: 'Analytics', path: '/dashboard/treasury' },
-        { name: 'Redemptions', path: '/dashboard/redemptions' },
+        { 
+          name: 'Analytics', 
+          path: '/dashboard/treasury',
+          icon: <FaChartLine className="mr-2" size={14} />
+        },
+        { 
+          name: 'Redemptions', 
+          path: '/dashboard/redemptions',
+          icon: <FaHistory className="mr-2" size={14} />
+        },
       ],
     },
-    { name: 'REDEEM', path: '/redeem' },
-
+    { name: 'REDEEM', path: '/redeem', icon: <FaExchangeAlt className="mr-2" size={16} /> },
     {
       name: 'BONDS',
+      icon: <FaHandHoldingUsd className="mr-2" size={16} />,
       subItems: [
-        { name: 'Home', path: '/bonds' },
-        { name: 'Resale', path: '/bonds/resale' },
+        { 
+          name: 'My Bonds', 
+          path: '/my-bonds',
+          icon: <FaStore className="mr-2" size={14} />
+        },
+        { 
+          name: 'Browse', 
+          path: '/bonds',
+          icon: <FaSearch className="mr-2" size={14} />
+        },
+        { 
+          name: 'Resale', 
+          path: '/bonds/resale',
+          icon: <FaStore className="mr-2" size={14} />
+        },
       ],
     },
-    // { name: 'BONDS', path: '/bonds' },
-    // { name: 'OTC MARKET', path: '/otc-market' },
-    // { name: 'LENDING', path: '/lending' },
-    // { name: 'BOND RESALE', path: '/bonds/resale'},
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -70,25 +87,42 @@ const Sidebar = () => {
         <nav className="flex-grow">
           <ul className="flex flex-col">
             {menuItems.map((item) => (
-              <li key={item.name} className="pb-2 pt-2 sm:pb-4 sm:pt-4 w-full sidebar-item text-right pr-4">
+              <li 
+                key={item.name} 
+                className={`pb-2 pt-2 sm:pb-4 sm:pt-4 w-full sidebar-item ${
+                  item.name === 'DASHBOARDS' ? 'mt-8 sm:mt-0' : ''
+                }`}
+              >
                 {item.subItems ? (
-                  <div>
+                  <div className="pr-4">
                     <button
                       onClick={(e) => toggleDropdown(e, item.name)}
-                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
+                      className="button-sidebar text-sm sm:text-base font-semibold hover:text-ophir-gold flex items-center justify-end w-full"
                     >
-                      {item.name}
-                      {openDropdowns[item.name] ? <FaChevronUp className="ml-1 sm:ml-2" size={14} /> : <FaChevronDown className="ml-1 sm:ml-2" size={14} />}
+                      <span className="flex items-center">
+                        {item.icon}
+                        {item.name}
+                      </span>
+                      {openDropdowns[item.name] ? 
+                        <FaChevronUp className="ml-1 sm:ml-2" size={14} /> : 
+                        <FaChevronDown className="ml-1 sm:ml-2" size={14} />
+                      }
                     </button>
                     {openDropdowns[item.name] && (
                       <ul className="mt-1 sm:mt-2">
                         {item.subItems.map((subItem) => (
-                          <li key={subItem.name} className="mb-1 sm:mb-2 text-right">
+                          <li key={subItem.name} className="mb-1 sm:mb-2">
                             <button
                               onClick={() => handleItemClick(subItem.path)}
-                              className="button-sidebar text-sm sm:text-base hover:text-ophir-gold"
+                              className="button-sidebar text-[11px] sm:text-xs text-gray-400 hover:text-ophir-gold transition-colors duration-200 flex items-center justify-end w-full pl-6"
                             >
-                              {subItem.name}
+                              <span className="flex items-center">
+                                {React.cloneElement(subItem.icon, { 
+                                  size: 10,
+                                  className: "mr-2 transition-colors duration-200"
+                                })}
+                                {subItem.name}
+                              </span>
                             </button>
                           </li>
                         ))}
@@ -96,23 +130,31 @@ const Sidebar = () => {
                     )}
                   </div>
                 ) : (
-                  <button
-                    onClick={() => handleItemClick(item.path)}
-                    className="button-sidebar text-sm sm:text-base hover:text-ophir-gold w-full text-right"
-                  >
-                    {item.name}
-                  </button>
+                  <div className="pr-4">
+                    <button
+                      onClick={() => handleItemClick(item.path)}
+                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
+                    >
+                      <span className="flex items-center">
+                        {item.icon}
+                        {item.name}
+                      </span>
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
           </ul>
         </nav>
-        <div className="mt-auto mb-20 sm:mb-28 text-right pr-4">
+        <div className="mt-auto mb-20 sm:mb-28 pr-4">
           <button
             onClick={() => handleItemClick('/about')}
-            className="button-sidebar text-sm sm:text-base hover:text-ophir-gold"
+            className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
           >
-            ABOUT US
+            <span className="flex items-center">
+              <FaInfoCircle className="mr-2" size={16} />
+              ABOUT US
+            </span>
           </button>
         </div>
       </div>

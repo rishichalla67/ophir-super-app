@@ -1,7 +1,7 @@
 import React from 'react';
 import { tokenMappings } from '../utils/tokenMappings';
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading }) => {
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, customBondName, fullBondDenomName }) => {
   if (!isOpen) return null;
 
   const formatDate = (date, time) => {
@@ -57,7 +57,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading }) 
             <DetailItem label="Quantity" value={formData.total_supply} />
             <DetailItem label="Purchasing" value={purchasingTokenSymbol} />
             <DetailItem label="Price" value={formData.price} />
-            <DetailItem label="Bond Name" value={`ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}${formData.bond_denom_suffix}`} />
+            <DetailItem label="Bond Name" value={customBondName || fullBondDenomName} />
+            <DetailItem label="Description" value={formData.description || 'No description provided'} />
             <DetailItem label="Immediate Claim" value={formData.immediate_claim ? 'Yes' : 'No'} />
             
             {/* New section for total purchasing tokens */}

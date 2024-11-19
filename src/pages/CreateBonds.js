@@ -356,7 +356,7 @@ const CreateBonds = () => {
           total_supply: "",
           purchasing_denom: "",
           price: "",
-          bond_denom_name: "",
+          bond_denom_name: fullBondDenomName,
           bond_denom_suffix: 1,
           description: "",
           immediate_claim: false,
@@ -888,9 +888,7 @@ const CreateBonds = () => {
         <h3 className="text-2xl font-bold mb-4">Submit Bond</h3>
         <p className="text-gray-400 mb-8">
           Happy with the Bond? Click Submit to make it public. You will be
-          prompted to approve a transaction. Please note, there is a 25 whale
-          fee charged to create the denom for{" "}
-          {fullBondDenomName !== "ob01" ? fullBondDenomName : "the obTOKEN"}.
+          prompted to approve a transaction.
         </p>
 
         <button
@@ -918,6 +916,8 @@ const CreateBonds = () => {
         onConfirm={handleConfirm}
         formData={formData}
         isLoading={isLoading}
+        customBondName={customBondName}
+        fullBondDenomName={fullBondDenomName}
         className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-8 shadow-xl border border-gray-700"
       />
 
