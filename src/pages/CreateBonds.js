@@ -71,12 +71,16 @@ const CreateBonds = () => {
       bond_denom_name: "",
       bond_denom_suffix: 1,
       description: "",
-      immediate_claim: false,
+      immediate_claim: true,
       nft_metadata: {
         name: "",
         symbol: "",
         token_uri: ""
-      }
+      },
+      claim_start_date: "",
+      claim_start_hour: "",
+      claim_end_date: "",
+      claim_end_hour: "",
     };
   });
   const [walletBalances, setWalletBalances] = useState({});
@@ -230,7 +234,41 @@ const CreateBonds = () => {
       
       // Add a larger buffer (e.g., 5 minutes worth of nanoseconds) to ensure clear separation
       const FIVE_MINUTES_NS = BigInt(5 * 60 * 1000000000);
-      const claimStartTime = (purchaseEnd + FIVE_MINUTES_NS).toString();
+      let claimStartTime, claimEndTime;
+
+      if (formData.immediate_claim) {
+        // Use existing logic for immediate claims
+        claimStartTime = (purchaseEnd + FIVE_MINUTES_NS).toString();
+        claimEndTime = timestamps.mature_time.toString();
+      } else if (formData.claim_start_date && formData.claim_end_date) {
+        // Use selected claim dates if provided
+        const claimStart = new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`);
+        const claimEnd = new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`);
+        
+        const claimStartOffset = Math.ceil((claimStart - now) / (1000 * 60));
+        const claimEndOffset = Math.ceil((claimEnd - now) / (1000 * 60));
+
+        const timestampQuery = {
+          get_timestamp_offsets: {
+            start_offset: startOffset,
+            end_offset: endOffset,
+            claim_start_offset: claimStartOffset,
+            claim_end_offset: claimEndOffset
+          }
+        };
+
+        const timestamps = await client.queryContractSmart(
+          daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+          timestampQuery
+        );
+
+        claimStartTime = timestamps.claim_start_time.toString();
+        claimEndTime = timestamps.claim_end_time.toString();
+      } else {
+        // Default behavior when no claim settings are specified
+        claimStartTime = timestamps.end_time.toString();
+        claimEndTime = timestamps.mature_time.toString();
+      }
 
       const message = {
         issue_bond: {
@@ -248,7 +286,7 @@ const CreateBonds = () => {
           purchase_start_time: timestamps.start_time.toString(),
           purchase_end_time: timestamps.end_time.toString(),
           claim_start_time: claimStartTime,
-          claim_end_time: timestamps.mature_time.toString(),
+          claim_end_time: claimEndTime,
           immediate_claim: formData.immediate_claim,
           description: formData.description,
           nft_metadata: {
@@ -263,7 +301,7 @@ const CreateBonds = () => {
         purchase_start: timestamps.start_time,
         purchase_end: timestamps.end_time,
         claim_start: claimStartTime,
-        claim_end: timestamps.mature_time
+        claim_end: claimEndTime
       });
 
       // Calculate the fee in uwhale (25 WHALE)
@@ -370,7 +408,11 @@ const CreateBonds = () => {
             name: "",
             symbol: "",
             token_uri: ""
-          }
+          },
+          claim_start_date: "",
+          claim_start_hour: "",
+          claim_end_date: "",
+          claim_end_hour: "",
         };
       });
 
@@ -811,7 +853,7 @@ const CreateBonds = () => {
 
         <h3 className="text-3xl font-bold mb-4">Immediate Claim</h3>
         <p className="text-gray-400 mb-8">
-          
+          Optional: Configure when users can claim their tokens.
         </p>
 
         <div className="mb-4">
@@ -829,6 +871,60 @@ const CreateBonds = () => {
               after the bond activates.
             </span>
           </label>
+        </div>
+
+        <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
+          <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+            <div className="space-y-6">
+              <div>
+                <LabelWithTooltip
+                  label="Claim Start Date and Time"
+                  tooltip="The time when users can start claiming their tokens. Must be after the bond end date."
+                  required={!formData.immediate_claim}
+                />
+                <div className="flex space-x-2 mobile-date-time">
+                  <input
+                    type="date"
+                    name="claim_start_date"
+                    value={formData.claim_start_date || formData.end_time}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                  <input
+                    type="time"
+                    name="claim_start_hour"
+                    value={formData.claim_start_hour || formData.end_time_hour}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <LabelWithTooltip
+                  label="Claim End Date and Time"
+                  tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
+                  required={!formData.immediate_claim}
+                />
+                <div className="flex space-x-2 mobile-date-time">
+                  <input
+                    type="date"
+                    name="claim_end_date"
+                    value={formData.claim_end_date || formData.maturity_date}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                  <input
+                    type="time"
+                    name="claim_end_hour"
+                    value={formData.claim_end_hour || formData.maturity_date_hour}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <h3 className="text-3xl font-bold mb-4">NFT Metadata</h3>
@@ -925,13 +1021,30 @@ const CreateBonds = () => {
         open={alertInfo.open}
         autoHideDuration={6000}
         onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
-        <Alert 
-          onClose={() => setAlertInfo({ ...alertInfo, open: false })} 
-          severity={alertInfo.severity}
-        >
-          {alertInfo.message}
-        </Alert>
+        {alertInfo.htmlContent ? (
+          <SnackbarContent
+            style={{
+              color: "black",
+              backgroundColor:
+                alertInfo.severity === "error" ? "#ffcccc" : "#ccffcc",
+            }}
+            message={
+              <span
+                dangerouslySetInnerHTML={{ __html: alertInfo.htmlContent }}
+              />
+            }
+          />
+        ) : (
+          <Alert
+            onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+            severity={alertInfo.severity}
+            sx={{ width: "100%" }}
+          >
+            {alertInfo.message}
+          </Alert>
+        )}
       </Snackbar>
     </div>
   );

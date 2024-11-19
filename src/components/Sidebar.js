@@ -52,6 +52,11 @@ const Sidebar = () => {
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const handleItemClick = (path) => {
+    if (path === '/about') {
+      window.open('https://x.com/Ophir_DAO', '_blank');
+      return;
+    }
+    
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
