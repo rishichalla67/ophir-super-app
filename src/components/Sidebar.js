@@ -88,29 +88,29 @@ const Sidebar = () => {
       >
         {isSidebarOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
       </button>
-      <div className={`sidebar-bg top-20 w-44 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
+      <div className={`sidebar-bg top-20 w-48 sm:w-48 md:w-64 fixed left-0 transition-transform duration-300 ease-in-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} z-10 flex flex-col`}>
         <nav className="flex-grow">
           <ul className="flex flex-col">
             {menuItems.map((item) => (
               <li 
                 key={item.name} 
-                className={`pb-2 pt-2 sm:pb-4 sm:pt-4 w-full sidebar-item ${
-                  item.name === 'DASHBOARDS' ? 'mt-8 sm:mt-0' : ''
+                className={`pb-2 pt-4 sm:pb-4 sm:pt-4 w-full sidebar-item ${
+                  item.name === 'DASHBOARDS' ? 'mt-12' : ''
                 }`}
               >
                 {item.subItems ? (
                   <div className="pr-4">
                     <button
                       onClick={(e) => toggleDropdown(e, item.name)}
-                      className="button-sidebar text-sm sm:text-base font-semibold hover:text-ophir-gold flex items-center justify-end w-full"
+                      className="button-sidebar pb-2 text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
                     >
                       <span className="flex items-center">
                         {item.icon}
                         {item.name}
                       </span>
                       {openDropdowns[item.name] ? 
-                        <FaChevronUp className="ml-1 sm:ml-2" size={14} /> : 
-                        <FaChevronDown className="ml-1 sm:ml-2" size={14} />
+                        <FaChevronUp className="ml-1 item-right sm:ml-2" size={14} /> : 
+                        <FaChevronDown className="ml-1 item-right sm:ml-2" size={14} />
                       }
                     </button>
                     {openDropdowns[item.name] && (
@@ -119,7 +119,7 @@ const Sidebar = () => {
                           <li key={subItem.name} className="mb-1 sm:mb-2">
                             <button
                               onClick={() => handleItemClick(subItem.path)}
-                              className="button-sidebar text-[11px] sm:text-xs text-gray-400 hover:text-ophir-gold transition-colors duration-200 flex items-center justify-end w-full pl-6"
+                              className="button-sidebar pt-2 pb-2 sm:text-xs hover:text-ophir-gold transition-colors duration-200 flex items-center justify-start w-full pl-6"
                             >
                               <span className="flex items-center">
                                 {React.cloneElement(subItem.icon, { 
@@ -138,7 +138,7 @@ const Sidebar = () => {
                   <div className="pr-4">
                     <button
                       onClick={() => handleItemClick(item.path)}
-                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
+                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
                     >
                       <span className="flex items-center">
                         {item.icon}
@@ -154,7 +154,7 @@ const Sidebar = () => {
         <div className="mt-auto mb-20 sm:mb-28 pr-4">
           <button
             onClick={() => handleItemClick('/about')}
-            className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-end w-full"
+            className="button-sidebar pb-2 text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
           >
             <span className="flex items-center">
               <FaInfoCircle className="mr-2" size={16} />

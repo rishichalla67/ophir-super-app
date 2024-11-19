@@ -546,7 +546,7 @@ const CreateBonds = () => {
   };
 
   const LabelWithTooltip = ({ label, tooltip, required }) => (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 pb-2">
       <span className="text-sm font-medium">
         {label} {required && <span className="text-red-500">*</span>}
       </span>
@@ -637,7 +637,7 @@ const CreateBonds = () => {
           A 25 whale fee is charged to create an obTOKEN denom.
         </p> */}
 
-        <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+        <div className="bg-[#23242f] bond-creation-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             {/* <p className="text-gray-400 mb-8">
               Your current timezone: {userTimezone}. All times will be converted
@@ -735,7 +735,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 mobile-input-group">
+              <div className="flex space-x-4 mobile-input-group align-qtty-and-price">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
@@ -750,7 +750,7 @@ const CreateBonds = () => {
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-sm font-medium pb-2">
                     Token Quantity
                   </label>
                   <input
@@ -758,7 +758,7 @@ const CreateBonds = () => {
                     name="total_supply"
                     value={formData.total_supply}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                     step="any"
                   />
@@ -779,7 +779,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 mobile-input-group">
+              <div className="flex space-x-4 mobile-input-group align-qtty-and-price">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="Sale Asset"
@@ -794,7 +794,7 @@ const CreateBonds = () => {
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-sm font-medium pb-2">
                     Purchasing Price
                   </label>
                   <input
@@ -802,7 +802,7 @@ const CreateBonds = () => {
                     name="price"
                     value={formData.price}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                     step="any"
                   />
@@ -834,7 +834,7 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 Description
               </label>
               <textarea
@@ -857,7 +857,7 @@ const CreateBonds = () => {
         </p>
 
         <div className="mb-4">
-          <label className="flex items-center">
+          <label className="flex items-center flex-center">
             <input
               type="checkbox"
               checked={formData.immediate_claim}
@@ -874,7 +874,7 @@ const CreateBonds = () => {
         </div>
 
         <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
-          <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+          <div className="bg-[#23242f] claim-div p-6 rounded-lg shadow-lg mb-8">
             <div className="space-y-6">
               <div>
                 <LabelWithTooltip
@@ -932,10 +932,10 @@ const CreateBonds = () => {
           Configure the metadata for the NFT that represents this bond.
         </p>
 
-        <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+        <div className="bg-[#23242f] nft-metadata-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 NFT Name
               </label>
               <input
@@ -949,7 +949,7 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 NFT Symbol
               </label>
               <input
@@ -963,7 +963,7 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 Token URI (Optional)
               </label>
               <input
