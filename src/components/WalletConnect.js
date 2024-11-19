@@ -13,6 +13,51 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
     const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    useEffect(() => {
+        const autoConnect = async () => {
+            //  Try Keplr first     
+            if (window.keplr) {
+                try {
+                    const chainId = "migaloo-1";
+                    await window.keplr.enable(chainId);
+                    const offlineSigner = window.keplr.getOfflineSigner(chainId);
+                    const accounts = await offlineSigner.getAccounts();
+                    if (accounts.length > 0) {
+                        walletConnected(accounts, false);
+                        return;
+                    }
+                } catch (error) {
+                    console.log("No Keplr wallet connected");
+                }
+            }
+            
+            //Try LEAP if Keplr fails
+            if (window.leap) {
+                try {
+                    const chainId = "migaloo-1";
+                    await window.leap.enable(chainId);
+                    const offlineSigner = window.leap.getOfflineSigner(chainId);
+                    const accounts = await offlineSigner.getAccounts();
+                    if (accounts.length > 0) {
+                        walletConnected(accounts, false);
+                        return;
+                    }
+                } catch (error) {
+                    console.log("No LEAP wallet connected");
+                }
+            }
+
+            
+        };
+
+        // Add a small delay to ensure wallet extensions are loaded
+        const timer = setTimeout(() => {
+            autoConnect();
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, []); // Empty dependency array means this runs once on mount
+
     const showAlert = (message, severity = 'info', htmlContent = null) => {
         setAlertInfo({ open: true, message, severity, htmlContent });
     };
