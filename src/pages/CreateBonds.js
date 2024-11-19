@@ -23,6 +23,7 @@ const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const ADDITIONAL_MINUTES_BUFFER = 5; // Easily adjustable buffer time in minutes
 
 const PRESET_DURATIONS = [
+  { label: 'Testing', minutes: { start: 5, end: 30, maturity: 180 } },
   { label: '24h Bond', days: 1 },
   { label: '7d Bond', days: 7 },
   { label: '30d Bond', days: 30 },
@@ -70,12 +71,16 @@ const CreateBonds = () => {
       bond_denom_name: "",
       bond_denom_suffix: 1,
       description: "",
-      immediate_claim: false,
+      immediate_claim: true,
       nft_metadata: {
         name: "",
         symbol: "",
         token_uri: ""
-      }
+      },
+      claim_start_date: "",
+      claim_start_hour: "",
+      claim_end_date: "",
+      claim_end_hour: "",
     };
   });
   const [walletBalances, setWalletBalances] = useState({});
@@ -83,6 +88,7 @@ const CreateBonds = () => {
   const [userTimezone, setUserTimezone] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
+  const [customBondName, setCustomBondName] = useState("");
 
   const allowedDenoms = [
     "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
@@ -183,45 +189,86 @@ const CreateBonds = () => {
   const executeCreateBond = async () => {
     setIsLoading(true);
     try {
-      const {
-        start_time,
-        start_time_hour,
-        end_time,
-        end_time_hour,
-        maturity_date,
-        maturity_date_hour,
-        token_denom,
-        total_supply,
-        purchasing_denom,
-        price,
-        bond_denom_name,
-        bond_denom_suffix,
-        immediate_claim,
-        nft_metadata
-      } = formData;
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
 
-      // Ensure bond_denom_name is prefixed with "o"
-      const fullBondDenomName = `ob${(
-        tokenMappings[formData.token_denom]?.symbol || formData.token_denom
-      ).toUpperCase()}${bond_denom_suffix.toString()}`;
+      // Calculate minute offsets from current time
+      const now = new Date();
+      const startDate = new Date(`${formData.start_time}T${formData.start_time_hour}`);
+      const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
+      const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
 
-      const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET;
+      // Convert dates to timestamps for comparison
+      const endTimestamp = endDate.getTime();
+      const maturityTimestamp = maturityDate.getTime();
 
-      // Convert dates to UTC and add 4 hours plus buffer minutes
-      const convertToUTC = (date, time, addExtraHour = false) => {
-        const localDate = new Date(`${date}T${time}`);
-        const utcDate = new Date(
-          localDate.getTime() - localDate.getTimezoneOffset() * 60000
-        );
-        // Add 4 hours plus buffer minutes
-        utcDate.setHours(utcDate.getHours() + 4);
-        utcDate.setMinutes(utcDate.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
-        // Add extra hour if needed
-        if (addExtraHour) {
-          utcDate.setHours(utcDate.getHours() + 1);
+      // Validate dates with detailed error messages
+      if (endTimestamp <= startDate.getTime()) {
+        throw new Error("End date must be after start date");
+      }
+      if (maturityTimestamp <= endTimestamp) {
+        throw new Error(`Invalid maturity time: ${maturityDate.toLocaleString()} must be after end time: ${endDate.toLocaleString()}`);
+      }
+
+      // Calculate offsets in minutes (ceiling)
+      const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+      const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+      const maturityOffset = Math.ceil((maturityDate - now) / (1000 * 60));
+
+      // Query contract for timestamps
+      const timestampQuery = {
+        get_timestamp_offsets: {
+          start_offset: startOffset,
+          end_offset: endOffset,
+          mature_offset: maturityOffset
         }
-        return utcDate;
       };
+
+      const timestamps = await client.queryContractSmart(
+        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        timestampQuery
+      );
+
+      // Ensure we're working with BigInt for precise calculations
+      const purchaseEnd = BigInt(timestamps.end_time);
+      
+      // Add a larger buffer (e.g., 5 minutes worth of nanoseconds) to ensure clear separation
+      const FIVE_MINUTES_NS = BigInt(5 * 60 * 1000000000);
+      let claimStartTime, claimEndTime;
+
+      if (formData.immediate_claim) {
+        // Use existing logic for immediate claims
+        claimStartTime = (purchaseEnd + FIVE_MINUTES_NS).toString();
+        claimEndTime = timestamps.mature_time.toString();
+      } else if (formData.claim_start_date && formData.claim_end_date) {
+        // Use selected claim dates if provided
+        const claimStart = new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`);
+        const claimEnd = new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`);
+        
+        const claimStartOffset = Math.ceil((claimStart - now) / (1000 * 60));
+        const claimEndOffset = Math.ceil((claimEnd - now) / (1000 * 60));
+
+        const timestampQuery = {
+          get_timestamp_offsets: {
+            start_offset: startOffset,
+            end_offset: endOffset,
+            claim_start_offset: claimStartOffset,
+            claim_end_offset: claimEndOffset
+          }
+        };
+
+        const timestamps = await client.queryContractSmart(
+          daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+          timestampQuery
+        );
+
+        claimStartTime = timestamps.claim_start_time.toString();
+        claimEndTime = timestamps.claim_end_time.toString();
+      } else {
+        // Default behavior when no claim settings are specified
+        claimStartTime = timestamps.end_time.toString();
+        claimEndTime = timestamps.mature_time.toString();
+      }
 
       const message = {
         issue_bond: {
@@ -236,53 +283,49 @@ const CreateBonds = () => {
               )
             )
           },
-          purchase_start_time: String(Math.floor(
-            convertToUTC(start_time, start_time_hour).getTime() * 1_000_000
-          )),
-          purchase_end_time: String(Math.floor(
-            convertToUTC(end_time, end_time_hour).getTime() * 1_000_000
-          )),
-          claim_start_time: String(Math.floor(
-            convertToUTC(end_time, end_time_hour, true).getTime() * 1_000_000 // Add extra hour
-          )),
-          claim_end_time: String(Math.floor(
-            convertToUTC(maturity_date, maturity_date_hour, true).getTime() * 1_000_000 // Add extra hour
-          )),
-          immediate_claim,
+          purchase_start_time: timestamps.start_time.toString(),
+          purchase_end_time: timestamps.end_time.toString(),
+          claim_start_time: claimStartTime,
+          claim_end_time: claimEndTime,
+          immediate_claim: formData.immediate_claim,
           description: formData.description,
           nft_metadata: {
-            name: nft_metadata.name || `${fullBondDenomName} Bond NFT`,
-            symbol: nft_metadata.symbol || fullBondDenomName,
+            name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
+            symbol: formData.nft_metadata.symbol || fullBondDenomName,
           }
         },
       };
 
-      const signer = await getSigner();
-
-      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      // Log timestamps for debugging
+      console.log('Timestamps:', {
+        purchase_start: timestamps.start_time,
+        purchase_end: timestamps.end_time,
+        claim_start: claimStartTime,
+        claim_end: claimEndTime
+      });
 
       // Calculate the fee in uwhale (25 WHALE)
       const whaleFee = "25000000"; // 25 WHALE in uwhale
 
       // Validate token_denom and total_supply before creating funds array
-      if (!token_denom || !total_supply) {
+      if (!formData.token_denom || !formData.total_supply) {
         throw new Error("Token denom and total supply are required");
       }
 
       // Ensure tokenDecimals is valid
-      const tokenDecimals = tokenMappings[token_denom]?.decimals;
+      const tokenDecimals = tokenMappings[formData.token_denom]?.decimals;
       if (typeof tokenDecimals !== 'number') {
         throw new Error("Invalid token decimals configuration");
       }
 
       // Calculate the total supply in the smallest unit of the token
       const adjustedTotalSupply = BigInt(
-        Math.round(parseFloat(total_supply) * Math.pow(10, tokenDecimals))
+        Math.round(parseFloat(formData.total_supply) * Math.pow(10, tokenDecimals))
       ).toString();
 
       // Prepare the funds array with validation
       const funds = [{
-        denom: token_denom,
+        denom: formData.token_denom,
         amount: adjustedTotalSupply
       }];
 
@@ -298,7 +341,7 @@ const CreateBonds = () => {
 
       const result = await client.execute(
         connectedWalletAddress,
-        contractAddress,
+        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
         message,
         fee,
         `Create Bond: ${fullBondDenomName}`,
@@ -351,7 +394,7 @@ const CreateBonds = () => {
           total_supply: "",
           purchasing_denom: "",
           price: "",
-          bond_denom_name: "",
+          bond_denom_name: fullBondDenomName,
           bond_denom_suffix: 1,
           description: "",
           immediate_claim: false,
@@ -365,7 +408,11 @@ const CreateBonds = () => {
             name: "",
             symbol: "",
             token_uri: ""
-          }
+          },
+          claim_start_date: "",
+          claim_start_hour: "",
+          claim_end_date: "",
+          claim_end_hour: "",
         };
       });
 
@@ -373,8 +420,10 @@ const CreateBonds = () => {
       navigate("/bonds");
     } catch (error) {
       console.error("Error creating bond:", error);
+      // Log the full error for debugging
+      console.error("Full error:", error);
       showAlert(
-        `Error creating bond: ${error.message || "Unknown error occurred"}`, 
+        `Error creating bond: ${error.message || "Unknown error occurred"}`,
         "error"
       );
     } finally {
@@ -413,12 +462,16 @@ const CreateBonds = () => {
   };
 
   useEffect(() => {
-    const name = `ob${(
-      tokenMappings[formData.token_denom]?.symbol || formData.token_denom
-    ).toUpperCase()}`;
-    const suffix = formData.bond_denom_suffix.toString();
-    setFullBondDenomName(`${name}${suffix}`);
-  }, [formData.bond_denom_name, formData.bond_denom_suffix]);
+    if (customBondName.trim()) {
+      setFullBondDenomName(customBondName);
+    } else {
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000); // Generate random 4-digit number
+      const defaultName = `ob${(
+        tokenMappings[formData.token_denom]?.symbol || formData.token_denom
+      ).toUpperCase()}${randomSuffix}`;
+      setFullBondDenomName(defaultName);
+    }
+  }, [customBondName, formData.token_denom]);
 
   useEffect(() => {
     // Get the user's timezone abbreviation and UTC offset
@@ -493,7 +546,7 @@ const CreateBonds = () => {
   };
 
   const LabelWithTooltip = ({ label, tooltip, required }) => (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 pb-2">
       <span className="text-sm font-medium">
         {label} {required && <span className="text-red-500">*</span>}
       </span>
@@ -503,31 +556,62 @@ const CreateBonds = () => {
     </div>
   );
 
-  const handlePresetDuration = (days) => {
+  const handlePresetDuration = (preset) => {
     const now = new Date();
     
-    // Start time: 1 hour from now
-    const startDate = new Date(now);
-    startDate.setHours(startDate.getHours() + 1);
-    
-    // End time: Start time + selected days
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + days);
-    
-    // Maturity time: End time + 1 hour
-    const maturityDate = new Date(endDate);
-    maturityDate.setHours(maturityDate.getHours() + 1);
-    
-    setFormData(prev => ({
-      ...prev,
-      start_time: startDate.toISOString().split('T')[0],
-      start_time_hour: startDate.toTimeString().slice(0, 5),
-      end_time: endDate.toISOString().split('T')[0],
-      end_time_hour: endDate.toTimeString().slice(0, 5),
-      maturity_date: maturityDate.toISOString().split('T')[0],
-      maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
-    }));
+    if (preset.minutes) {
+      // Handle testing preset with minute-based durations
+      const startDate = new Date(now.getTime() + preset.minutes.start * 60000);
+      const endDate = new Date(now.getTime() + preset.minutes.end * 60000);
+      const maturityDate = new Date(now.getTime() + preset.minutes.maturity * 60000);
+      
+      setFormData(prev => ({
+        ...prev,
+        start_time: startDate.toISOString().split('T')[0],
+        start_time_hour: startDate.toTimeString().slice(0, 5),
+        end_time: endDate.toISOString().split('T')[0],
+        end_time_hour: endDate.toTimeString().slice(0, 5),
+        maturity_date: maturityDate.toISOString().split('T')[0],
+        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+      }));
+    } else {
+      // Handle existing day-based presets
+      const startDate = new Date(now);
+      startDate.setHours(startDate.getHours() + 1);
+      
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + preset.days);
+      
+      const maturityDate = new Date(endDate);
+      maturityDate.setHours(maturityDate.getHours() + 1);
+      
+      setFormData(prev => ({
+        ...prev,
+        start_time: startDate.toISOString().split('T')[0],
+        start_time_hour: startDate.toTimeString().slice(0, 5),
+        end_time: endDate.toISOString().split('T')[0],
+        end_time_hour: endDate.toTimeString().slice(0, 5),
+        maturity_date: maturityDate.toISOString().split('T')[0],
+        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+      }));
+    }
   };
+
+  useEffect(() => {
+    const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
+    const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
+    
+    if (maturityDate <= endDate) {
+      const newMaturityDate = new Date(endDate);
+      newMaturityDate.setHours(endDate.getHours() + 1);
+      
+      setFormData(prev => ({
+        ...prev,
+        maturity_date: newMaturityDate.toISOString().split('T')[0],
+        maturity_date_hour: newMaturityDate.toTimeString().slice(0, 5)
+      }));
+    }
+  }, [formData.end_time, formData.end_time_hour]);
 
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
@@ -553,7 +637,7 @@ const CreateBonds = () => {
           A 25 whale fee is charged to create an obTOKEN denom.
         </p> */}
 
-        <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+        <div className="bg-[#23242f] bond-creation-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             {/* <p className="text-gray-400 mb-8">
               Your current timezone: {userTimezone}. All times will be converted
@@ -569,8 +653,8 @@ const CreateBonds = () => {
               <div className="flex justify-end flex-wrap gap-2">
                 {PRESET_DURATIONS.map((duration) => (
                   <button
-                    key={duration.days}
-                    onClick={() => handlePresetDuration(duration.days)}
+                    key={duration.label}
+                    onClick={() => handlePresetDuration(duration)}
                     className="px-4 py-2 text-sm rounded-md bg-[#2c2d3a] hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
                   >
                     {duration.label}
@@ -651,7 +735,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 mobile-input-group">
+              <div className="flex space-x-4 mobile-input-group align-qtty-and-price">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
@@ -666,7 +750,7 @@ const CreateBonds = () => {
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-sm font-medium pb-2">
                     Token Quantity
                   </label>
                   <input
@@ -674,7 +758,7 @@ const CreateBonds = () => {
                     name="total_supply"
                     value={formData.total_supply}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                     step="any"
                   />
@@ -695,7 +779,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 mobile-input-group">
+              <div className="flex space-x-4 mobile-input-group align-qtty-and-price">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="Sale Asset"
@@ -710,7 +794,7 @@ const CreateBonds = () => {
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
-                  <label className="block text-sm font-medium mb-1">
+                  <label className="block text-sm font-medium pb-2">
                     Purchasing Price
                   </label>
                   <input
@@ -718,7 +802,7 @@ const CreateBonds = () => {
                     name="price"
                     value={formData.price}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                     step="any"
                   />
@@ -729,37 +813,28 @@ const CreateBonds = () => {
             <div>
               <LabelWithTooltip
                 label="Bond Denom"
-                tooltip="A unique identifier for your bond. The prefix 'ob' stands for 'Ophir Bond' followed by your token symbol and a number suffix to ensure uniqueness."
+                tooltip="Enter a custom name for your bond, or leave blank to use the default format (obTOKENXXXX)"
                 required
               />
               <div className="flex items-center mobile-input-group">
                 <input
                   type="text"
-                  name="bond_name"
-                  value={`ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}`}
-                  onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-l-md mobile-full-width"
-                  disabled={true}
-                />
-                <input
-                  type="number"
-                  name="bond_denom_suffix"
-                  value={formData.bond_denom_suffix}
-                  onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/4 px-3 py-2 rounded-r-md mobile-full-width"
-                  min="1"
-                  max="99"
-                  placeholder="01"
+                  value={customBondName}
+                  onChange={(e) => setCustomBondName(e.target.value)}
+                  className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md mobile-full-width"
+                  placeholder={`Default: ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}XXXX`}
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Use a number suffix (01-99) to ensure a unique name for your
-                bond denom.
+                {customBondName ? 
+                  "Using custom bond name" : 
+                  "Leave blank to use default format with random 4-digit suffix"
+                }
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 Description
               </label>
               <textarea
@@ -778,11 +853,11 @@ const CreateBonds = () => {
 
         <h3 className="text-3xl font-bold mb-4">Immediate Claim</h3>
         <p className="text-gray-400 mb-8">
-          
+          Optional: Configure when users can claim their tokens.
         </p>
 
         <div className="mb-4">
-          <label className="flex items-center">
+          <label className="flex items-center flex-center">
             <input
               type="checkbox"
               checked={formData.immediate_claim}
@@ -798,15 +873,69 @@ const CreateBonds = () => {
           </label>
         </div>
 
+        <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
+          <div className="bg-[#23242f] claim-div p-6 rounded-lg shadow-lg mb-8">
+            <div className="space-y-6">
+              <div>
+                <LabelWithTooltip
+                  label="Claim Start Date and Time"
+                  tooltip="The time when users can start claiming their tokens. Must be after the bond end date."
+                  required={!formData.immediate_claim}
+                />
+                <div className="flex space-x-2 mobile-date-time">
+                  <input
+                    type="date"
+                    name="claim_start_date"
+                    value={formData.claim_start_date || formData.end_time}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                  <input
+                    type="time"
+                    name="claim_start_hour"
+                    value={formData.claim_start_hour || formData.end_time_hour}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <LabelWithTooltip
+                  label="Claim End Date and Time"
+                  tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
+                  required={!formData.immediate_claim}
+                />
+                <div className="flex space-x-2 mobile-date-time">
+                  <input
+                    type="date"
+                    name="claim_end_date"
+                    value={formData.claim_end_date || formData.maturity_date}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                  <input
+                    type="time"
+                    name="claim_end_hour"
+                    value={formData.claim_end_hour || formData.maturity_date_hour}
+                    onChange={handleInputChange}
+                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <h3 className="text-3xl font-bold mb-4">NFT Metadata</h3>
         <p className="text-gray-400 mb-8">
           Configure the metadata for the NFT that represents this bond.
         </p>
 
-        <div className="bg-[#23242f] p-6 rounded-lg shadow-lg mb-8">
+        <div className="bg-[#23242f] nft-metadata-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 NFT Name
               </label>
               <input
@@ -820,7 +949,7 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 NFT Symbol
               </label>
               <input
@@ -834,7 +963,7 @@ const CreateBonds = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium pb-2">
                 Token URI (Optional)
               </label>
               <input
@@ -855,9 +984,7 @@ const CreateBonds = () => {
         <h3 className="text-2xl font-bold mb-4">Submit Bond</h3>
         <p className="text-gray-400 mb-8">
           Happy with the Bond? Click Submit to make it public. You will be
-          prompted to approve a transaction. Please note, there is a 25 whale
-          fee charged to create the denom for{" "}
-          {fullBondDenomName !== "ob01" ? fullBondDenomName : "the obTOKEN"}.
+          prompted to approve a transaction.
         </p>
 
         <button
@@ -885,6 +1012,8 @@ const CreateBonds = () => {
         onConfirm={handleConfirm}
         formData={formData}
         isLoading={isLoading}
+        customBondName={customBondName}
+        fullBondDenomName={fullBondDenomName}
         className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-8 shadow-xl border border-gray-700"
       />
 
@@ -892,13 +1021,30 @@ const CreateBonds = () => {
         open={alertInfo.open}
         autoHideDuration={6000}
         onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
-        <Alert 
-          onClose={() => setAlertInfo({ ...alertInfo, open: false })} 
-          severity={alertInfo.severity}
-        >
-          {alertInfo.message}
-        </Alert>
+        {alertInfo.htmlContent ? (
+          <SnackbarContent
+            style={{
+              color: "black",
+              backgroundColor:
+                alertInfo.severity === "error" ? "#ffcccc" : "#ccffcc",
+            }}
+            message={
+              <span
+                dangerouslySetInnerHTML={{ __html: alertInfo.htmlContent }}
+              />
+            }
+          />
+        ) : (
+          <Alert
+            onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+            severity={alertInfo.severity}
+            sx={{ width: "100%" }}
+          >
+            {alertInfo.message}
+          </Alert>
+        )}
       </Snackbar>
     </div>
   );

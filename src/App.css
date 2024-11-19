@@ -130,8 +130,9 @@
 
 .button-sidebar{
   color: var(--text-gray);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 500;
+  padding-left: 1rem;
 }
 
 .button-sidebar:focus{
@@ -142,7 +143,20 @@
   background-color: var(--sidebar-focus-gold);
 }
 
+.item-right{
+  margin-left: auto;
+}
+
 /*end of side bar*/
+
+/*create bond page*/
+
+.align-qtty-and-price{
+  align-items: end;
+}
+
+/*end of create bond page*/
+
 
 /*seeker round page*/
 
@@ -640,6 +654,14 @@ table td{
     margin-bottom: 0;
   }
 
+  .bond-creation-div, .claim-div, .nft-metadata-div{
+    width: 60%;
+    margin: 0 auto;
+  }
+
+  .flex-center{
+    justify-content: center;
+  }
 
 }
 
@@ -664,3 +686,4 @@ table td{
   background: #4a5568;
   border-radius: 4px;
 }
+

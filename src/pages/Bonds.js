@@ -616,17 +616,31 @@ const Bonds = () => {
       return false;
     }
     
-    const now = Math.floor(Date.now() / 1000);
-    const claimStartTime = Math.floor(parseInt(bond.claim_start_time) / 1_000_000_000);
-    const claimEndTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
-    
     const hasUnclaimedAmount = parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
+    return hasUnclaimedAmount;
+  };
+
+  const canClaim = (bond) => {
+    if (!bond) return false;
     
-    return now >= claimStartTime && now <= claimEndTime && hasUnclaimedAmount;
+    const now = new Date();
+    const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
+    return now >= claimStartDate;
   };
 
   const UserBondsSection = () => {
     if (!connectedWalletAddress || userBonds.length === 0) return null;
+
+    const getBondName = (bondId) => {
+      const bond = bonds.find(b => b.bond_id === bondId);
+      return bond?.bond_name || `Bond #${bondId}`;
+    };
+
+    const isFullyClaimed = (purchase) => {
+      const totalAmount = BigInt(purchase.amount || 0);
+      const claimedAmount = BigInt(purchase.claimed_amount || 0);
+      return claimedAmount >= totalAmount;
+    };
 
     return (
       <div className="mb-8">
@@ -638,7 +652,7 @@ const Bonds = () => {
             <table className="w-full">
               <thead className="sticky top-0 backdrop-blur-sm z-10">
                 <tr className="text-gray-400 border-b border-gray-800 bond-table-header">
-                  <th className="text-left py-2">Bond ID</th>
+                  <th className="text-left py-2">Bond Name</th>
                   <th className="text-center py-2">Amount</th>
                   <th className="text-center py-2">Purchase Date</th>
                   <th className="text-center py-2">Status</th>
@@ -647,39 +661,42 @@ const Bonds = () => {
               </thead>
               <tbody>
                 {userBonds.map((purchase) => {
-                  const canClaim = purchase.claimed_amount === "0";
+                  const fullyClaimed = isFullyClaimed(purchase);
                   const purchaseDate = purchase.purchase_time instanceof Date 
                     ? purchase.purchase_time 
                     : new Date(Number(purchase.purchase_time) / 1_000_000);
 
                   return (
                     <tr key={purchase.bond_id} className="border-b border-gray-800">
-                      <td className="py-4">Bond #{purchase.bond_id}</td>
+                      <td className="py-4">{getBondName(purchase.bond_id)}</td>
                       <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
                       <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
                       <td className="py-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-sm ${
-                          canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                          !fullyClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                         }`}>
-                          {canClaim ? 'Unclaimed' : 'Claimed'}
+                          {!fullyClaimed ? 'Unclaimed' : 'Claimed'}
                         </span>
                       </td>
                       <td className="py-4 text-right">
                         <button
                           onClick={() => handleClaim(purchase.bond_id)}
-                          disabled={!isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) || claimingBondId === purchase.bond_id}
-                          className={`px-4 py-1.5 rounded-md text-sm transition duration-300 ${
-                            isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase)
-                              ? 'landing-button hover:bg-yellow-500' 
-                              : 'bg-gray-600 cursor-not-allowed'
-                          }`}
+                          disabled={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
+                          className={`px-4 py-1.5 rounded-md text-sm transition duration-300 
+                            landing-button disabled:opacity-50 disabled:cursor-not-allowed
+                            hover:bg-yellow-500 disabled:hover:bg-yellow-500/50`}
+                          title={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                            `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
+                            'Claim now'}
                         >
                           {claimingBondId === purchase.bond_id ? (
                             <div className="flex items-center justify-center">
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                               Claiming...
                             </div>
-                          ) : isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) ? 'Claim' : 'Claimed'}
+                          ) : !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                            `Claimable ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
+                            'Claim'}
                         </button>
                       </td>
                     </tr>
@@ -693,22 +710,19 @@ const Bonds = () => {
         {/* Mobile view */}
         <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {userBonds.map((purchase) => {
-            const canClaim = purchase.claimed_amount === "0";
+            const fullyClaimed = isFullyClaimed(purchase);
             const purchaseDate = purchase.purchase_time instanceof Date 
               ? purchase.purchase_time 
               : new Date(Number(purchase.purchase_time) / 1_000_000);
             
             return (
-              <div 
-                key={purchase.bond_id}
-                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
-              >
+              <div key={purchase.bond_id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
                 <div className="flex justify-between items-start mb-2">
-                  <span className="text-gray-400">Bond #{purchase.bond_id}</span>
+                  <span className="text-gray-400">{getBondName(purchase.bond_id)}</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
-                    canClaim ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                    !fullyClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                   }`}>
-                    {canClaim ? 'Unclaimed' : 'Claimed'}
+                    {!fullyClaimed ? 'Unclaimed' : 'Claimed'}
                   </span>
                 </div>
                 
@@ -734,16 +748,22 @@ const Bonds = () => {
                 {isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
                   <button
                     onClick={() => handleClaim(purchase.bond_id)}
-                    disabled={claimingBondId === purchase.bond_id}
+                    disabled={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
                     className="w-full mt-3 landing-button px-4 py-1.5 rounded-md 
-                      hover:bg-yellow-500 transition duration-300 text-sm disabled:opacity-50"
+                      transition duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed
+                      hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
+                    title={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                      `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
+                      'Claim now'}
                   >
                     {claimingBondId === purchase.bond_id ? (
                       <div className="flex items-center justify-center">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                         Claiming...
                       </div>
-                    ) : 'Claim'}
+                    ) : !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                      `Claimable ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
+                      'Claim'}
                   </button>
                 )}
               </div>
@@ -842,7 +862,7 @@ const Bonds = () => {
       className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
       style={{ paddingTop: "12dvh" }}
     >
-      <div className="max-w-7xl mx-auto w-full px-4 mt-5">
+      <div className="max-w-7xl mx-auto w-full px-4 mt-10">
         {/* Snackbar for alerts */}
         <Snackbar
           open={alertInfo.open}
