@@ -735,7 +735,7 @@ const CreateBonds = () => {
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
-                    tooltip="The token you're offering in the bond. This is what buyers will receive when the bond matures."
+                    tooltip="The token you're offering in the bond. This is what buyers will receive when they claim their purchased bonds."
                     required
                   />
                   <TokenDropdown
