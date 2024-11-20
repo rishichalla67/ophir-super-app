@@ -106,7 +106,7 @@ const Bonds = () => {
           ...offer.bond_offer,
           start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
           end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
-          maturity_date: convertContractTimeToDate(offer.bond_offer.claim_end_time),
+          maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
         }));
         setBonds(transformedBonds);
       }

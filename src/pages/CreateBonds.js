@@ -44,26 +44,21 @@ const CreateBonds = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState(() => {
     const now = new Date();
-    now.setMinutes(now.getMinutes() + 60); // Changed from 30 to 60 minutes
-    const startTime = now.toTimeString().slice(0, 5); // Format as HH:MM
-    const startDate = now.toISOString().split("T")[0]; // Format as YYYY-MM-DD
-
+    now.setMinutes(now.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
+    
+    const startDate = new Date(now);
     const endDate = new Date(now);
-    endDate.setDate(endDate.getDate() + 1); // Add one day
-    const endTime = endDate.toTimeString().slice(0, 5);
-    const endDateString = endDate.toISOString().split("T")[0];
-
+    endDate.setDate(endDate.getDate() + 1);
     const maturityDate = new Date(endDate);
-    maturityDate.setHours(maturityDate.getHours() + 1); // Add 1 hour for maturity only
-    const maturityTime = maturityDate.toTimeString().slice(0, 5);
+    maturityDate.setHours(maturityDate.getHours() + 1);
 
     return {
-      start_time: startDate,
-      start_time_hour: startTime,
-      end_time: endDateString,
-      end_time_hour: endTime,
-      maturity_date: endDateString,
-      maturity_date_hour: maturityTime,
+      start_time: startDate.toLocaleDateString('en-CA'),
+      start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+      end_time: endDate.toLocaleDateString('en-CA'),
+      end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+      maturity_date: maturityDate.toLocaleDateString('en-CA'),
+      maturity_date_hour: maturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
       token_denom: "",
       total_supply: "",
       purchasing_denom: "",
@@ -261,6 +256,7 @@ const CreateBonds = () => {
           purchase_end_time: timestamps.end_time.toString(),
           claim_start_time: timestamps.claim_start_time.toString(),
           claim_end_time: timestamps.claim_end_time.toString(),
+          maturity_date: timestamps.mature_time.toString(),
           immediate_claim: formData.immediate_claim,
           description: formData.description,
           nft_metadata: {
@@ -343,27 +339,22 @@ const CreateBonds = () => {
       // Reset form
       setFormData((prevState) => {
         const now = new Date();
-        now.setMinutes(now.getMinutes() + 60); // Changed from 30 to 60 minutes
-        const startTime = now.toTimeString().slice(0, 5);
-        const startDate = now.toISOString().split("T")[0];
-
+        now.setMinutes(now.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
+        
+        const startDate = new Date(now);
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + 1);
-        const endTime = endDate.toTimeString().slice(0, 5);
-        const endDateString = endDate.toISOString().split("T")[0];
-
         const maturityDate = new Date(endDate);
-        maturityDate.setHours(maturityDate.getHours() + 1); // Add 1 hour for maturity only
-        const maturityTime = maturityDate.toTimeString().slice(0, 5);
+        maturityDate.setHours(maturityDate.getHours() + 1);
 
         return {
           ...prevState,
-          start_time: startDate,
-          start_time_hour: startTime,
-          end_time: endDateString,
-          end_time_hour: endTime,
-          maturity_date: endDateString,
-          maturity_date_hour: maturityTime,
+          start_time: startDate.toLocaleDateString('en-CA'),
+          start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+          end_time: endDate.toLocaleDateString('en-CA'),
+          end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+          maturity_date: maturityDate.toLocaleDateString('en-CA'),
+          maturity_date_hour: maturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
           token_denom: "",
           total_supply: "",
           purchasing_denom: "",
@@ -374,7 +365,7 @@ const CreateBonds = () => {
           immediate_claim: false,
           flow_schedule: {
             percentage: 100,
-            start_date: startDate,
+            start_date: startDate.toLocaleDateString('en-CA'),
             initial_delay: 0,
             duration: 0,
           },
@@ -531,27 +522,34 @@ const CreateBonds = () => {
   );
 
   const handlePresetDuration = (preset) => {
+    // Get current time in local timezone
     const now = new Date();
+    // Add buffer to ensure we're not setting times in the past due to UTC conversion
+    now.setMinutes(now.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
     
     if (preset.minutes) {
       // Handle testing preset with minute-based durations
-      const startDate = new Date(now.getTime() + preset.minutes.start * 60000);
-      const endDate = new Date(now.getTime() + preset.minutes.end * 60000);
-      const maturityDate = new Date(now.getTime() + preset.minutes.maturity * 60000);
+      const startDate = new Date(now);
+      startDate.setMinutes(startDate.getMinutes() + preset.minutes.start);
+      
+      const endDate = new Date(now);
+      endDate.setMinutes(endDate.getMinutes() + preset.minutes.end);
+      
+      const maturityDate = new Date(now);
+      maturityDate.setMinutes(maturityDate.getMinutes() + preset.minutes.maturity);
       
       setFormData(prev => ({
         ...prev,
-        start_time: startDate.toISOString().split('T')[0],
-        start_time_hour: startDate.toTimeString().slice(0, 5),
-        end_time: endDate.toISOString().split('T')[0],
-        end_time_hour: endDate.toTimeString().slice(0, 5),
-        maturity_date: maturityDate.toISOString().split('T')[0],
-        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+        start_time: startDate.toLocaleDateString('en-CA'), // Format as YYYY-MM-DD in local timezone
+        start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+        end_time: endDate.toLocaleDateString('en-CA'),
+        end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+        maturity_date: maturityDate.toLocaleDateString('en-CA'),
+        maturity_date_hour: maturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
       }));
     } else {
-      // Handle existing day-based presets
+      // Handle day-based presets
       const startDate = new Date(now);
-      startDate.setHours(startDate.getHours() + 1);
       
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + preset.days);
@@ -561,12 +559,12 @@ const CreateBonds = () => {
       
       setFormData(prev => ({
         ...prev,
-        start_time: startDate.toISOString().split('T')[0],
-        start_time_hour: startDate.toTimeString().slice(0, 5),
-        end_time: endDate.toISOString().split('T')[0],
-        end_time_hour: endDate.toTimeString().slice(0, 5),
-        maturity_date: maturityDate.toISOString().split('T')[0],
-        maturity_date_hour: maturityDate.toTimeString().slice(0, 5),
+        start_time: startDate.toLocaleDateString('en-CA'),
+        start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+        end_time: endDate.toLocaleDateString('en-CA'),
+        end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
+        maturity_date: maturityDate.toLocaleDateString('en-CA'),
+        maturity_date_hour: maturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
       }));
     }
   };
@@ -581,8 +579,8 @@ const CreateBonds = () => {
       
       setFormData(prev => ({
         ...prev,
-        maturity_date: newMaturityDate.toISOString().split('T')[0],
-        maturity_date_hour: newMaturityDate.toTimeString().slice(0, 5)
+        maturity_date: newMaturityDate.toLocaleDateString('en-CA'),
+        maturity_date_hour: newMaturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)
       }));
     }
   }, [formData.end_time, formData.end_time_hour]);
@@ -590,23 +588,23 @@ const CreateBonds = () => {
   // Add this effect to update claim times when immediate claim changes
   useEffect(() => {
     if (formData.immediate_claim) {
-      // Convert end time and maturity time to UTC
-      const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}Z`);
-      const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}Z`);
+      // Parse bond end date and time
+      const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
+      const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
       
-      // Set claim start to 1 minute after bond end
-      const claimStartDate = new Date(endDate.getTime() + 60000); // Add 1 minute in milliseconds
+      // Set claim start to exactly match bond end time, preserving the date
+      const claimStartDate = new Date(endDate);
       
-      // Set claim end to 1 minute before maturity
-      const claimEndDate = new Date(maturityDate.getTime() - 60000); // Subtract 1 minute in milliseconds
+      // Set claim end to match maturity time
+      const claimEndDate = new Date(maturityDate);
       
-      // Convert back to local timezone for display
+      // Format dates ensuring we use the same date as bond end
       setFormData(prevState => ({
         ...prevState,
-        claim_start_date: claimStartDate.toISOString().split('T')[0],
-        claim_start_hour: claimStartDate.toTimeString().slice(0, 5),
-        claim_end_date: claimEndDate.toISOString().split('T')[0],
-        claim_end_hour: claimEndDate.toTimeString().slice(0, 5)
+        claim_start_date: formData.end_time, // Use exact same date as bond end
+        claim_start_hour: formData.end_time_hour, // Use exact same time as bond end
+        claim_end_date: formData.maturity_date, // Use exact same date as maturity
+        claim_end_hour: formData.maturity_date_hour // Use exact same time as maturity
       }));
     }
   }, [formData.immediate_claim, formData.end_time, formData.end_time_hour, formData.maturity_date, formData.maturity_date_hour]);
