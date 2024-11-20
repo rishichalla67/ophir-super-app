@@ -78,7 +78,7 @@ const Bonds = () => {
   const [bonds, setBonds] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [userBonds, setUserBonds] = useState([]);
-  const [claimingBondId, setClaimingBondId] = useState(null);
+  const [claimingStates, setClaimingStates] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [denomFilter, setDenomFilter] = useState('all');
   const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
@@ -701,7 +701,7 @@ const Bonds = () => {
 
   const handleClaim = async (bondId) => {
     try {
-      setClaimingBondId(bondId);
+      setClaimingStates(prev => ({ ...prev, [bondId]: true }));
 
       if (!connectedWalletAddress) {
         showAlert("Please connect your wallet first", "error");
@@ -741,14 +741,13 @@ const Bonds = () => {
           `<a href="${txnUrl}" target="_blank">View Transaction</a>`
         );
         
-        // Refresh data
         await fetchUserBonds();
       }
     } catch (error) {
       console.error("Error claiming rewards:", error);
       showAlert(`Error claiming rewards: ${error.message}`, "error");
     } finally {
-      setClaimingBondId(null);
+      setClaimingStates(prev => ({ ...prev, [bondId]: false }));
     }
   };
 
@@ -837,7 +836,7 @@ const Bonds = () => {
                       <td className="py-4 text-right">
                         <button
                           onClick={() => handleClaim(purchase.bond_id)}
-                          disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
+                          disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingStates[purchase.bond_id]}
                           className={`px-4 py-1.5 rounded-md text-sm transition duration-300 
                             landing-button disabled:opacity-50 disabled:cursor-not-allowed
                             hover:bg-yellow-500 disabled:hover:bg-yellow-500/50`}
@@ -846,7 +845,7 @@ const Bonds = () => {
                             `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                             'Claim now'}
                         >
-                          {claimingBondId === purchase.bond_id ? (
+                          {claimingStates[purchase.bond_id] ? (
                             <div className="flex items-center justify-center">
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                               Claiming...
@@ -926,7 +925,7 @@ const Bonds = () => {
                 {!fullyClaimed && isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
                   <button
                     onClick={() => handleClaim(purchase.bond_id)}
-                    disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
+                    disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingStates[purchase.bond_id]}
                     className="w-full mt-3 landing-button px-4 py-1.5 rounded-md 
                       transition duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed
                       hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
@@ -935,7 +934,7 @@ const Bonds = () => {
                       `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                       'Claim now'}
                   >
-                    {claimingBondId === purchase.bond_id ? (
+                    {claimingStates[purchase.bond_id] ? (
                       <div className="flex items-center justify-center">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                         Claiming...

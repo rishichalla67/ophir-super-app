@@ -100,6 +100,12 @@ const CreateBonds = () => {
     {}
   );
 
+  const validateNumericInput = (value) => {
+    // Allows positive numbers with optional decimals
+    const regex = /^\d*\.?\d*$/;
+    return regex.test(value) && value !== '.';
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     
@@ -113,10 +119,9 @@ const CreateBonds = () => {
           [field]: value
         }
       }));
-    } else if (type === "number") {
-      // Allow decimal inputs
-      const regex = /^\d*\.?\d*$/;
-      if (regex.test(value) || value === '') {
+    } else if (name === 'total_supply' || name === 'price') {
+      // Validate numeric inputs
+      if (value === '' || validateNumericInput(value)) {
         setFormData((prevState) => ({
           ...prevState,
           [name]: value,
@@ -750,13 +755,12 @@ const CreateBonds = () => {
                     Token Quantity
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="total_supply"
                     value={formData.total_supply}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
-                    step="any"
                   />
                   {formData.token_denom &&
                     walletBalances[formData.token_denom] && (
@@ -794,13 +798,12 @@ const CreateBonds = () => {
                     Purchasing Price
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="price"
                     value={formData.price}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
-                    step="any"
                   />
                 </div>
               </div>

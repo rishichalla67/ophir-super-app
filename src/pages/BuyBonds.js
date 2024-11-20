@@ -43,7 +43,7 @@ const BuyBonds = () => {
   const [walletBalances, setWalletBalances] = useState({});
   const [userBondPurchase, setUserBondPurchase] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [isClaimLoading, setIsClaimLoading] = useState(false);
+  const [claimingStates, setClaimingStates] = useState({});
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawLoading, setIsWithdrawLoading] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
@@ -226,9 +226,9 @@ const BuyBonds = () => {
         const result = await queryContract(queryMsg);
         console.log('User bond purchase result:', result);
 
-        const bondPurchase = result.bond_purchases?.[0] || null;
-        setUserBondPurchase(bondPurchase);
-        console.log('Updated userBondPurchase state:', bondPurchase);
+        const bondPurchases = result.bond_purchases || null;
+        setUserBondPurchase(bondPurchases);
+        console.log('Updated userBondPurchase state:', bondPurchases);
     } catch (error) {
     //   console.error("Error fetching user bond purchase:", error);
     }
@@ -466,8 +466,10 @@ const BuyBonds = () => {
     }
   };
 
-  const handleClaimRewards = async () => {
-    setIsClaimLoading(true);
+  const handleClaimRewards = async (purchaseIndex) => {
+    // Update claiming state for specific purchase
+    setClaimingStates(prev => ({ ...prev, [purchaseIndex]: true }));
+    
     try {
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
@@ -512,7 +514,8 @@ const BuyBonds = () => {
       console.error("Error claiming rewards:", error);
       showAlert(`Error claiming rewards: ${error.message}`, "error");
     } finally {
-      setIsClaimLoading(false);
+      // Clear claiming state for specific purchase
+      setClaimingStates(prev => ({ ...prev, [purchaseIndex]: false }));
     }
   };
 
@@ -622,15 +625,12 @@ const BuyBonds = () => {
 
   const calculateWithdrawAmount = () => {
     if (!bond) {
-      console.log('Missing bond data');
       return {
         bondTokens: '0'
       };
     }
     
-    console.log('Bond data for withdrawal calculation:', {
-      remainingSupply: bond.remaining_supply
-    });
+
 
     // Calculate unclaimed bond tokens (remaining supply)
     const remainingBonds = parseInt(bond.remaining_supply) / 1000000;
@@ -639,7 +639,6 @@ const BuyBonds = () => {
       bondTokens: remainingBonds.toFixed(6)
     };
 
-    console.log('Final result:', result);
     
     return result;
   };
@@ -797,7 +796,7 @@ const BuyBonds = () => {
           </div>
         )}
 
-        {userBonds.length > 0 && (
+        {/* {userBonds.length > 0 && (
           <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
             <h2 className="text-lg md:text-2xl font-bold mb-3 md:mb-6 text-yellow-400">Your Bond Holdings</h2>
             <div className="space-y-2 md:space-y-3">
@@ -825,39 +824,7 @@ const BuyBonds = () => {
               ))}
             </div>
           </div>
-        )}
-
-        {userBondPurchase && (
-          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 sm:p-8 mb-4 sm:mb-8 shadow-xl border border-gray-700">
-            <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-yellow-400">Your Bond Purchase</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-              <div className="p-1 sm:p-3 bg-gray-900/50 rounded-lg">
-                <p className="text-gray-400 text-[10px] sm:text-xs font-medium truncate">Amount Purchased:</p>
-                <p className="text-xs sm:text-base font-bold truncate">
-                  {formatAmount(userBondPurchase.amount)} {bondSymbol}
-                </p>
-              </div>
-              <div className="p-1 sm:p-3 bg-gray-900/50 rounded-lg">
-                <p className="text-gray-400 text-[10px] sm:text-xs font-medium truncate">Purchase Date:</p>
-                <p className="text-xs sm:text-base font-bold truncate">
-                  {formatDate(userBondPurchase.purchase_time)}
-                </p>
-              </div>
-              <div className="p-1 sm:p-3 bg-gray-900/50 rounded-lg">
-                <p className="text-gray-400 text-[10px] sm:text-xs font-medium truncate">Claimed Amount:</p>
-                <p className="text-xs sm:text-base font-bold truncate">
-                  {formatAmount(userBondPurchase.claimed_amount)} {bondSymbol}
-                </p>
-              </div>
-              <div className="p-1 sm:p-3 bg-gray-900/50 rounded-lg">
-                <p className="text-gray-400 text-[10px] sm:text-xs font-medium truncate">Available to Claim:</p>
-                <p className="text-xs sm:text-base font-bold truncate">
-                  {formatDate(bond.claim_start_time)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        )} */}
 
         {isBondActive && (
           <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
@@ -930,7 +897,9 @@ const BuyBonds = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">You Will Receive:</span>
                     <span className="text-white font-medium">
-                      {calculateBondAmount(purchaseAmount)} {bondSymbol}
+                      {validatePurchaseAmount(purchaseAmount) 
+                        ? `${calculateBondAmount(purchaseAmount)} ${bondSymbol}`
+                        : 'N/A'}
                     </span>
                   </div>
                 )}
@@ -961,58 +930,73 @@ const BuyBonds = () => {
           </div>
         )}
 
-        {userBondPurchase && isClaimable(bond, userBondPurchase) && (
-          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 mt-6 shadow-xl border border-gray-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Claim Rewards</h2>
-              <div className="text-sm text-gray-400">
-                Maturity Date: {formatDate(bond.maturity_date)}
+{userBondPurchase && (
+  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 sm:p-6 mt-4 mb-4 shadow-xl border border-gray-700">
+    <h2 className="text-lg sm:text-2xl font-bold mb-4 text-yellow-400">Your Bond Purchases</h2>
+    
+    <div className="space-y-2">
+      {userBondPurchase
+        .filter(purchase => purchase.bond_id === parseInt(bondId))
+        .map((purchase, index) => (
+          <div 
+            key={index} 
+            className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50 hover:border-gray-600 transition-colors"
+          >
+            <div className="grid grid-cols-4 gap-4 items-center">
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Amount</p>
+                <p className="font-medium">
+                  {formatAmount(purchase.amount)} {bondSymbol}
+                </p>
+              </div>
+              
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Claimed</p>
+                <p className="font-medium">
+                  {formatAmount(purchase.claimed_amount)} {bondSymbol}
+                </p>
+              </div>
+              
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Purchase Date</p>
+                <p className="font-medium">
+                  {formatDate(purchase.purchase_time)}
+                </p>
+              </div>
+              
+              <div>
+                {isClaimable(bond, purchase) ? (
+                  <button
+                    onClick={() => handleClaimRewards(index)}
+                    disabled={claimingStates[index]}
+                    className="w-full px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 
+                      disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 
+                      flex items-center justify-center space-x-2"
+                  >
+                    {claimingStates[index] ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Claiming...</span>
+                      </>
+                    ) : (
+                      'Claim Rewards'
+                    )}
+                  </button>
+                ) : (
+                  <div className="text-sm text-gray-400">
+                    Claimable {formatDate(bond.claim_start_time)}
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="bg-gray-900/30 rounded-lg p-4 space-y-3 mb-6">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Total Amount:</span>
-                <span className="text-white font-medium">
-                  {formatAmount(userBondPurchase.amount)} {bondSymbol}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Claimed Amount:</span>
-                <span className="text-white font-medium">
-                  {formatAmount(userBondPurchase.claimed_amount)} {bondSymbol}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Available to Claim:</span>
-                <span className="text-yellow-400 font-bold">
-                  {formatAmount(calculateUnclaimedAmount(
-                    userBondPurchase.amount,
-                    userBondPurchase.claimed_amount
-                  ))} {bondSymbol}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleClaimRewards}
-              disabled={isClaimLoading}
-              className="w-full py-4 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
-            >
-              {isClaimLoading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Claiming...</span>
-                </>
-              ) : (
-                'Claim Rewards'
-              )}
-            </button>
           </div>
-        )}
+        ))}
+    </div>
+  </div>
+)}
 
         <Dialog
           open={showConfirmModal}
