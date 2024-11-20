@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { tokenMappings } from "../utils/tokenMappings";
@@ -32,7 +32,6 @@ const Bonds = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [bonds, setBonds] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-  const [searchTerm, setSearchTerm] = useState('');
   const [userBonds, setUserBonds] = useState([]);
   const [claimingBondId, setClaimingBondId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -292,11 +291,6 @@ const Bonds = () => {
     return null;
   };
 
-  const handleSearchChange = (event) => {
-    const value = event.target.value;
-    setSearchTerm(value);
-  };
-
   const getUniquePurchaseDenoms = useMemo(() => {
     const denoms = new Set(bonds.map(bond => bond.purchase_denom));
     return Array.from(denoms);
@@ -304,26 +298,15 @@ const Bonds = () => {
 
   const filteredBonds = useMemo(() => {
     return sortedBonds.filter((bond) => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = searchTerm === '' || (
-        (bond.bond_name?.toLowerCase() || '').includes(searchLower) ||
-        (bond.bond_id?.toString() || '').includes(searchLower) ||
-        (bond.description?.toLowerCase() || '').includes(searchLower) ||
-        (getTokenSymbol(bond.token_denom)?.toLowerCase() || '').includes(searchLower) ||
-        (getTokenSymbol(bond.purchase_denom)?.toLowerCase() || '').includes(searchLower)
-      );
-
       const status = getBondStatus(bond);
       const matchesStatus = statusFilter === 'all' || status.toLowerCase() === statusFilter.toLowerCase();
-
       const matchesDenom = denomFilter === 'all' || bond.purchase_denom === denomFilter;
-
       const matchesUserBonds = !showUserBondsOnly || 
         userBonds.some(userBond => userBond.bond_id === bond.bond_id);
 
-      return matchesSearch && matchesStatus && matchesDenom && matchesUserBonds;
+      return matchesStatus && matchesDenom && matchesUserBonds;
     });
-  }, [sortedBonds, searchTerm, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus, getTokenSymbol]);
+  }, [sortedBonds, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -415,7 +398,7 @@ const Bonds = () => {
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col">
             <span className="text-gray-400">
               {status === 'Upcoming' ? 'Opens' : 'Maturity Date'}
             </span>
@@ -812,34 +795,6 @@ const Bonds = () => {
     return (
       <div className="mb-6 space-y-4">
         <div className="flex flex-wrap gap-4">
-          {/* Search input */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search bonds..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full p-2 pl-10 rounded-md bg-gray-700 text-white border border-gray-600 
-                  focus:border-yellow-200 focus:outline-none transition duration-300"
-              />
-              <svg
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-          </div>
-
           {/* Status filter */}
           <select
             value={statusFilter}
@@ -861,10 +816,10 @@ const Bonds = () => {
             onChange={(e) => setDenomFilter(e.target.value)}
             className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-200 focus:outline-none"
           >
-            <option value="all">All Tokens</option>
+            <option value="all">All Payment Methods</option>
             {getUniquePurchaseDenoms.map(denom => (
               <option key={denom} value={denom}>
-                {getTokenSymbol(denom)}
+                Buy with {getTokenSymbol(denom)}
               </option>
             ))}
           </select>
