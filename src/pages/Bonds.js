@@ -103,11 +103,11 @@ const Bonds = () => {
       const data = await queryContract(message);
       
       if (data && Array.isArray(data.bond_offers)) {
-        const transformedBonds = data.bond_offers.map(bond => ({
-          ...bond,
-          start_time: convertContractTimeToDate(bond.purchase_start_time),
-          end_time: convertContractTimeToDate(bond.purchase_end_time),
-          maturity_date: convertContractTimeToDate(bond.claim_end_time),
+        const transformedBonds = data.bond_offers.map(offer => ({
+          ...offer.bond_offer,
+          start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
+          end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
+          maturity_date: convertContractTimeToDate(offer.bond_offer.claim_end_time),
         }));
         setBonds(transformedBonds);
       }
@@ -193,10 +193,9 @@ const Bonds = () => {
     return tokenMappings[denom]?.symbol || denom;
   };
 
-  const getTokenImage = (symbol) => {
-    if (!symbol) return '';
-    const lowerSymbol = symbol.toLowerCase();
-    return tokenImages[lowerSymbol] || '';
+  const getTokenImage = (denom) => {
+    const token = tokenMappings[denom] || denom;
+    return tokenImages[token];
   };
 
   const formatDate = (date) => {
@@ -665,11 +664,26 @@ const Bonds = () => {
                   const purchaseDate = purchase.purchase_time instanceof Date 
                     ? purchase.purchase_time 
                     : new Date(Number(purchase.purchase_time) / 1_000_000);
+                  const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+                  const tokenImage = getTokenImage(bond?.backing_denom);
 
                   return (
-                    <tr key={purchase.bond_id} className="border-b border-gray-800">
+                    <tr 
+                      key={purchase.bond_id} 
+                      className="border-b border-gray-800 cursor-pointer hover:bg-gray-700/50 transition-colors duration-200"
+                      onClick={(e) => {
+                        // Prevent navigation if clicking the claim button
+                        if (e.target.tagName !== 'BUTTON') {
+                          handleBondClick(purchase.bond_id);
+                        }
+                      }}
+                    >
                       <td className="py-4">{getBondName(purchase.bond_id)}</td>
-                      <td className="py-4 text-center">{formatAmount(purchase.amount)}</td>
+                      <td className="text-center py-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <span>{formatAmount(purchase.amount)}</span>
+                        </div>
+                      </td>
                       <td className="py-4 text-center">{formatDate(purchaseDate)}</td>
                       <td className="py-4 text-center">
                         <span className={`px-3 py-1 rounded-full text-sm ${
@@ -714,9 +728,20 @@ const Bonds = () => {
             const purchaseDate = purchase.purchase_time instanceof Date 
               ? purchase.purchase_time 
               : new Date(Number(purchase.purchase_time) / 1_000_000);
-            
+            const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+            const tokenImage = getTokenImage(bond?.backing_denom);
+
             return (
-              <div key={purchase.bond_id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+              <div 
+                key={purchase.bond_id} 
+                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 cursor-pointer hover:bg-gray-700/50 transition-colors duration-200"
+                onClick={(e) => {
+                  // Prevent navigation if clicking the claim button
+                  if (e.target.tagName !== 'BUTTON') {
+                    handleBondClick(purchase.bond_id);
+                  }
+                }}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-gray-400">{getBondName(purchase.bond_id)}</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
@@ -729,7 +754,16 @@ const Bonds = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Amount:</span>
-                    <span>{formatAmount(purchase.amount)}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{formatAmount(purchase.amount)}</span>
+                      {tokenImage && (
+                        <img
+                          src={tokenImage} 
+                          alt={bond?.backing_denom} 
+                          className="w-5 h-5 rounded-full"
+                        />
+                      )}
+                    </div>
                   </div>
                   
                   <div className="flex justify-between">

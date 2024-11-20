@@ -198,28 +198,43 @@ const CreateBonds = () => {
       const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}`);
       const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
 
-      // Convert dates to timestamps for comparison
-      const endTimestamp = endDate.getTime();
-      const maturityTimestamp = maturityDate.getTime();
-
       // Validate dates with detailed error messages
-      if (endTimestamp <= startDate.getTime()) {
+      if (endDate <= startDate) {
         throw new Error("End date must be after start date");
       }
-      if (maturityTimestamp <= endTimestamp) {
+      if (maturityDate <= endDate) {
         throw new Error(`Invalid maturity time: ${maturityDate.toLocaleString()} must be after end time: ${endDate.toLocaleString()}`);
       }
 
-      // Calculate offsets in minutes (ceiling)
+      // Calculate all offsets in minutes (ceiling)
       const startOffset = Math.ceil((startDate - now) / (1000 * 60));
       const endOffset = Math.ceil((endDate - now) / (1000 * 60));
       const maturityOffset = Math.ceil((maturityDate - now) / (1000 * 60));
 
-      // Query contract for timestamps
+      let claimStartOffset, claimEndOffset;
+      if (formData.immediate_claim) {
+        // Set claim start to 1 minute after bond end
+        claimStartOffset = endOffset + 1;
+        // Set claim end to 1 minute before maturity
+        claimEndOffset = maturityOffset - 1;
+      } else if (formData.claim_start_date && formData.claim_end_date) {
+        const claimStart = new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`);
+        const claimEnd = new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`);
+        claimStartOffset = Math.ceil((claimStart - now) / (1000 * 60));
+        claimEndOffset = Math.ceil((claimEnd - now) / (1000 * 60));
+      } else {
+        // Default behavior
+        claimStartOffset = endOffset;
+        claimEndOffset = maturityOffset;
+      }
+
+      // Single timestamp query with all offsets
       const timestampQuery = {
         get_timestamp_offsets: {
           start_offset: startOffset,
           end_offset: endOffset,
+          claim_start_offset: claimStartOffset,
+          claim_end_offset: claimEndOffset,
           mature_offset: maturityOffset
         }
       };
@@ -228,47 +243,6 @@ const CreateBonds = () => {
         daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
         timestampQuery
       );
-
-      // Ensure we're working with BigInt for precise calculations
-      const purchaseEnd = BigInt(timestamps.end_time);
-      
-      // Add a larger buffer (e.g., 5 minutes worth of nanoseconds) to ensure clear separation
-      const FIVE_MINUTES_NS = BigInt(5 * 60 * 1000000000);
-      let claimStartTime, claimEndTime;
-
-      if (formData.immediate_claim) {
-        // Use existing logic for immediate claims
-        claimStartTime = (purchaseEnd + FIVE_MINUTES_NS).toString();
-        claimEndTime = timestamps.mature_time.toString();
-      } else if (formData.claim_start_date && formData.claim_end_date) {
-        // Use selected claim dates if provided
-        const claimStart = new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`);
-        const claimEnd = new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`);
-        
-        const claimStartOffset = Math.ceil((claimStart - now) / (1000 * 60));
-        const claimEndOffset = Math.ceil((claimEnd - now) / (1000 * 60));
-
-        const timestampQuery = {
-          get_timestamp_offsets: {
-            start_offset: startOffset,
-            end_offset: endOffset,
-            claim_start_offset: claimStartOffset,
-            claim_end_offset: claimEndOffset
-          }
-        };
-
-        const timestamps = await client.queryContractSmart(
-          daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
-          timestampQuery
-        );
-
-        claimStartTime = timestamps.claim_start_time.toString();
-        claimEndTime = timestamps.claim_end_time.toString();
-      } else {
-        // Default behavior when no claim settings are specified
-        claimStartTime = timestamps.end_time.toString();
-        claimEndTime = timestamps.mature_time.toString();
-      }
 
       const message = {
         issue_bond: {
@@ -285,8 +259,8 @@ const CreateBonds = () => {
           },
           purchase_start_time: timestamps.start_time.toString(),
           purchase_end_time: timestamps.end_time.toString(),
-          claim_start_time: claimStartTime,
-          claim_end_time: claimEndTime,
+          claim_start_time: timestamps.claim_start_time.toString(),
+          claim_end_time: timestamps.claim_end_time.toString(),
           immediate_claim: formData.immediate_claim,
           description: formData.description,
           nft_metadata: {
@@ -300,8 +274,8 @@ const CreateBonds = () => {
       console.log('Timestamps:', {
         purchase_start: timestamps.start_time,
         purchase_end: timestamps.end_time,
-        claim_start: claimStartTime,
-        claim_end: claimEndTime
+        claim_start: timestamps.claim_start_time,
+        claim_end: timestamps.claim_end_time
       });
 
       // Calculate the fee in uwhale (25 WHALE)
@@ -613,6 +587,30 @@ const CreateBonds = () => {
     }
   }, [formData.end_time, formData.end_time_hour]);
 
+  // Add this effect to update claim times when immediate claim changes
+  useEffect(() => {
+    if (formData.immediate_claim) {
+      // Convert end time and maturity time to UTC
+      const endDate = new Date(`${formData.end_time}T${formData.end_time_hour}Z`);
+      const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}Z`);
+      
+      // Set claim start to 1 minute after bond end
+      const claimStartDate = new Date(endDate.getTime() + 60000); // Add 1 minute in milliseconds
+      
+      // Set claim end to 1 minute before maturity
+      const claimEndDate = new Date(maturityDate.getTime() - 60000); // Subtract 1 minute in milliseconds
+      
+      // Convert back to local timezone for display
+      setFormData(prevState => ({
+        ...prevState,
+        claim_start_date: claimStartDate.toISOString().split('T')[0],
+        claim_start_hour: claimStartDate.toTimeString().slice(0, 5),
+        claim_end_date: claimEndDate.toISOString().split('T')[0],
+        claim_end_hour: claimEndDate.toTimeString().slice(0, 5)
+      }));
+    }
+  }, [formData.immediate_claim, formData.end_time, formData.end_time_hour, formData.maturity_date, formData.maturity_date_hour]);
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -735,7 +733,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 mobile-input-group align-qtty-and-price">
+              <div className="flex space-x-4 ">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
@@ -886,16 +884,18 @@ const CreateBonds = () => {
                   <input
                     type="date"
                     name="claim_start_date"
-                    value={formData.claim_start_date || formData.end_time}
+                    value={formData.claim_start_date}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    disabled={formData.immediate_claim}
                   />
                   <input
                     type="time"
                     name="claim_start_hour"
-                    value={formData.claim_start_hour || formData.end_time_hour}
+                    value={formData.claim_start_hour}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    disabled={formData.immediate_claim}
                   />
                 </div>
               </div>
@@ -910,16 +910,18 @@ const CreateBonds = () => {
                   <input
                     type="date"
                     name="claim_end_date"
-                    value={formData.claim_end_date || formData.maturity_date}
+                    value={formData.claim_end_date}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    disabled={formData.immediate_claim}
                   />
                   <input
                     type="time"
                     name="claim_end_hour"
-                    value={formData.claim_end_hour || formData.maturity_date_hour}
+                    value={formData.claim_end_hour}
                     onChange={handleInputChange}
                     className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    disabled={formData.immediate_claim}
                   />
                 </div>
               </div>
