@@ -709,7 +709,7 @@ const CreateBonds = () => {
             <div>
               <LabelWithTooltip
                 label="Bond Maturity Date"
-                tooltip="The date and time when users can claim their tokens from the bond. This must be after the bond end date."
+                tooltip="Date and time when the bond will mature and all claiming ends. Bond issuers can claim their tokens at any time after this date."
                 required
               />
               <div className="flex space-x-2 mobile-date-time">
