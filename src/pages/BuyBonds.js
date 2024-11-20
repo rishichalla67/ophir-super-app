@@ -131,7 +131,7 @@ const BuyBonds = () => {
     const now = Math.floor(Date.now() / 1000);
     const startTime = Math.floor(parseInt(bond.purchase_start_time) / 1_000_000_000);
     const endTime = Math.floor(parseInt(bond.purchase_end_time) / 1_000_000_000);
-    const maturityDate = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    const maturityDate = Math.floor(parseInt(bond.maturity_date) / 1_000_000_000);
 
     if (now < startTime) return "Upcoming";
     if (now >= startTime && now <= endTime) return "Active";
@@ -610,7 +610,7 @@ const BuyBonds = () => {
     if (!bond) return false;
     
     const now = Math.floor(Date.now() / 1000);
-    const maturityTime = Math.floor(parseInt(bond.claim_end_time) / 1_000_000_000);
+    const maturityTime = Math.floor(parseInt(bond.maturity_date) / 1_000_000_000);
     const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
     
     // Add check for bond.closed
@@ -624,40 +624,19 @@ const BuyBonds = () => {
     if (!bond) {
       console.log('Missing bond data');
       return {
-        bondTokens: '0',
-        purchaseTokens: '0'
+        bondTokens: '0'
       };
     }
     
     console.log('Bond data for withdrawal calculation:', {
-      totalAmount: bond.total_amount,
-      remainingSupply: bond.remaining_supply,
-      price: bond.price
+      remainingSupply: bond.remaining_supply
     });
 
     // Calculate unclaimed bond tokens (remaining supply)
     const remainingBonds = parseInt(bond.remaining_supply) / 1000000;
     
-    // Calculate sold bonds
-    const totalBonds = parseInt(bond.total_amount) / 1000000;
-    const soldBonds = totalBonds - remainingBonds;
-    
-    // Calculate refund in purchasing token (whale)
-    // The refund should be based on the sold bonds, not the remaining bonds
-    const purchasePrice = parseFloat(bond.price);
-    const refundAmount = soldBonds * purchasePrice;
-    
-    console.log('Withdrawal calculation:', {
-      remainingBonds,
-      soldBonds,
-      purchasePrice,
-      refundAmount,
-      calculation: `${soldBonds} * ${purchasePrice} = ${refundAmount}`
-    });
-
     const result = {
-      bondTokens: remainingBonds.toFixed(6),
-      purchaseTokens: refundAmount.toFixed(6)
+      bondTokens: remainingBonds.toFixed(6)
     };
 
     console.log('Final result:', result);
@@ -702,10 +681,6 @@ const BuyBonds = () => {
                   You can withdraw{' '}
                   <span className="font-bold">
                     {calculateWithdrawAmount().bondTokens} {bondSymbol}
-                  </span>
-                  {' '}and{' '}
-                  <span className="font-bold">
-                    {calculateWithdrawAmount().purchaseTokens} {purchasingSymbol}
                   </span>
                 </p>
               </div>
@@ -765,6 +740,13 @@ const BuyBonds = () => {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Purchase End:</p>
+              <p className="text-sm md:text-xl font-bold text-center">
+                {bond?.purchase_end_time ? formatDate(bond.purchase_end_time) : 'N/A'}
+              </p>
             </div>
 
             <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
@@ -984,7 +966,7 @@ const BuyBonds = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Claim Rewards</h2>
               <div className="text-sm text-gray-400">
-                Maturity Date: {formatDate(bond.claim_end_time)}
+                Maturity Date: {formatDate(bond.maturity_date)}
               </div>
             </div>
 
@@ -1104,9 +1086,6 @@ const BuyBonds = () => {
                   <p className="text-gray-400 text-sm">You will withdraw:</p>
                   <p className="text-lg font-bold">
                     {calculateWithdrawAmount().bondTokens} {bondSymbol}
-                  </p>
-                  <p className="text-lg font-bold">
-                    {calculateWithdrawAmount().purchaseTokens} {purchasingSymbol}
                   </p>
                 </div>
               </div>

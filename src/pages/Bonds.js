@@ -17,6 +17,51 @@ const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const OPHIR_DECIMAL = BigInt(1000000);
 
+const CountdownTimer = ({ targetDate, label }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date().getTime();
+      const difference = targetDate.getTime() - now;
+
+      if (difference <= 0) {
+        return 'Ended';
+      }
+
+      // Calculate time units
+      const years = Math.floor(difference / (1000 * 60 * 60 * 24 * 365));
+      const days = Math.floor((difference % (1000 * 60 * 60 * 24 * 365)) / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+      // More compact format
+      if (years > 0) return `${years}y ${days}d`;
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      return `${minutes}m ${seconds}s`;
+    };
+
+    // Initial calculation
+    setTimeLeft(calculateTimeLeft());
+
+    // Update every second
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  return (
+    <div className="text-xs text-gray-400">
+      {label && <span className="mr-1">{label}</span>}
+      {timeLeft}
+    </div>
+  );
+};
+
 const Bonds = () => {
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
@@ -360,12 +405,18 @@ const Bonds = () => {
             </div>
           </div>
           <div className={`px-3 py-1 rounded-full text-sm ${
-            status === 'Active' ? 'bg-green-500/20 text-green-400' :
+            status === 'Active' ? 'bg-green-500/20 text-green-400 flex flex-col items-center' :
             status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
-            status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
+            status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400 flex flex-col items-center' :
             'bg-gray-500/20 text-gray-400'
           }`}>
             {status}
+            {(status === 'Upcoming' || status === 'Active') && (
+              <CountdownTimer 
+                targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time} 
+                label={status === 'Active' ? 'Ends in:' : undefined}
+              />
+            )}
           </div>
         </div>
 
@@ -385,7 +436,7 @@ const Bonds = () => {
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-gray-400">Price</span>
+            <span className="text-gray-400">Bond Price</span>
             <div className="flex items-center">
               <span className="font-medium mr-2">
                 {formatAmount(bond.price, true)} {purchasingSymbol}
@@ -429,6 +480,62 @@ const Bonds = () => {
     );
   };
 
+  const canWithdraw = (bond) => {
+    if (!bond) return false;
+    const now = new Date();
+    const maturityDate = new Date(parseInt(bond.maturity_date) / 1_000_000);
+    return now >= maturityDate;
+  };
+
+  const handleWithdraw = async (bondId) => {
+    try {
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const withdrawMsg = {
+        withdraw_bond: {
+          bond_id: parseInt(bondId)
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
+        connectedWalletAddress,
+        contractAddress,
+        withdrawMsg,
+        fee,
+        "Withdraw Bond"
+      );
+
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        showAlert(
+          `Bond withdrawn successfully!`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh data
+        await fetchData();
+      }
+    } catch (error) {
+      console.error("Error withdrawing bond:", error);
+      showAlert(`Error withdrawing bond: ${error.message}`, "error");
+    }
+  };
+
   const renderBondTable = () => {
     if (!Array.isArray(filteredBonds) || filteredBonds.length === 0) {
       return <div>No bonds available</div>;
@@ -455,7 +562,7 @@ const Bonds = () => {
             </th>
             <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('price')}>
               <span className="flex items-center justify-center">
-                Price {renderSortIcon('price')}
+                Bond Price {renderSortIcon('price')}
               </span>
             </th>
             <th className="text-center py-2 w-1/4 cursor-pointer" onClick={() => requestSort('maturity_date')}>
@@ -485,7 +592,14 @@ const Bonds = () => {
                     ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
                     : 'hover:bg-gray-700'
                   }`}
-                onClick={() => handleBondClick(bond.bond_id)}
+                onClick={(e) => {
+                  // Prevent navigation if clicking action buttons
+                  if (e.target.tagName === 'BUTTON') {
+                    e.stopPropagation();
+                    return;
+                  }
+                  handleBondClick(bond.bond_id);
+                }}
               >
                 <td className="py-4 pl-4">
                   <div className="flex items-center">
@@ -500,10 +614,32 @@ const Bonds = () => {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 text-center">{status}</td>
                 <td className="py-4 text-center">
-                  <div>
-                    {formatAmount(bond.total_amount)}
+                  <div className="flex flex-col items-center">
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                      status === 'Active' ? 'bg-green-500/20 text-green-400' :
+                      status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
+                      status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
+                      'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {status}
+                    </span>
+                    {(status === 'Upcoming' || status === 'Active') && (
+                      <CountdownTimer 
+                        targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time}
+                        label={status === 'Active' ? 'Ends in:' : undefined}
+                      />
+                    )}
+                  </div>
+                </td>
+                <td className="py-4 text-center">
+                  <div className="flex items-center justify-center">
+                    <span className="mr-2">{formatAmount(bond.total_amount)}</span>
+                    {bondImage && (
+                      <div className="w-5 h-5 rounded-full overflow-hidden">
+                        <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
+                      </div>
+                    )}
                   </div>
                   <div className="text-sm text-gray-400">
                     {isSoldOut(bond.remaining_supply) ? (
@@ -530,7 +666,30 @@ const Bonds = () => {
                   }
                 </td>
                 <td className="py-4 text-center pr-2 pl-2">
-                  <button className="text-gray-400 hover:text-white transition duration-300">→</button>
+                  <div className="flex items-center justify-end space-x-2">
+                    {canWithdraw(bond) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleWithdraw(bond.bond_id);
+                        }}
+                        className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 
+                          hover:bg-green-500/30 rounded-md transition-colors"
+                        title="Withdraw matured bonds"
+                      >
+                        Withdraw
+                      </button>
+                    )}
+                    <button 
+                      className="text-gray-400 hover:text-white transition duration-300"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBondClick(bond.bond_id);
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
@@ -626,11 +785,11 @@ const Bonds = () => {
 
     return (
       <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
+        <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
         
         {/* Desktop view */}
         <div className="hidden md:block">
-          <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+          <div className="overflow-x-auto max-h-[35vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
             <table className="w-full">
               <thead className="sticky top-0 backdrop-blur-sm z-10">
                 <tr className="text-gray-400 border-b border-gray-800 bond-table-header">
@@ -678,11 +837,12 @@ const Bonds = () => {
                       <td className="py-4 text-right">
                         <button
                           onClick={() => handleClaim(purchase.bond_id)}
-                          disabled={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
+                          disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
                           className={`px-4 py-1.5 rounded-md text-sm transition duration-300 
                             landing-button disabled:opacity-50 disabled:cursor-not-allowed
                             hover:bg-yellow-500 disabled:hover:bg-yellow-500/50`}
-                          title={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                          title={fullyClaimed ? 'Already claimed' : 
+                            !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
                             `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                             'Claim now'}
                         >
@@ -691,7 +851,8 @@ const Bonds = () => {
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                               Claiming...
                             </div>
-                          ) : !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                          ) : fullyClaimed ? 'Claimed' :
+                            !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
                             `Claimable ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                             'Claim'}
                         </button>
@@ -705,7 +866,7 @@ const Bonds = () => {
         </div>
 
         {/* Mobile view */}
-        <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+        <div className="md:hidden max-h-[40vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
           {userBonds.map((purchase) => {
             const fullyClaimed = isFullyClaimed(purchase);
             const purchaseDate = purchase.purchase_time instanceof Date 
@@ -762,14 +923,15 @@ const Bonds = () => {
                   )} */}
                 </div>
 
-                {isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
+                {!fullyClaimed && isClaimable(bonds.find(b => b.bond_id === purchase.bond_id), purchase) && (
                   <button
                     onClick={() => handleClaim(purchase.bond_id)}
-                    disabled={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
+                    disabled={fullyClaimed || !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) || claimingBondId === purchase.bond_id}
                     className="w-full mt-3 landing-button px-4 py-1.5 rounded-md 
                       transition duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed
                       hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
-                    title={!canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                    title={fullyClaimed ? 'Already claimed' :
+                      !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
                       `Claimable after ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                       'Claim now'}
                   >
@@ -778,7 +940,8 @@ const Bonds = () => {
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                         Claiming...
                       </div>
-                    ) : !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
+                    ) : fullyClaimed ? 'Claimed' :
+                      !canClaim(bonds.find(b => b.bond_id === purchase.bond_id)) ? 
                       `Claimable ${formatDate(convertContractTimeToDate(bonds.find(b => b.bond_id === purchase.bond_id)?.claim_start_time))}` : 
                       'Claim'}
                   </button>
