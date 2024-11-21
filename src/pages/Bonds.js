@@ -882,7 +882,9 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
-        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Desktop view - modified with fixed height and scroll */}
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 h-[60vh] overflow-y-auto 
+          scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
             const isClaimingThis = claimingStates[claimKey];
@@ -969,8 +971,9 @@ const Bonds = () => {
           })}
         </div>
 
-        {/* Mobile view */}
-        <div className="md:hidden space-y-2">
+        {/* Mobile view - modified with fixed height and scroll */}
+        <div className="md:hidden space-y-2 h-[60vh] overflow-y-auto 
+          scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
             const isClaimingThis = claimingStates[claimKey];
