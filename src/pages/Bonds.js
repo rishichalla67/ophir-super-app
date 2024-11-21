@@ -126,7 +126,7 @@ const Bonds = () => {
       
       const queryResponse = await client.queryContractSmart(
         contractAddress,
-        message
+        message,
       );
       console.log('📦 Query response:', queryResponse);
       return queryResponse;
@@ -882,14 +882,16 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
-        {/* Desktop view - modified with fixed height and scroll */}
-        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 h-[60vh] overflow-y-auto 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[60vh] overflow-y-auto 
           scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
             const isClaimingThis = claimingStates[claimKey];
             const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-            const isClaimed = purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0;
+            const isClaimed = purchase.claimed_amount && parseInt(purchase.claimed_amount) >= parseInt(purchase.amount);
+            const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
+            const now = new Date();
+            const canClaimNow = now >= claimStartDate;
 
             return (
               <div 
@@ -897,7 +899,6 @@ const Bonds = () => {
                 className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
                   transition-all duration-300 backdrop-blur-sm cursor-pointer"
                 onClick={(e) => {
-                  // Prevent navigation if clicking the claim button
                   if (e.target.tagName === 'BUTTON') {
                     e.stopPropagation();
                     return;
@@ -919,7 +920,7 @@ const Bonds = () => {
                     </span>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs ${
-                    !isClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                    isClaimed ? 'bg-gray-500/20 text-gray-400' : 'bg-green-500/20 text-green-400'
                   }`}>
                     {isClaimed ? 'Claimed' : 'Unclaimed'}
                   </span>
@@ -946,11 +947,11 @@ const Bonds = () => {
                   </div>
                 </div>
 
-                {isClaimable(bond, purchase) && (
+                {!isClaimed && (
                   <div className="mt-4">
                     <button
                       onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id, index)}
-                      disabled={isClaimingThis}
+                      disabled={isClaimingThis || !canClaimNow}
                       className="w-full landing-button px-4 py-2 rounded-md 
                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
                         hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
@@ -960,97 +961,10 @@ const Bonds = () => {
                           <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
                           <span>Claiming...</span>
                         </div>
-                      ) : (
+                      ) : canClaimNow ? (
                         'Claim'
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Mobile view - modified with fixed height and scroll */}
-        <div className="md:hidden space-y-2 h-[60vh] overflow-y-auto 
-          scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
-          {userBonds.map((purchase, index) => {
-            const claimKey = `${purchase.bond_id}_${index}`;
-            const isClaimingThis = claimingStates[claimKey];
-            const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-            const isClaimed = purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0;
-
-            return (
-              <div 
-                key={index} 
-                className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
-                  transition-all duration-300 backdrop-blur-sm cursor-pointer"
-                onClick={(e) => {
-                  // Prevent navigation if clicking the claim button
-                  if (e.target.tagName === 'BUTTON') {
-                    e.stopPropagation();
-                    return;
-                  }
-                  handleBondClick(purchase.bond_id);
-                }}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center space-x-2">
-                    {bond?.backing_denom && (
-                      <img
-                        src={getTokenImage(bond.backing_denom)}
-                        alt={bond.backing_denom}
-                        className="w-8 h-8 rounded-full"
-                      />
-                    )}
-                    <span className="text-lg font-medium">
-                      {bond?.bond_name || `Bond #${purchase.bond_id}`}
-                    </span>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs ${
-                    !isClaimed ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {isClaimed ? 'Claimed' : 'Unclaimed'}
-                  </span>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Amount:</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
-                      {bond?.backing_denom && (
-                        <img
-                          src={getTokenImage(bond.backing_denom)}
-                          alt={bond.backing_denom}
-                          className="w-5 h-5 rounded-full"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Purchase Date:</span>
-                    <span>{formatDate(purchase.purchase_time)}</span>
-                  </div>
-                </div>
-
-                {isClaimable(bond, purchase) && (
-                  <div className="mt-4">
-                    <button
-                      onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id, index)}
-                      disabled={isClaimingThis}
-                      className="w-full landing-button px-4 py-2 rounded-md 
-                        transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-                        hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
-                    >
-                      {isClaimingThis ? (
-                        <div className="flex items-center justify-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-                          <span>Claiming...</span>
-                        </div>
                       ) : (
-                        'Claim'
+                        `Claim available on ${formatDate(claimStartDate)}`
                       )}
                     </button>
                   </div>
