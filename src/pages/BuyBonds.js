@@ -594,7 +594,7 @@ const BuyBonds = () => {
             "success",
             `<div>
               <p class="mb-2">✅ Bond #${bondId} has been successfully closed.</p>
-              <a href="${txnUrl}" target="_blank" class="text-yellow-400 hover:text-yellow-300">View Transaction</a>
+              <a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-300">View Transaction</a>
             </div>`
           );
         } else {
@@ -720,26 +720,26 @@ const BuyBonds = () => {
           {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
-        <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
+        <div className="bond-buy backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond ID:</p>
               <p className="text-sm md:text-xl font-bold text-center">{bond?.bond_id || 'N/A'}</p>
             </div>
             
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Status:</p>
               <p className="text-sm md:text-xl font-bold text-center">{bond ? getBondStatus(bond) : 'N/A'}</p>
             </div>
 
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Total Supply:</p>
               <p className="text-sm md:text-xl font-bold text-center">
                 {bond ? `${formatAmount(bond.total_amount)} ${bondSymbol}` : 'N/A'}
               </p>
             </div>
 
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Price:</p>
               <div className="flex items-center justify-center">
                 <p className="text-sm md:text-xl font-bold">{bond ? bond.price : 'N/A'}</p>
@@ -754,14 +754,14 @@ const BuyBonds = () => {
               </div>
             </div>
 
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Purchase End:</p>
               <p className="text-sm md:text-xl font-bold text-center">
                 {bond?.purchase_end_time ? formatDate(bond.purchase_end_time) : 'N/A'}
               </p>
             </div>
 
-            <div className="p-2 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Maturity Date:</p>
               <p className="text-sm md:text-xl font-bold text-center">
                 {bond?.claim_end_time ? formatDate(bond.claim_end_time) : 'N/A'}
@@ -771,7 +771,7 @@ const BuyBonds = () => {
           
           <div className="col-span-2 mt-4 md:mt-6">
             <p className="text-gray-400 text-xs md:text-sm mb-2">Bond Sale Progress:</p>
-            <div className="flex items-center p-3 md:p-4 bg-gray-900/50 rounded-lg">
+            <div className="flex items-center p-3 bond-buy-text-container md:p-4 bg-gray-900/50 rounded-lg">
               <div className="w-16 h-16 md:w-24 md:h-24 mr-4 md:mr-6">
                 <CircularProgressbar
                   value={bond ? calculateSoldPercentage(bond.remaining_supply, bond.total_amount) : 0}
@@ -786,12 +786,12 @@ const BuyBonds = () => {
               </div>
               <div className="space-y-1 md:space-y-2">
                 <p className="text-xs md:text-sm">
-                  Sold: <span className="text-yellow-400 font-bold">
+                  Sold: <span className="text-yellow-300 font-bold">
                     {bond ? `${formatAmount(bond.total_amount - bond.remaining_supply)} ${bondSymbol}` : 'N/A'}
                   </span>
                 </p>
                 <p className="text-xs md:text-sm">
-                  Remaining: <span className="text-yellow-400 font-bold">
+                  Remaining: <span className="text-yellow-300 font-bold">
                     {bond ? `${formatAmount(bond.remaining_supply)} ${bondSymbol}` : 'N/A'}
                   </span>
                 </p>
@@ -840,7 +840,7 @@ const BuyBonds = () => {
         )} */}
 
         {isBondActive && (
-          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
+          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
               <div className="flex items-center space-x-2">
@@ -872,7 +872,7 @@ const BuyBonds = () => {
                   />
                   {bond?.purchase_denom && walletBalances[bond.purchase_denom] && (
                     <button 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 text-sm bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-md transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 text-sm bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-md transition-colors"
                       onClick={() => {
                         const maxPurchaseAmount = calculateMaxPurchaseAmount(bond);
                         const userBalance = walletBalances[bond.purchase_denom];
@@ -897,7 +897,7 @@ const BuyBonds = () => {
                 {bond?.purchase_denom && walletBalances[bond.purchase_denom] && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Available Balance:</span>
-                    <span className="text-yellow-400 font-medium">
+                    <span className="text-yellow-300 font-medium">
                       {walletBalances[bond.purchase_denom]?.toLocaleString(undefined, {
                         minimumFractionDigits: 6,
                         maximumFractionDigits: 6
@@ -921,7 +921,7 @@ const BuyBonds = () => {
               <button
                 onClick={handlePurchase}
                 disabled={!connectedWalletAddress || isLoading || !purchaseAmount}
-                className="w-full py-4 mt-4 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
+                className="w-full py-4 mt-4 bg-yellow-300 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
               >
                 {isLoading ? (
                   <>
@@ -944,7 +944,7 @@ const BuyBonds = () => {
         )}
 
 {userBondPurchase && (
-  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 sm:p-6 mt-4 mb-4 shadow-xl border border-gray-700">
+  <div className="bond-buy backdrop-blur-sm rounded-lg p-4 sm:p-6 mt-4 mb-4 shadow-xl border border-gray-700">
     <h2 className="text-lg sm:text-2xl font-bold mb-4 text-yellow-400">Your Bond Purchases</h2>
     
     <div className="space-y-2">
@@ -953,7 +953,7 @@ const BuyBonds = () => {
         .map((purchase, index) => (
           <div 
             key={index} 
-            className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/50 hover:border-gray-600 transition-colors"
+            className="bg-gray-900/50 rounded-lg p-3 bond-buy-text-container border border-gray-700/50 hover:border-gray-600 transition-colors"
           >
             {/* Mobile Layout */}
             <div className="sm:hidden space-y-3">
@@ -1075,7 +1075,7 @@ const BuyBonds = () => {
           
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <Dialog.Panel className="bg-gray-800 rounded-lg p-6 max-w-sm w-full border border-gray-700">
-              <Dialog.Title className="text-xl font-bold text-yellow-400 mb-4">
+              <Dialog.Title className="text-xl font-bold text-yellow-300 mb-4">
                 Confirm Bond Purchase
               </Dialog.Title>
               
@@ -1129,7 +1129,7 @@ const BuyBonds = () => {
           
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <Dialog.Panel className="bg-gray-800 rounded-lg p-6 max-w-sm w-full border border-gray-700">
-              <Dialog.Title className="text-xl font-bold text-yellow-400 mb-4">
+              <Dialog.Title className="text-xl font-bold text-yellow-300 mb-4">
                 Confirm Withdrawal
               </Dialog.Title>
               

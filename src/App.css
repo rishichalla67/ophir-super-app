@@ -33,6 +33,9 @@
   --sidebar-border-color: rgba(148, 141, 104, 0.5);
   --bond-table-header-bg-color: rgb(65, 62, 54);
   --bond-table-header-border-color: rgb(199, 194, 170);
+  --bond-buy-bg-color: rgb(29, 28, 25);
+  --bond-buy-text-container-color: rgb(37, 37, 35);
+  --bond-create-text-container-color: rgb(44, 44, 41);
 }
 
 *{
@@ -598,6 +601,27 @@ table td{
   border-bottom: 1px solid var(--bond-table-header-border-color);
 }
 
+.bond-claim{
+  height: fit-content;
+}
+
+.bond-buy{
+  background-color: var(--bond-buy-bg-color);
+}
+
+.bond-buy-text-container{
+  background-color: var(--bond-buy-text-container-color);
+}
+
+.bond-create-text-container{
+  background-color: var(--bond-create-text-container-color);
+}
+
+.bond-creation-div, .claim-div, .nft-metadata-div{
+  background-color: var(--bond-buy-bg-color);
+  border: 1px solid var(--sidebar-border-color);
+}
+
 /*end of bond page*/
 
 @media screen and (max-width: 800px) {
@@ -667,7 +691,7 @@ table td{
     margin-bottom: 0;
   }
 
-  .bond-creation-div, .claim-div, .nft-metadata-div{
+  .bond-creation-div, .claim-div, .nft-metadata-div, .bond-buy{
     width: 60%;
     margin: 0 auto;
   }
