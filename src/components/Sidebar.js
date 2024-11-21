@@ -40,11 +40,11 @@ const Sidebar = () => {
           path: '/bonds',
           icon: <FaSearch className="mr-2" size={14} />
         },
-        { 
-          name: 'Resale', 
-          path: '/bonds/resale',
-          icon: <FaStore className="mr-2" size={14} />
-        },
+        // { 
+        //   name: 'Resale', 
+        //   path: '/bonds/resale',
+        //   icon: <FaStore className="mr-2" size={14} />
+        // },
       ],
     },
   ];
