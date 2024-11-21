@@ -386,6 +386,8 @@ const BuyBonds = () => {
 
   const CountdownRenderer = ({ days, hours, minutes, seconds, completed }) => {
     if (completed) {
+      // Refresh the page when the countdown completes
+      window.location.reload();
       return <span>Bond is now active!</span>;
     } else {
       const formattedDays = Math.floor(days);
