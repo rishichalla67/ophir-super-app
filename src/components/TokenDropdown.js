@@ -42,7 +42,7 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms }) => {
       <label className="block text-sm font-medium mb-1">{label}</label>
       <button
         type="button"
-        className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md flex items-center justify-between text-left"
+        className="bond-create-text-container w-full px-3 py-2 rounded-md flex items-center justify-between text-left"
         onClick={() => setIsOpen(!isOpen)}
       >
         {selectedToken ? (
@@ -84,7 +84,7 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms }) => {
         </svg>
       </button>
       {isOpen && (
-        <ul className="absolute mt-1 bg-[#2c2d3a] w-full rounded-md shadow-lg max-h-60 overflow-auto z-10">
+        <ul className="absolute mt-1 bond-create-text-container w-full rounded-md shadow-lg max-h-60 overflow-auto z-10">
           {tokens.map((token) => (
             <li
               key={token.denom}

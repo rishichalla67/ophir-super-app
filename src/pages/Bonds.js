@@ -896,7 +896,7 @@ const Bonds = () => {
             return (
               <div 
                 key={index} 
-                className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
+                className="bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
                   transition-all duration-300 backdrop-blur-sm cursor-pointer flex flex-col min-h-[200px] max-h-[250px]"
                 onClick={(e) => {
                   if (e.target.tagName === 'BUTTON') {
