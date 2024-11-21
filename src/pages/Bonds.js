@@ -699,7 +699,7 @@ const Bonds = () => {
     );
   };
 
-  const handleClaim = async (bondId, purchaseIndex) => {
+  const handleClaim = async (bondId, nftTokenId, purchaseIndex) => {
     // Create a unique key combining bondId and purchaseIndex
     const claimKey = `${bondId}_${purchaseIndex}`;
     
@@ -716,7 +716,8 @@ const Bonds = () => {
       
       const claimMsg = {
         claim_rewards: {
-          bond_id: parseInt(bondId)
+          bond_id: parseInt(bondId),
+          nft_token_id: nftTokenId
         }
       };
 
@@ -727,6 +728,7 @@ const Bonds = () => {
 
       console.log('Claiming rewards with:', {
         bondId,
+        nftTokenId,
         purchaseIndex,
         claimKey,
         message: claimMsg
@@ -796,7 +798,15 @@ const Bonds = () => {
               <div 
                 key={index} 
                 className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
-                  transition-all duration-300 backdrop-blur-sm"
+                  transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                onClick={(e) => {
+                  // Prevent navigation if clicking the claim button
+                  if (e.target.tagName === 'BUTTON') {
+                    e.stopPropagation();
+                    return;
+                  }
+                  handleBondClick(purchase.bond_id);
+                }}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-2">
@@ -842,7 +852,7 @@ const Bonds = () => {
                 {isClaimable(bond, purchase) && (
                   <div className="mt-4">
                     <button
-                      onClick={() => handleClaim(purchase.bond_id, index)}
+                      onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id, index)}
                       disabled={isClaimingThis}
                       className="w-full landing-button px-4 py-2 rounded-md 
                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
@@ -864,7 +874,7 @@ const Bonds = () => {
           })}
         </div>
 
-        {/* Keep existing mobile view */}
+        {/* Mobile view */}
         <div className="md:hidden space-y-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
@@ -876,7 +886,15 @@ const Bonds = () => {
               <div 
                 key={index} 
                 className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
-                  transition-all duration-300 backdrop-blur-sm"
+                  transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                onClick={(e) => {
+                  // Prevent navigation if clicking the claim button
+                  if (e.target.tagName === 'BUTTON') {
+                    e.stopPropagation();
+                    return;
+                  }
+                  handleBondClick(purchase.bond_id);
+                }}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-2">
@@ -922,7 +940,7 @@ const Bonds = () => {
                 {isClaimable(bond, purchase) && (
                   <div className="mt-4">
                     <button
-                      onClick={() => handleClaim(purchase.bond_id, index)}
+                      onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id, index)}
                       disabled={isClaimingThis}
                       className="w-full landing-button px-4 py-2 rounded-md 
                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed

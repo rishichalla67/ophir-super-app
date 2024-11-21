@@ -466,7 +466,7 @@ const BuyBonds = () => {
     }
   };
 
-  const handleClaimRewards = async (purchaseIndex) => {
+  const handleClaimRewards = async (purchase, purchaseIndex) => {
     // Update claiming state for specific purchase
     setClaimingStates(prev => ({ ...prev, [purchaseIndex]: true }));
     
@@ -476,7 +476,8 @@ const BuyBonds = () => {
       
       const claimMsg = {
         claim_rewards: {
-          bond_id: parseInt(bondId)
+          bond_id: parseInt(bondId),
+          nft_token_id: purchase.nft_token_id
         }
       };
 
@@ -485,12 +486,19 @@ const BuyBonds = () => {
         gas: "500000",
       };
 
+      console.log('Claiming rewards with:', {
+        bondId,
+        nftTokenId: purchase.nft_token_id,
+        purchaseIndex,
+        message: claimMsg
+      });
+
       const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
         claimMsg,
         fee,
-        "Claim Bond Rewards"
+        `Claim Bond Rewards - Amount: ${formatAmount(purchase.amount)}`
       );
 
       if (result.transactionHash) {
@@ -499,7 +507,7 @@ const BuyBonds = () => {
           : "https://inbloc.org/migaloo/transactions";
         const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
         showAlert(
-          `Rewards claimed successfully!`,
+          `Bond claimed successfully!`,
           "success",
           `<a href="${txnUrl}" target="_blank">View Transaction</a>`
         );
@@ -511,8 +519,8 @@ const BuyBonds = () => {
         ]);
       }
     } catch (error) {
-      console.error("Error claiming rewards:", error);
-      showAlert(`Error claiming rewards: ${error.message}`, "error");
+      console.error("Error claiming bond:", error);
+      showAlert(`Error claiming bond: ${error.message}`, "error");
     } finally {
       // Clear claiming state for specific purchase
       setClaimingStates(prev => ({ ...prev, [purchaseIndex]: false }));
@@ -970,7 +978,7 @@ const BuyBonds = () => {
               <div>
                 {isClaimable(bond, purchase) ? (
                   <button
-                    onClick={() => handleClaimRewards(index)}
+                    onClick={() => handleClaimRewards(purchase, index)}
                     disabled={claimingStates[index]}
                     className="w-full px-3 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 
                       disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 
@@ -985,7 +993,7 @@ const BuyBonds = () => {
                         <span>Processing...</span>
                       </>
                     ) : (
-                      'Claim Rewards'
+                      'Claim'
                     )}
                   </button>
                 ) : (
@@ -1022,7 +1030,7 @@ const BuyBonds = () => {
               <div>
                 {isClaimable(bond, purchase) ? (
                   <button
-                    onClick={() => handleClaimRewards(index)}
+                    onClick={() => handleClaimRewards(purchase, index)}
                     disabled={claimingStates[index]}
                     className="w-full px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 
                       disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 
@@ -1034,7 +1042,7 @@ const BuyBonds = () => {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Processing...</span>
+                        <span>Claiming...</span>
                       </>
                     ) : (
                       'Claim Rewards'
