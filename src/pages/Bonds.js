@@ -882,7 +882,7 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[60vh] overflow-y-auto 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bond-claim overflow-y-auto 
           scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
@@ -896,7 +896,7 @@ const Bonds = () => {
             return (
               <div 
                 key={index} 
-                className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
+                className="bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
                   transition-all duration-300 backdrop-blur-sm cursor-pointer"
                 onClick={(e) => {
                   if (e.target.tagName === 'BUTTON') {

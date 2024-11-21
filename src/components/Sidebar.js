@@ -107,7 +107,7 @@ const Sidebar = () => {
                   <div className="pr-4">
                     <button
                       onClick={(e) => toggleDropdown(e, item.name)}
-                      className="button-sidebar pb-2 text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
+                      className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
                     >
                       <span className="flex items-center">
                         {item.icon}

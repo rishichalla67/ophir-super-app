@@ -638,7 +638,7 @@ const CreateBonds = () => {
           A 25 whale fee is charged to create an obTOKEN denom.
         </p> */}
 
-        <div className="bg-[#23242f] bond-creation-div p-6 rounded-lg shadow-lg mb-8">
+        <div className="bond-creation-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             {/* <p className="text-gray-400 mb-8">
               Your current timezone: {userTimezone}. All times will be converted
@@ -656,7 +656,7 @@ const CreateBonds = () => {
                   <button
                     key={duration.label}
                     onClick={() => handlePresetDuration(duration)}
-                    className="px-4 py-2 text-sm rounded-md bg-[#2c2d3a] hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
+                    className="px-4 py-2 text-sm rounded-md bond-create-text-container hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
                   >
                     {duration.label}
                   </button>
@@ -675,14 +675,14 @@ const CreateBonds = () => {
                   name="start_time"
                   value={formData.start_time}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
                 <input
                   type="time"
                   name="start_time_hour"
                   value={formData.start_time_hour}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
               </div>
             </div>
@@ -699,14 +699,14 @@ const CreateBonds = () => {
                   name="end_time"
                   value={formData.end_time}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
                 <input
                   type="time"
                   name="end_time_hour"
                   value={formData.end_time_hour}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
               </div>
             </div>
@@ -723,20 +723,20 @@ const CreateBonds = () => {
                   name="maturity_date"
                   value={formData.maturity_date}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
                 <input
                   type="time"
                   name="maturity_date_hour"
                   value={formData.maturity_date_hour}
                   onChange={handleInputChange}
-                  className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
               </div>
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 ">
+              <div className="flex space-x-4 align-qtty-and-price">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
@@ -759,7 +759,7 @@ const CreateBonds = () => {
                     name="total_supply"
                     value={formData.total_supply}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
+                    className="bond-create-text-container w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                   />
                   {formData.token_denom &&
@@ -802,7 +802,7 @@ const CreateBonds = () => {
                     name="price"
                     value={formData.price}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-full px-3 py-2 mt-1 rounded-md"
+                    className="bond-create-text-container w-full px-3 py-2 mt-1 rounded-md"
                     placeholder="0"
                   />
                 </div>
@@ -820,7 +820,7 @@ const CreateBonds = () => {
                   type="text"
                   value={customBondName}
                   onChange={(e) => setCustomBondName(e.target.value)}
-                  className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md mobile-full-width"
+                  className="bond-create-text-container w-full px-3 py-2 rounded-md mobile-full-width"
                   placeholder={`Default: ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}XXXX`}
                 />
               </div>
@@ -840,7 +840,7 @@ const CreateBonds = () => {
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md min-h-[100px]"
+                className="bond-create-text-container w-full px-3 py-2 rounded-md min-h-[100px]"
                 placeholder="Enter a description for your bond..."
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -873,7 +873,7 @@ const CreateBonds = () => {
         </div>
 
         <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
-          <div className="bg-[#23242f] claim-div p-6 rounded-lg shadow-lg mb-8">
+          <div className="claim-div p-6 rounded-lg shadow-lg mb-8">
             <div className="space-y-6">
               <div>
                 <LabelWithTooltip
@@ -887,7 +887,7 @@ const CreateBonds = () => {
                     name="claim_start_date"
                     value={formData.claim_start_date}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                     disabled={formData.immediate_claim}
                   />
                   <input
@@ -895,7 +895,7 @@ const CreateBonds = () => {
                     name="claim_start_hour"
                     value={formData.claim_start_hour}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                     disabled={formData.immediate_claim}
                   />
                 </div>
@@ -913,7 +913,7 @@ const CreateBonds = () => {
                     name="claim_end_date"
                     value={formData.claim_end_date}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                     disabled={formData.immediate_claim}
                   />
                   <input
@@ -921,7 +921,7 @@ const CreateBonds = () => {
                     name="claim_end_hour"
                     value={formData.claim_end_hour}
                     onChange={handleInputChange}
-                    className="bg-[#2c2d3a] w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                     disabled={formData.immediate_claim}
                   />
                 </div>
@@ -935,7 +935,7 @@ const CreateBonds = () => {
           Configure the metadata for the NFT that represents this bond.
         </p>
 
-        <div className="bg-[#23242f] nft-metadata-div p-6 rounded-lg shadow-lg mb-8">
+        <div className="nft-metadata-div p-6 rounded-lg shadow-lg mb-8">
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium pb-2">
@@ -946,7 +946,7 @@ const CreateBonds = () => {
                 name="nft_metadata.name"
                 value={formData.nft_metadata.name}
                 onChange={handleInputChange}
-                className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                className="bond-create-text-container w-full px-3 py-2 rounded-md"
                 placeholder={`${fullBondDenomName} Bond NFT`}
               />
             </div>
@@ -960,7 +960,7 @@ const CreateBonds = () => {
                 name="nft_metadata.symbol"
                 value={formData.nft_metadata.symbol}
                 onChange={handleInputChange}
-                className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                className="bond-create-text-container w-full px-3 py-2 rounded-md"
                 placeholder={fullBondDenomName}
               />
             </div>
@@ -974,7 +974,7 @@ const CreateBonds = () => {
                 name="nft_metadata.token_uri"
                 value={formData.nft_metadata.token_uri}
                 onChange={handleInputChange}
-                className="bg-[#2c2d3a] w-full px-3 py-2 rounded-md"
+                className="bond-create-text-container w-full px-3 py-2 rounded-md"
                 placeholder="https://example.com/metadata/1"
               />
               <p className="text-xs text-gray-500 mt-1">
