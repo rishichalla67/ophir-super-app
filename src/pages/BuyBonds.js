@@ -192,21 +192,21 @@ const BuyBonds = () => {
     }
   };
 
-  const fetchUserBonds = async (address) => {
-    try {
-      const queryMsg = { 
-        get_bonds_by_user: { 
-          buyer: address 
-        } 
-      };
-      const result = await queryContract(queryMsg);
-      console.log('User bonds:', result);
-      setUserBonds(result.bond_purchases || []);
-    } catch (error) {
-      console.error("Error fetching user bonds:", error);
-      showAlert(`Error fetching user bonds: ${error.message}`, "error");
-    }
-  };
+  // const fetchUserBonds = async (address) => {
+  //   try {
+  //     const queryMsg = { 
+  //       get_bonds_by_user: { 
+  //         buyer: address 
+  //       } 
+  //     };
+  //     const result = await queryContract(queryMsg);
+  //     console.log('User bonds:', result);
+  //     setUserBonds(result.bond_purchases || []);
+  //   } catch (error) {
+  //     console.error("Error fetching user bonds:", error);
+  //     showAlert(`Error fetching user bonds: ${error.message}`, "error");
+  //   }
+  // };
 
   const fetchUserBondPurchase = async (address) => {
     try {

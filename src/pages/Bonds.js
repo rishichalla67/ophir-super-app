@@ -171,7 +171,7 @@ const Bonds = () => {
       
       const message = { 
         get_bonds_by_user: { 
-          buyer: connectedWalletAddress 
+          buyer: connectedWalletAddress
         } 
       };
       
@@ -294,14 +294,22 @@ const Bonds = () => {
     let sortableBonds = [...bonds];
     
     sortableBonds.sort((a, b) => {
-      const statusOrder = { 'UPCOMING': 0, 'ACTIVE': 1, 'COMPLETED': 2 };
+      const statusOrder = { 
+        'Upcoming': 0, 
+        'Active': 1, 
+        'Sold Out': 2, 
+        'Ended': 3,
+        'Matured': 4  // Matured status will always be last
+      };
       const statusA = getBondStatus(a);
       const statusB = getBondStatus(b);
       
+      // First compare by status
       if (statusOrder[statusA] !== statusOrder[statusB]) {
         return statusOrder[statusA] - statusOrder[statusB];
       }
       
+      // If statuses are the same, apply the user's sort configuration
       if (sortConfig.key !== null) {
         const aValue = a[sortConfig.key] || '';
         const bValue = b[sortConfig.key] || '';
@@ -765,12 +773,20 @@ const Bonds = () => {
   };
 
   const isClaimable = (bond, userBond) => {
-    if (!bond || !userBond || !userBond.amount || !userBond.claimed_amount) {
+    if (!bond || !userBond || !userBond.amount) {
       return false;
     }
     
-    const hasUnclaimedAmount = parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
-    return hasUnclaimedAmount;
+    // Check if claimed_amount exists and is less than amount
+    const hasUnclaimedAmount = !userBond.claimed_amount || 
+      parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
+
+    // Check if bond is claimable based on time
+    const now = new Date();
+    const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
+    const isAfterClaimStart = now >= claimStartDate;
+
+    return hasUnclaimedAmount && isAfterClaimStart;
   };
 
   const canClaim = (bond) => {
