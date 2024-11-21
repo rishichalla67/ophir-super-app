@@ -28,6 +28,53 @@ const isSoldOut = (remainingSupply) => {
   return parseInt(remainingSupply) / 1000000 < 0.00001;
 };
 
+const canClaimBond = (claimStartTime) => {
+  if (!claimStartTime) return false;
+  
+  try {
+    const now = new Date().getTime();
+    // Handle both nanosecond and second timestamps
+    const claimStart = claimStartTime.toString().length > 13 
+      ? parseInt(claimStartTime) / 1_000_000 
+      : parseInt(claimStartTime) * 1000;
+    
+    return now >= claimStart;
+  } catch (error) {
+    console.error('Error checking claim time:', error);
+    return false;
+  }
+};
+
+const formatDate = (timestamp) => {
+  if (!timestamp) return 'N/A';
+  try {
+    // Handle both nanosecond and second timestamps
+    const milliseconds = timestamp.toString().length > 13 
+      ? parseInt(timestamp) / 1_000_000 
+      : parseInt(timestamp) * 1000;
+    
+    const date = new Date(milliseconds);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date timestamp:', timestamp);
+      return 'Invalid Date';
+    }
+    
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return 'Invalid Date';
+  }
+};
+
 const BuyBonds = () => {
   const { bondId } = useParams();
   const navigate = useNavigate();
@@ -139,30 +186,6 @@ const BuyBonds = () => {
     return "Matured";
   };
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    
-    try {
-      const milliseconds = Number(timestamp) / 1_000_000;
-      const date = new Date(milliseconds);
-      
-      const options = {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-        timeZoneName: 'short'
-      };
-      
-      return new Intl.DateTimeFormat(undefined, options).format(date);
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return 'Invalid Date';
-    }
-  };
-
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
   };
@@ -208,29 +231,111 @@ const BuyBonds = () => {
   //   }
   // };
 
-  const fetchUserBondPurchase = async (address) => {
+  const queryNFTContract = async (contractAddress, message) => {
     try {
-        console.log('Fetching user bond purchase for:', {
-        bondId,
-        address
-        });
-
-        const queryMsg = { 
-        get_bond_purchase: { 
-            bond_id: parseInt(bondId),
-            buyer: address
-        } 
-        };
-        console.log('Query message:', queryMsg);
-
-        const result = await queryContract(queryMsg);
-        console.log('User bond purchase result:', result);
-
-        const bondPurchases = result.bond_purchases || null;
-        setUserBondPurchase(bondPurchases);
-        console.log('Updated userBondPurchase state:', bondPurchases);
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      const queryResponse = await client.queryContractSmart(
+        contractAddress,
+        message
+      );
+      return queryResponse;
     } catch (error) {
-    //   console.error("Error fetching user bond purchase:", error);
+      console.error("Error querying NFT contract:", error);
+      throw error;
+    }
+  };
+
+  const fetchUserBondPurchase = async (address) => {
+    if (!address || !bondId) return;
+
+    try {
+      console.log('🔍 Starting user bond purchase fetch for:', {
+        address,
+        bondId
+      });
+      
+      let allPurchases = [];
+      let startAfter = "0";
+      const limit = 5;
+      
+      while (true) {
+        try {
+          const message = {
+            get_bonds_by_user: {
+              buyer: address,
+              limit: limit,
+              start_after: startAfter
+            }
+          };
+
+          console.log('📤 Querying bonds with:', message);
+          const response = await queryContract(message);
+          console.log('📥 Raw bonds response:', response);
+          
+          if (!response?.pairs || response.pairs.length === 0) {
+            console.log('No more results found');
+            break;
+          }
+
+          // Filter for matching bondId
+          const matchingPairs = response.pairs.filter(pair => pair.bond_id === parseInt(bondId));
+
+          // Fetch NFT info for each matching pair
+          const purchasePromises = matchingPairs.map(async pair => {
+            try {
+              const nftMessage = {
+                nft_info: {
+                  token_id: pair.nft_id
+                }
+              };
+              
+              console.log(`📤 Querying NFT info for token ${pair.nft_id}:`, nftMessage);
+              const nftInfo = await queryNFTContract(pair.contract_addr, nftMessage);
+              console.log(`📥 NFT info for token ${pair.nft_id}:`, nftInfo);
+
+              // Extract attributes
+              const attributes = nftInfo.extension.attributes.reduce((acc, attr) => {
+                acc[attr.trait_type] = attr.value;
+                return acc;
+              }, {});
+
+              return {
+                bond_id: pair.bond_id,
+                nft_token_id: pair.nft_id,
+                contract_address: pair.contract_addr,
+                amount: attributes.amount,
+                claimed_amount: attributes.claimed_amount,
+                purchase_time: attributes.purchase_time,
+                status: attributes.status
+              };
+            } catch (error) {
+              console.error(`Error fetching NFT info for token ${pair.nft_id}:`, error);
+              return null;
+            }
+          });
+
+          const bondPurchases = (await Promise.all(purchasePromises)).filter(Boolean);
+          console.log('Transformed purchases:', bondPurchases);
+          allPurchases = [...allPurchases, ...bondPurchases];
+          
+          // Update startAfter for next iteration
+          startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          
+        } catch (error) {
+          console.error('Loop iteration error:', error);
+          if (!error.message.includes('No bond purchase found')) {
+            console.warn('Query error:', error);
+          }
+          break;
+        }
+      }
+
+      console.log('✅ Final filtered purchases:', allPurchases);
+      setUserBondPurchase(allPurchases);
+
+    } catch (error) {
+      console.error("Error fetching user bond purchase:", error);
     }
   };
 
@@ -656,6 +761,46 @@ const BuyBonds = () => {
     return result;
   };
 
+  const handleClaim = async (bondId, nftId) => {
+    if (!connectedWalletAddress) {
+      showAlert("Please connect your wallet first", "error");
+      return;
+    }
+
+    try {
+      setClaimingStates(prev => ({ ...prev, [nftId]: true }));
+      
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const message = {
+        claim: {
+          token_id: nftId.toString()
+        }
+      };
+
+      const response = await client.execute(
+        connectedWalletAddress,
+        bond.contract_address,
+        message,
+        "auto"
+      );
+
+      if (response.code === 0) {
+        showAlert("Successfully claimed bond rewards!", "success");
+        // Refresh the user's bond purchases
+        fetchUserBondPurchase(connectedWalletAddress);
+      } else {
+        throw new Error("Transaction failed");
+      }
+    } catch (error) {
+      console.error("Error claiming bond:", error);
+      showAlert(error.message || "Failed to claim bond rewards", "error");
+    } finally {
+      setClaimingStates(prev => ({ ...prev, [nftId]: false }));
+    }
+  };
+
   if (!bond) {
     return (<>
       <div className="global-bg-new flex flex-col justify-center items-center h-screen">
@@ -720,7 +865,7 @@ const BuyBonds = () => {
           {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
-        <div className="bond-buy backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
+        <div className=" backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bg-gray-800/80 border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond ID:</p>
@@ -943,128 +1088,83 @@ const BuyBonds = () => {
           </div>
         )}
 
-{userBondPurchase && (
-  <div className="bond-buy backdrop-blur-sm rounded-lg p-4 sm:p-6 mt-4 mb-4 shadow-xl border border-gray-700">
-    <h2 className="text-lg sm:text-2xl font-bold mb-4 text-yellow-400">Your Bond Purchases</h2>
-    
-    <div className="space-y-2">
-      {userBondPurchase
-        .filter(purchase => purchase.bond_id === parseInt(bondId))
-        .map((purchase, index) => (
-          <div 
-            key={index} 
-            className="bg-gray-900/50 rounded-lg p-3 bond-buy-text-container border border-gray-700/50 hover:border-gray-600 transition-colors"
-          >
-            {/* Mobile Layout */}
-            <div className="sm:hidden space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-gray-400 text-xs mb-1">Amount</p>
-                  <p className="font-medium">
-                    {formatAmount(purchase.amount)} {bondSymbol}
-                  </p>
-                </div>
-                
-                <div>
-                  <p className="text-gray-400 text-xs mb-1">Claimed</p>
-                  <p className="font-medium">
-                    {formatAmount(purchase.claimed_amount)} {bondSymbol}
-                  </p>
-                </div>
-              </div>
-              
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Purchase Date</p>
-                <p className="font-medium text-sm">
-                  {formatDate(purchase.purchase_time)}
-                </p>
-              </div>
-              
-              <div>
-                {isClaimable(bond, purchase) ? (
-                  <button
-                    onClick={() => handleClaimRewards(purchase, index)}
-                    disabled={claimingStates[index]}
-                    className="w-full px-3 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 
-                      disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 
-                      flex items-center justify-center space-x-2 text-sm"
-                  >
-                    {claimingStates[index] ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      'Claim'
-                    )}
-                  </button>
-                ) : (
-                  <div className="text-sm text-gray-400 text-center py-1">
-                    Claimable {formatDate(bond.claim_start_time)}
-                  </div>
-                )}
-              </div>
-            </div>
+        {userBondPurchase && userBondPurchase.length > 0 && (
+          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 sm:p-6 mt-4 mb-4 shadow-xl border border-gray-700">
+            <h2 className="text-xl font-bold mb-4 text-yellow-400">Your Bond Purchases</h2>
+            
+            <div className="space-y-3">
+              {userBondPurchase.map((purchase) => {
+                const isClaimingThis = claimingStates[purchase.nft_token_id];
+                const canClaimNow = canClaimBond(bond?.claim_start_time);
+                const isClaimed = parseInt(purchase.claimed_amount) > 0;
 
-            {/* Desktop Layout */}
-            <div className="hidden sm:grid grid-cols-4 gap-4 items-center">
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Amount</p>
-                <p className="font-medium">
-                  {formatAmount(purchase.amount)} {bondSymbol}
-                </p>
-              </div>
-              
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Claimed</p>
-                <p className="font-medium">
-                  {formatAmount(purchase.claimed_amount)} {bondSymbol}
-                </p>
-              </div>
-              
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Purchase Date</p>
-                <p className="font-medium">
-                  {formatDate(purchase.purchase_time)}
-                </p>
-              </div>
-              
-              <div>
-                {isClaimable(bond, purchase) ? (
-                  <button
-                    onClick={() => handleClaimRewards(purchase, index)}
-                    disabled={claimingStates[index]}
-                    className="w-full px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 
-                      disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 
-                      flex items-center justify-center space-x-2"
+                return (
+                  <div 
+                    key={purchase.nft_token_id} 
+                    className="bond-buy-text-container rounded-lg p-4 border border-gray-700/50 hover:border-gray-600 transition-all duration-300"
                   >
-                    {claimingStates[index] ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Claiming...</span>
-                      </>
-                    ) : (
-                      'Claim Rewards'
-                    )}
-                  </button>
-                ) : (
-                  <div className="text-sm text-gray-400">
-                    Claimable {formatDate(bond.claim_start_time)}
+                    <div className="flex flex-col space-y-3">
+                      {/* Top row with amount and status */}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-gray-400 text-xs">Amount</p>
+                          <p className="text-sm font-semibold">
+                            {formatAmount(purchase.amount)} {bondSymbol}
+                          </p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          isClaimed 
+                            ? 'bg-gray-700/50 text-gray-300' 
+                            : 'bg-green-900/50 text-green-400'
+                        }`}>
+                          {isClaimed ? 'Claimed' : 'Unclaimed'}
+                        </span>
+                      </div>
+
+                      {/* Middle row with claimed amount and purchase date */}
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-gray-400 text-xs">Claimed</p>
+                          <p className="text-sm font-semibold">
+                            {formatAmount(purchase.claimed_amount)} {bondSymbol}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-gray-400 text-xs">Purchase Date</p>
+                          <p className="text-sm font-semibold">
+                            {formatDate(purchase.purchase_time)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Claim button */}
+                      {!isClaimed && (
+                        <button
+                          onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id)}
+                          disabled={isClaimingThis || !canClaimNow}
+                          className="w-full landing-button px-4 py-2 rounded-md 
+                            transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                            hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
+                        >
+                          {isClaimingThis ? (
+                            <div className="flex items-center justify-center space-x-2">
+                              <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                              <span>Claiming...</span>
+                            </div>
+                          ) : canClaimNow ? (
+                            'Claim'
+                          ) : (
+                            `Claim available on ${formatDate(bond?.claim_start_time)}`
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
           </div>
-        ))}
-    </div>
-  </div>
-)}
+        )}
 
         <Dialog
           open={showConfirmModal}

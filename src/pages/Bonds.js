@@ -171,100 +171,74 @@ const Bonds = () => {
     try {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
-      console.log('📊 Current bonds:', bonds);
-      console.log('🔄 Retry attempt:', retry);
       
-      // Try primary method first
-      try {
-        const message = { 
-          get_bonds_by_user: { 
-            buyer: connectedWalletAddress
-          } 
-        };
-        
-        console.log('📤 Attempting primary query:', message);
-        const data = await queryContract(message);
-        
-        if (data && Array.isArray(data.bond_purchases)) {
-          console.log('✅ Primary query successful:', data);
-          const transformedBonds = data.bond_purchases.map(purchase => ({
-            ...purchase,
-            purchase_time: convertContractTimeToDate(purchase.purchase_time),
-            amount: purchase.amount,
-            claimed_amount: purchase.claimed_amount,
-            bond_id: purchase.bond_id,
-          }));
-          setUserBonds(transformedBonds);
-          setInitialLoadAttempted(true);
-          return;
-        }
-      } catch (primaryError) {
-        console.log('⚠️ Primary query failed, proceeding to backup method');
-      }
+      let allUserBonds = [];
+      let startAfter = "0";
+      const limit = 5;
       
-      // Backup method
-      console.log('🔄 Starting backup method...');
-      const allBondPurchases = [];
-      const fetchPromises = [];
+      while (true) {
+        try {
+          const message = {
+            get_bonds_by_user: {
+              buyer: connectedWalletAddress,
+              limit: limit,
+              start_after: startAfter
+            }
+          };
 
-      // Create array of promises for parallel execution
-      bonds.forEach(bond => {
-        const backupMessage = {
-          get_bond_purchase: {
-            bond_id: parseInt(bond.bond_id),
-            buyer: connectedWalletAddress
+          console.log('📤 Querying with:', message);
+          const response = await queryContract(message);
+          console.log('📥 Raw response:', response);
+          
+          // Check if response has the pairs property
+          if (!response?.pairs || response.pairs.length === 0) {
+            console.log('No more results found');
+            break;
           }
-        };
-        
-        const fetchPromise = queryContract(backupMessage)
-          .then(bondData => {
-            if (bondData && Array.isArray(bondData.bond_purchases)) {
-              return bondData.bond_purchases.map(purchase => ({
-                ...purchase,
-                purchase_time: convertContractTimeToDate(purchase.purchase_time),
-                amount: purchase.amount,
-                claimed_amount: purchase.claimed_amount,
-                bond_id: bond.bond_id,
-              }));
+
+          // Transform the response data
+          const bondPurchases = response.pairs.map(pair => {
+            const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
+            if (!matchingBond) {
+              console.log('No matching bond found for:', pair.bond_id);
+              return null;
             }
-            return [];
-          })
-          .catch(error => {
-            if (!error.message.includes('No bond purchase found')) {
-              console.warn(`Failed to fetch purchases for bond ${bond.bond_id}:`, error);
-            }
-            return [];
-          });
 
-        fetchPromises.push(fetchPromise);
-      });
+            return {
+              bond_id: pair.bond_id,
+              nft_token_id: pair.nft_id,
+              contract_address: pair.contract_addr,
+              // Maintain compatibility with existing display logic
+              purchase_time: matchingBond.start_time,
+              amount: matchingBond.total_amount,
+              claimed_amount: "0" // This will need to be updated when we implement NFT queries
+            };
+          }).filter(Boolean); // Remove null entries
 
-      // Wait for all queries to complete
-      const results = await Promise.all(fetchPromises);
-      
-      // Combine all results
-      results.forEach(bondPurchases => {
-        allBondPurchases.push(...bondPurchases);
-      });
-
-      console.log('🎯 Backup method results:', allBondPurchases);
-      
-      if (allBondPurchases.length > 0) {
-        setUserBonds(allBondPurchases);
-        setInitialLoadAttempted(true);
-      } else {
-        console.log('ℹ️ No bond purchases found for user');
-        setUserBonds([]);
-        setInitialLoadAttempted(true);
+          console.log('Transformed purchases:', bondPurchases);
+          allUserBonds = [...allUserBonds, ...bondPurchases];
+          
+          // Update startAfter for next iteration
+          startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          
+        } catch (error) {
+          console.error('Loop iteration error:', error);
+          if (!error.message.includes('No bond purchase found')) {
+            console.warn('Query error:', error);
+          }
+          break;
+        }
       }
+
+      console.log('✅ Final user bonds array:', allUserBonds);
+      setUserBonds(allUserBonds);
+      setInitialLoadAttempted(true);
 
     } catch (error) {
       console.error('❌ Bond fetch failed completely:', error);
       
-      // Implement retry logic
       if (retry < maxRetries) {
         console.log(`🔄 Retrying... Attempt ${retry + 1} of ${maxRetries}`);
-        // Exponential backoff
         setTimeout(() => {
           fetchUserBonds(retry + 1);
         }, Math.min(1000 * Math.pow(2, retry), 8000));
