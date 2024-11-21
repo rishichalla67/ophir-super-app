@@ -172,17 +172,18 @@ const Bonds = () => {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
-      let allUserBonds = [];
-      let startAfter = "0";
-      const limit = 5;
+      let allUserBonds = new Map(); // Use Map to prevent duplicates
+      let startAfter = null; // Start with null instead of "0"
+      const limit = 10; // Increased limit per page
+      let hasMore = true;
       
-      while (true) {
+      while (hasMore) {
         try {
           const message = {
             get_bonds_by_user: {
               buyer: connectedWalletAddress,
               limit: limit,
-              start_after: startAfter
+              ...(startAfter && { start_after: startAfter })
             }
           };
 
@@ -190,48 +191,52 @@ const Bonds = () => {
           const response = await queryContract(message);
           console.log('📥 Raw response:', response);
           
-          // Check if response has the pairs property
+          // Check if response has the pairs property and is not empty
           if (!response?.pairs || response.pairs.length === 0) {
             console.log('No more results found');
             break;
           }
 
-          // Transform the response data
-          const bondPurchases = response.pairs.map(pair => {
+          // Transform and store unique bonds using Map
+          response.pairs.forEach(pair => {
             const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
-            if (!matchingBond) {
-              console.log('No matching bond found for:', pair.bond_id);
-              return null;
+            if (matchingBond) {
+              // Use bond_id + nft_id as unique key
+              const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
+              if (!allUserBonds.has(uniqueKey)) {
+                allUserBonds.set(uniqueKey, {
+                  bond_id: pair.bond_id,
+                  nft_token_id: pair.nft_id,
+                  contract_address: pair.contract_addr,
+                  purchase_time: matchingBond.start_time,
+                  amount: matchingBond.total_amount,
+                  claimed_amount: "0" // This will need to be updated when we implement NFT queries
+                });
+              }
             }
+          });
 
-            return {
-              bond_id: pair.bond_id,
-              nft_token_id: pair.nft_id,
-              contract_address: pair.contract_addr,
-              // Maintain compatibility with existing display logic
-              purchase_time: matchingBond.start_time,
-              amount: matchingBond.total_amount,
-              claimed_amount: "0" // This will need to be updated when we implement NFT queries
-            };
-          }).filter(Boolean); // Remove null entries
-
-          console.log('Transformed purchases:', bondPurchases);
-          allUserBonds = [...allUserBonds, ...bondPurchases];
-          
-          // Update startAfter for next iteration
-          startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          // Update startAfter for next iteration if we got a full page
+          if (response.pairs.length === limit) {
+            startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          } else {
+            hasMore = false;
+          }
           
         } catch (error) {
           console.error('Loop iteration error:', error);
           if (!error.message.includes('No bond purchase found')) {
             console.warn('Query error:', error);
           }
+          hasMore = false;
           break;
         }
       }
 
-      console.log('✅ Final user bonds array:', allUserBonds);
-      setUserBonds(allUserBonds);
+      // Convert Map values back to array
+      const uniqueUserBonds = Array.from(allUserBonds.values());
+      console.log('✅ Final unique user bonds array:', uniqueUserBonds);
+      setUserBonds(uniqueUserBonds);
       setInitialLoadAttempted(true);
 
     } catch (error) {

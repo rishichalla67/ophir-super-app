@@ -100,6 +100,10 @@ const BuyBonds = () => {
   const rpc = isTestnet ? migalooTestnetRPC : migalooRPC;
   const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET;
 
+  const explorerUrl = isTestnet 
+    ? "https://ping.pfc.zone/narwhal-testnet/tx"
+    : "https://inbloc.org/migaloo/transactions";
+
   useEffect(() => {
     fetchBondDetails();
   }, [bondId]);
@@ -256,16 +260,17 @@ const BuyBonds = () => {
       });
       
       let allPurchases = [];
-      let startAfter = "0";
-      const limit = 5;
+      let startAfter = null;
+      const limit = 10;
+      let hasMore = true;
       
-      while (true) {
+      while (hasMore) {
         try {
           const message = {
             get_bonds_by_user: {
               buyer: address,
               limit: limit,
-              start_after: startAfter
+              ...(startAfter && { start_after: startAfter })
             }
           };
 
@@ -275,6 +280,7 @@ const BuyBonds = () => {
           
           if (!response?.pairs || response.pairs.length === 0) {
             console.log('No more results found');
+            hasMore = false;
             break;
           }
 
@@ -319,14 +325,19 @@ const BuyBonds = () => {
           console.log('Transformed purchases:', bondPurchases);
           allPurchases = [...allPurchases, ...bondPurchases];
           
-          // Update startAfter for next iteration
-          startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          // Update startAfter for next iteration if we got a full page
+          if (response.pairs.length === limit) {
+            startAfter = response.pairs[response.pairs.length - 1].nft_id;
+          } else {
+            hasMore = false;
+          }
           
         } catch (error) {
           console.error('Loop iteration error:', error);
           if (!error.message.includes('No bond purchase found')) {
             console.warn('Query error:', error);
           }
+          hasMore = false;
           break;
         }
       }
@@ -387,7 +398,40 @@ const BuyBonds = () => {
       showAlert("Invalid purchase amount", "error");
       return;
     }
-    setShowConfirmModal(true);
+
+    setShowConfirmModal(false);
+    setIsLoading(true);
+
+    try {
+      const result = await executePurchase();
+      
+      // Reset loading state and purchase amount after successful transaction
+      setIsLoading(false);
+      setPurchaseAmount('');
+      
+      // Show success message with correct explorer URL
+      if (result?.transactionHash) {
+        const txnUrl = `${explorerUrl}/${result.transactionHash}`;
+        showAlert(
+          `Purchase successful! Transaction Hash: ${result.transactionHash}`,
+          "success",
+          `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
+        );
+      } else {
+        showAlert("Purchase successful!", "success");
+      }
+
+      // Refresh bond data
+      fetchBondDetails();
+      if (connectedWalletAddress) {
+        fetchUserBondPurchase(connectedWalletAddress);
+      }
+
+    } catch (error) {
+      console.error("Purchase error:", error);
+      showAlert(error.message || "Failed to purchase bond", "error");
+      setIsLoading(false);
+    }
   };
 
   const executePurchase = async () => {
@@ -954,38 +998,8 @@ const BuyBonds = () => {
           </div>
         )}
 
-        {/* {userBonds.length > 0 && (
-          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
-            <h2 className="text-lg md:text-2xl font-bold mb-3 md:mb-6 text-yellow-400">Your Bond Holdings</h2>
-            <div className="space-y-2 md:space-y-3">
-              {userBonds.map((userBond, index) => (
-                <div key={index} className="p-2 md:p-3 bg-gray-900/50 rounded-lg">
-                  <div className="grid grid-cols-2 gap-2 text-xs md:text-base">
-                    <div>
-                      <p className="text-gray-400 text-[10px] md:text-xs">Amount:</p>
-                      <p className="font-bold">{formatAmount(userBond.amount)} {bondSymbol}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-xs md:text-xs">Purchase Date:</p>
-                      <p className="font-bold">{formatDate(userBond.purchase_time)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-xs md:text-xs">Claimed Amount:</p>
-                      <p className="font-bold">{formatAmount(userBond.claimed_amount)} {bondSymbol}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-xs md:text-xs">Bond ID:</p>
-                      <p className="font-bold">#{userBond.bond_id}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )} */}
-
         {isBondActive && (
-          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
+          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700 w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
               <div className="flex items-center space-x-2">
@@ -1066,7 +1080,10 @@ const BuyBonds = () => {
               <button
                 onClick={handlePurchase}
                 disabled={!connectedWalletAddress || isLoading || !purchaseAmount}
-                className="w-full py-4 mt-4 bg-yellow-300 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
+                className="w-full py-4 mt-4 bg-yellow-300 hover:bg-yellow-400 
+                  disabled:bg-gray-600 disabled:cursor-not-allowed text-black 
+                  font-bold rounded-lg transition-all duration-300 flex items-center 
+                  justify-center space-x-2"
               >
                 {isLoading ? (
                   <>
