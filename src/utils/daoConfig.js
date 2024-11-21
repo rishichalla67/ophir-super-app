@@ -19,6 +19,7 @@ export const daoConfig = {
     "migaloo1dpchsx70fe6gu9ljtnknsvd2dx9u7ztrxz9dr6ypfkj4fvv0re6qkdrwkh",
   DAO_MINE_ADDRESS_TESTNET: "migaloo17ephyl7pxx7hrauhu6guf62z7nrtszj23wwdt8",
 
+  DAO_REWARDS_BUCKET_ADDRESS:"migaloo1234uqhtq3mr723a446ph5fel4l7qwmgj08fe00nnu3gd2mfh60tqnc0xq7",
   // REDEEM Contract Addresses
   CONTRACT_ADDRESS:
     "migaloo10p9ttf976c4q7czknd3z7saejsmx0uwvy4lgzyg09jmtq6up9e3s3wga9m",

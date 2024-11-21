@@ -14,6 +14,7 @@ import BuyBonds from './pages/BuyBonds'; // Add this import
 import ResaleBonds from './pages/ResaleBonds'; // Add this import
 import { CryptoProvider } from './context/CryptoContext';
 import TreasuryAnalytics from './pages/TreasuryAnalytics-new';
+import Govern from './pages/Govern'; // Add this import
 
 function App() {
   return (
@@ -34,8 +35,7 @@ function App() {
                 <Route path="/bonds/:bondId" element={<BuyBonds />} />
                 <Route path="/bonds/resale" element={<ResaleBonds />} />
                 <Route path="/analytics/new" element={<TreasuryAnalytics />} />
-                {/* <Route path="/bonds/resale" element={< />} /> */}
-                {/* Add more routes for other pages */}
+                <Route path="/govern" element={<Govern />} />
               </Routes>
             </div>
           </Router>
