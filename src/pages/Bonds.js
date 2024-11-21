@@ -882,7 +882,7 @@ const Bonds = () => {
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[60vh] overflow-y-auto 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto 
           scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
@@ -897,7 +897,7 @@ const Bonds = () => {
               <div 
                 key={index} 
                 className="p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
-                  transition-all duration-300 backdrop-blur-sm cursor-pointer"
+                  transition-all duration-300 backdrop-blur-sm cursor-pointer flex flex-col min-h-[200px] max-h-[250px]"
                 onClick={(e) => {
                   if (e.target.tagName === 'BUTTON') {
                     e.stopPropagation();
