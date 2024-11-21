@@ -82,6 +82,9 @@ const Bonds = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [denomFilter, setDenomFilter] = useState('all');
   const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
+  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
+  const [isLoadingUserBonds, setIsLoadingUserBonds] = useState(false);
+  const maxRetries = 3;
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -135,7 +138,6 @@ const Bonds = () => {
         contractAddress,
         rpc
       });
-      showAlert(`Error querying contract: ${error.message}`, "error");
       throw error;
     }
   };
@@ -163,62 +165,138 @@ const Bonds = () => {
     }
   };
 
-  const fetchUserBonds = async () => {
-    if (!connectedWalletAddress) return;
+  const fetchUserBonds = async (retry = 0) => {
+    if (!connectedWalletAddress || !bonds.length) return;
 
     try {
-      console.log('🔍 Fetching bonds for address:', connectedWalletAddress);
+      setIsLoadingUserBonds(true);
+      console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
+      console.log('📊 Current bonds:', bonds);
+      console.log('🔄 Retry attempt:', retry);
       
-      const message = { 
-        get_bonds_by_user: { 
-          buyer: connectedWalletAddress
-        } 
-      };
-      
-      console.log('📤 Query message:', message);
-      console.log('📍 Contract address:', contractAddress);
-      console.log('🔗 RPC endpoint:', rpc);
-      
-      const data = await queryContract(message);
-      console.log('📦 Query response:', data);
-      
-      if (data && Array.isArray(data.bond_purchases)) {
-        const transformedBonds = data.bond_purchases.map(purchase => ({
-          ...purchase,
-          purchase_time: convertContractTimeToDate(purchase.purchase_time),
-          amount: purchase.amount,
-          claimed_amount: purchase.claimed_amount,
-          bond_id: purchase.bond_id,
-        //   nft_token_id: purchase.nft_token_id
-        }));
-        console.log('✨ Transformed bonds:', transformedBonds);
-        setUserBonds(transformedBonds);
-      } else {
-        console.warn('⚠️ Unexpected data structure:', data);
-        setUserBonds([]);
+      // Try primary method first
+      try {
+        const message = { 
+          get_bonds_by_user: { 
+            buyer: connectedWalletAddress
+          } 
+        };
+        
+        console.log('📤 Attempting primary query:', message);
+        const data = await queryContract(message);
+        
+        if (data && Array.isArray(data.bond_purchases)) {
+          console.log('✅ Primary query successful:', data);
+          const transformedBonds = data.bond_purchases.map(purchase => ({
+            ...purchase,
+            purchase_time: convertContractTimeToDate(purchase.purchase_time),
+            amount: purchase.amount,
+            claimed_amount: purchase.claimed_amount,
+            bond_id: purchase.bond_id,
+          }));
+          setUserBonds(transformedBonds);
+          setInitialLoadAttempted(true);
+          return;
+        }
+      } catch (primaryError) {
+        console.log('⚠️ Primary query failed, proceeding to backup method');
       }
-    } catch (error) {
-      console.error('❌ Error fetching user bonds:', {
-        error,
-        message: error.message,
-        contractAddress,
-        rpc,
-        walletAddress: connectedWalletAddress
+      
+      // Backup method
+      console.log('🔄 Starting backup method...');
+      const allBondPurchases = [];
+      const fetchPromises = [];
+
+      // Create array of promises for parallel execution
+      bonds.forEach(bond => {
+        const backupMessage = {
+          get_bond_purchase: {
+            bond_id: parseInt(bond.bond_id),
+            buyer: connectedWalletAddress
+          }
+        };
+        
+        const fetchPromise = queryContract(backupMessage)
+          .then(bondData => {
+            if (bondData && Array.isArray(bondData.bond_purchases)) {
+              return bondData.bond_purchases.map(purchase => ({
+                ...purchase,
+                purchase_time: convertContractTimeToDate(purchase.purchase_time),
+                amount: purchase.amount,
+                claimed_amount: purchase.claimed_amount,
+                bond_id: bond.bond_id,
+              }));
+            }
+            return [];
+          })
+          .catch(error => {
+            if (!error.message.includes('No bond purchase found')) {
+              console.warn(`Failed to fetch purchases for bond ${bond.bond_id}:`, error);
+            }
+            return [];
+          });
+
+        fetchPromises.push(fetchPromise);
       });
+
+      // Wait for all queries to complete
+      const results = await Promise.all(fetchPromises);
       
-      let errorMessage = "Failed to fetch your bonds";
-      if (error.message.includes("not found")) {
-        errorMessage = "Contract not found. Please check the network settings.";
-      } else if (error.message.includes("denomination")) {
-        errorMessage = "Invalid denomination in the contract response.";
-      } else if (error.message.includes("parsing")) {
-        errorMessage = "Error parsing contract response.";
+      // Combine all results
+      results.forEach(bondPurchases => {
+        allBondPurchases.push(...bondPurchases);
+      });
+
+      console.log('🎯 Backup method results:', allBondPurchases);
+      
+      if (allBondPurchases.length > 0) {
+        setUserBonds(allBondPurchases);
+        setInitialLoadAttempted(true);
+      } else {
+        console.log('ℹ️ No bond purchases found for user');
+        setUserBonds([]);
+        setInitialLoadAttempted(true);
       }
+
+    } catch (error) {
+      console.error('❌ Bond fetch failed completely:', error);
       
-      showAlert(errorMessage, "error");
-      setUserBonds([]);
+      // Implement retry logic
+      if (retry < maxRetries) {
+        console.log(`🔄 Retrying... Attempt ${retry + 1} of ${maxRetries}`);
+        // Exponential backoff
+        setTimeout(() => {
+          fetchUserBonds(retry + 1);
+        }, Math.min(1000 * Math.pow(2, retry), 8000));
+      } else {
+        console.error('❌ Max retries reached');
+        setUserBonds([]);
+        setInitialLoadAttempted(true);
+      }
+    } finally {
+      setIsLoadingUserBonds(false);
     }
   };
+
+  useEffect(() => {
+    const initializeUserBonds = async () => {
+      if (connectedWalletAddress && bonds.length > 0 && !initialLoadAttempted) {
+        await fetchUserBonds();
+      }
+    };
+
+    initializeUserBonds();
+  }, [connectedWalletAddress, bonds, initialLoadAttempted]);
+
+  useEffect(() => {
+    const updateUserBonds = async () => {
+      if (connectedWalletAddress && bonds.length > 0 && initialLoadAttempted && !isLoadingUserBonds) {
+        await fetchUserBonds();
+      }
+    };
+
+    updateUserBonds();
+  }, [connectedWalletAddress, bonds]);
 
   useEffect(() => {
     const rpcEndpoint = isTestnet ? migalooTestnetRPC : migalooRPC;
@@ -269,6 +347,7 @@ const Bonds = () => {
     if (now < bond.start_time) {
       return 'Upcoming';
     }
+    
     
     if (isSoldOut(bond.remaining_supply)) {
       return 'Sold Out';
