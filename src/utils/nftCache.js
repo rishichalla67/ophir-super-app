@@ -1,5 +1,13 @@
 export const nftInfoCache = new Map();
-export const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes in milliseconds
+export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+export const invalidateNFTCache = (contractAddr, tokenId) => {
+  const cacheKey = `${contractAddr}_${tokenId}`;
+  if (nftInfoCache.has(cacheKey)) {
+    console.log('🗑️ Invalidating NFT cache for:', cacheKey);
+    nftInfoCache.delete(cacheKey);
+  }
+};
 
 export const getNFTInfo = async (contractAddr, tokenId, rpc) => {
   const cacheKey = `${contractAddr}_${tokenId}`;

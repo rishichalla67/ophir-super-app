@@ -15,7 +15,7 @@ import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Dialog } from '@headlessui/react'
 import { BigInt } from 'big-integer';
-import { getNFTInfo } from '../utils/nftCache';
+import { getNFTInfo, nftInfoCache, CACHE_DURATION, invalidateNFTCache } from '../utils/nftCache';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -612,7 +612,6 @@ const BuyBonds = () => {
   };
 
   const handleClaimRewards = async (purchase, purchaseIndex) => {
-    // Update claiming state for specific purchase
     setClaimingStates(prev => ({ ...prev, [purchaseIndex]: true }));
     
     try {
@@ -626,17 +625,11 @@ const BuyBonds = () => {
         }
       };
 
+      // Use standard gas configuration
       const fee = {
         amount: [{ denom: "uwhale", amount: "50000" }],
         gas: "500000",
       };
-
-      console.log('Claiming rewards with:', {
-        bondId,
-        nftTokenId: purchase.nft_token_id,
-        purchaseIndex,
-        message: claimMsg
-      });
 
       const result = await client.execute(
         connectedWalletAddress,
@@ -651,6 +644,7 @@ const BuyBonds = () => {
           ? "https://ping.pfc.zone/narwhal-testnet/tx"
           : "https://inbloc.org/migaloo/transactions";
         const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
         showAlert(
           `Bond claimed successfully!`,
           "success",
@@ -667,7 +661,6 @@ const BuyBonds = () => {
       console.error("Error claiming bond:", error);
       showAlert(`Error claiming bond: ${error.message}`, "error");
     } finally {
-      // Clear claiming state for specific purchase
       setClaimingStates(prev => ({ ...prev, [purchaseIndex]: false }));
     }
   };
@@ -799,43 +792,82 @@ const BuyBonds = () => {
     return result;
   };
 
-  const handleClaim = async (bondId, nftId) => {
+  const handleClaim = async (bondId, nftId, index, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
     if (!connectedWalletAddress) {
       showAlert("Please connect your wallet first", "error");
       return;
     }
 
     try {
-      setClaimingStates(prev => ({ ...prev, [nftId]: true }));
+      setClaimingStates(prev => ({ ...prev, [index]: true }));
       
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
       
       const message = {
-        claim: {
-          token_id: nftId.toString()
+        claim_rewards: {
+          bond_id: parseInt(bondId),
+          nft_token_id: nftId
         }
       };
 
-      const response = await client.execute(
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
         connectedWalletAddress,
-        bond.contract_address,
+        contractAddress,
         message,
-        "auto"
+        fee,
+        `Claim Bond Rewards - Token ID: ${nftId}`
       );
 
-      if (response.code === 0) {
-        showAlert("Successfully claimed bond rewards!", "success");
-        // Refresh the user's bond purchases
-        fetchUserBondPurchase(connectedWalletAddress);
-      } else {
-        throw new Error("Transaction failed");
+      if (result.transactionHash) {
+        // Invalidate the NFT cache for this token
+        const purchase = userBondPurchase.find(p => p.nft_token_id === nftId);
+        if (purchase) {
+          invalidateNFTCache(purchase.contract_address, nftId);
+        }
+
+        // Immediately update the local state to reflect the claim
+        setUserBondPurchase(prevPurchases => 
+          prevPurchases.map(purchase => {
+            if (purchase.nft_token_id === nftId) {
+              return {
+                ...purchase,
+                status: "Claimed",
+                claimed_amount: purchase.amount // Set claimed amount equal to total amount
+              };
+            }
+            return purchase;
+          })
+        );
+
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
+        showAlert(
+          "Successfully claimed bond rewards!",
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh the data in the background
+        await fetchUserBondPurchase(connectedWalletAddress);
       }
     } catch (error) {
       console.error("Error claiming bond:", error);
       showAlert(error.message || "Failed to claim bond rewards", "error");
     } finally {
-      setClaimingStates(prev => ({ ...prev, [nftId]: false }));
+      setClaimingStates(prev => ({ ...prev, [index]: false }));
     }
   };
 
@@ -1104,7 +1136,7 @@ const BuyBonds = () => {
             <h2 className="text-xl font-bold mb-4 text-yellow-400">Your Bond Purchases</h2>
             
             <div className="space-y-3">
-              {userBondPurchase.map((purchase) => {
+              {userBondPurchase.map((purchase, index) => {
                 const isClaimingThis = claimingStates[purchase.nft_token_id];
                 const canClaimNow = canClaimBond(bond?.claim_start_time);
                 const isClaimed = parseInt(purchase.claimed_amount) > 0;
@@ -1151,7 +1183,7 @@ const BuyBonds = () => {
                       {/* Claim button */}
                       {!isClaimed && (
                         <button
-                          onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id)}
+                          onClick={(e) => handleClaim(bondId, purchase.nft_token_id, index, e)}
                           disabled={isClaimingThis || !canClaimNow}
                           className="w-full landing-button px-4 py-2 rounded-md 
                             transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
