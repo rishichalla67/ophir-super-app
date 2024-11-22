@@ -86,6 +86,7 @@ const Bonds = () => {
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const [isLoadingUserBonds, setIsLoadingUserBonds] = useState(false);
   const maxRetries = 3;
+  const [expandedBondGroups, setExpandedBondGroups] = useState(new Set());
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -822,12 +823,14 @@ const Bonds = () => {
 
   const [claimedBonds, setClaimedBonds] = useState(new Set());
 
+  const lastClaimedBondIdRef = useRef(null);
+
   const handleClaim = async (bondId, nftTokenId, purchaseIndex, event) => {
-    // Prevent any default behavior and stop propagation
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Ensure the group stays expanded during claim
+    setExpandedBondGroups(prev => new Set([...prev, bondId]));
     
     const claimKey = `${bondId}_${purchaseIndex}`;
     const bondKey = `${bondId}_${nftTokenId}`;
@@ -864,6 +867,9 @@ const Bonds = () => {
       );
 
       if (result.transactionHash) {
+        // Set the last claimed bondId
+        lastClaimedBondIdRef.current = bondId;
+
         // Immediately mark this bond as claimed
         setClaimedBonds(prev => new Set([...prev, bondKey]));
         
@@ -887,8 +893,8 @@ const Bonds = () => {
           `<a href="${txnUrl}" target="_blank">View Transaction</a>`
         );
         
-        // Still fetch user bonds in the background to ensure data consistency
-        await fetchUserBonds();
+        // Refresh data
+        await fetchData();
       }
     } catch (error) {
       console.error("Error claiming rewards:", error);
@@ -939,9 +945,31 @@ const Bonds = () => {
     return now >= claimStartDate;
   };
 
+  const toggleGroup = (bondId) => {
+    setExpandedBondGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(bondId)) {
+        newSet.delete(bondId);
+      } else {
+        newSet.add(bondId);
+      }
+      return newSet;
+    });
+  };
+
   const UserBondsSection = () => {
     const [expandedGroups, setExpandedGroups] = useState(new Set());
-    
+    const prevUserBondsRef = useRef(userBonds);
+
+    useEffect(() => {
+      // If a bond was just claimed, ensure its group is expanded
+      if (lastClaimedBondIdRef.current) {
+        setExpandedGroups(prev => new Set([...prev, lastClaimedBondIdRef.current]));
+        // Reset the ref
+        lastClaimedBondIdRef.current = null;
+      }
+    }, [userBonds]);
+
     if (!connectedWalletAddress || userBonds.length === 0) return null;
 
     // Group bonds and check for claimable purchases
@@ -983,18 +1011,6 @@ const Bonds = () => {
       return a[1].bondName.localeCompare(b[1].bondName);
     });
 
-    const toggleGroup = (bondId) => {
-      setExpandedGroups(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(bondId)) {
-          newSet.delete(bondId);
-        } else {
-          newSet.add(bondId);
-        }
-        return newSet;
-      });
-    };
-
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
@@ -1035,11 +1051,11 @@ const Bonds = () => {
                   </div>
                   <ChevronUpIcon 
                     className={`w-5 h-5 transition-transform duration-300 
-                      ${expandedGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
+                      ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
                   />
                 </div>
                 
-                {expandedGroups.has(bondId) && (
+                {expandedBondGroups.has(bondId) && (
                   <div className="p-4 pt-0">
                     <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 
                       scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
