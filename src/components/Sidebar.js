@@ -1,12 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield } from 'react-icons/fa'; // Make sure to install react-icons
+import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown } from 'react-icons/fa'; // Make sure to install react-icons
 import { useSidebar } from '../context/SidebarContext';
+import { useWallet } from '../context/WalletContext';
+import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
+import { daoConfig } from "../utils/daoConfig";
 
 const Sidebar = () => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
   const [openDropdowns, setOpenDropdowns] = useState({});
   const navigate = useNavigate();
+  const { connectedWalletAddress } = useWallet();
+  const [isIssuer, setIsIssuer] = useState(false);
+
+  const checkIfIssuer = async () => {
+    if (!connectedWalletAddress) return;
+
+    try {
+      const rpc = "https://migaloo-testnet-rpc.polkachu.com:443"; // Use your RPC
+      const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET; // Use your contract address
+      
+      const client = await CosmWasmClient.connect(rpc);
+      const response = await client.queryContractSmart(
+        contractAddress,
+        { get_all_bond_offers: {} }
+      );
+      
+      // Check if any bond offer was created by this wallet
+      const isWalletIssuer = response.bond_offers.some(
+        offer => offer.bond_offer.issuer === connectedWalletAddress
+      );
+      
+      setIsIssuer(isWalletIssuer);
+    } catch (error) {
+      console.error("Error checking issuer status:", error);
+      setIsIssuer(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!connectedWalletAddress) {
+      setIsIssuer(false);
+      return;
+    }
+    checkIfIssuer();
+  }, [connectedWalletAddress]);
 
   const menuItems = [    
     {
@@ -30,21 +68,16 @@ const Sidebar = () => {
       name: 'BONDS',
       icon: <FaHandHoldingUsd className="mr-2" size={16} />,
       subItems: [
-        // { 
-        //   name: 'My Bonds', 
-        //   path: '/my-bonds',
-        //   icon: <FaStore className="mr-2" size={14} />
-        // },
         { 
           name: 'Browse', 
           path: '/bonds',
           icon: <FaSearch className="mr-2" size={14} />
         },
-        // { 
-        //   name: 'Resale', 
-        //   path: '/bonds/resale',
-        //   icon: <FaStore className="mr-2" size={14} />
-        // },
+        ...(isIssuer ? [{
+          name: 'Issuer', 
+          path: '/bonds/issuer',
+          icon: <FaCrown className="mr-2" size={14} />
+        }] : []),
       ],
     },
     { 
