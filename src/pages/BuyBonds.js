@@ -412,7 +412,7 @@ const BuyBonds = () => {
           `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
         );
       } else {
-        showAlert("Purchase successful!", "success");
+        showAlert('Purchase transaction cancelled', "error");
       }
 
       // Refresh bond data
