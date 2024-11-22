@@ -6,6 +6,8 @@ import { FaSpinner } from 'react-icons/fa';
 import { useSidebar } from '../context/SidebarContext';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
+import { tokenMappings } from '../utils/tokenMappings';
+import { tokenImages } from '../utils/tokenImages';
 
 const Issuers = () => {
   const { isSidebarOpen } = useSidebar();
@@ -74,6 +76,12 @@ const Issuers = () => {
     return Math.round((sold / parseInt(totalAmount)) * 100);
   };
 
+  const formatTokenAmount = (amount, denom) => {
+    if (!amount) return '0';
+    const decimals = tokenMappings[denom]?.decimals || 6;
+    return (parseInt(amount) / Math.pow(10, decimals)).toLocaleString();
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -86,7 +94,7 @@ const Issuers = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center text-white">
-          Please connect your wallet to view your issued bonds.
+          Please connect your wallet to view your issued bonds. 
         </div>
       </div>
     );
@@ -178,42 +186,50 @@ const Issuers = () => {
                       </div>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
-                      <span className="whitespace-nowrap">
-                        {(parseInt(bond.bond_offer.total_amount) / 1_000_000).toLocaleString()} OPHIR
+                      <span className="whitespace-nowrap flex items-center justify-end gap-1">
+                        <span className="text-right">
+                          {formatTokenAmount(bond.bond_offer.total_amount, bond.bond_offer.token_denom)}
+                        </span>
+                        <img 
+                          src={tokenImages[tokenMappings[bond.bond_offer.token_denom]?.symbol?.toLowerCase()]} 
+                          alt=""
+                          className="w-4 h-4 md:w-5 md:h-5 inline-block"
+                        />
                       </span>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
-                      <span className="whitespace-nowrap">
-                        {parseFloat(bond.bond_offer.price).toFixed(3)} WHALE
+                      <span className="whitespace-nowrap flex items-center gap-1">
+                        {parseFloat(bond.bond_offer.price).toFixed(3)}
+                        <img 
+                          src={tokenImages[tokenMappings[bond.bond_offer.purchase_denom]?.symbol?.toLowerCase()]} 
+                          alt=""
+                          className="w-4 h-4 md:w-5 md:h-5 inline-block"
+                        />
+                        {/* {tokenMappings[bond.bond_offer.purchase_denom]?.symbol?.toUpperCase() || 'WHALE'} */}
                       </span>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
                       <div className="flex items-center gap-1 md:gap-2">
-                        {/* Progress circle - smaller on mobile, larger on desktop */}
                         <div className="w-6 h-6 md:w-8 md:h-8">
                           <CircularProgressbar
                             value={soldPercentage}
                             text={`${soldPercentage}%`}
                             styles={buildStyles({
-                              // Smaller text on mobile
                               textSize: '32px',
                               pathColor: '#ffa500',
                               textColor: '#fff',
                               trailColor: '#d6d6d6',
-                              // Adjust text size based on screen size
-                              text: {
-                                fontSize: '32px',
-                                dominantBaseline: 'middle',
-                                textAnchor: 'middle',
-                              }
                             })}
                           />
                         </div>
-                        {/* Text version for all screens */}
                         <div className="text-[10px] md:text-sm">
                           <span className="text-gray-400 block text-[8px] md:text-xs">
-                            {((parseInt(bond.bond_offer.total_amount) - parseInt(bond.bond_offer.remaining_supply)) / 1_000_000).toLocaleString()}/
-                            {(parseInt(bond.bond_offer.total_amount) / 1_000_000).toLocaleString()}
+                            {formatTokenAmount(
+                              parseInt(bond.bond_offer.total_amount) - parseInt(bond.bond_offer.remaining_supply),
+                              bond.bond_offer.token_denom
+                            )}/
+                            {formatTokenAmount(bond.bond_offer.total_amount, bond.bond_offer.token_denom)} {' '}
+                            {tokenMappings[bond.bond_offer.token_denom]?.symbol?.toUpperCase() || 'OPHIR'}
                           </span>
                         </div>
                       </div>
