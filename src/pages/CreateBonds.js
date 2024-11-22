@@ -812,21 +812,27 @@ const CreateBonds = () => {
             <div>
               <LabelWithTooltip
                 label="Bond Denom"
-                tooltip="Enter a custom name for your bond, or leave blank to use the default format (obTOKENXXXX)"
+                tooltip="Enter a custom name for your bond (max 127 characters), or leave blank to use the default format (obTOKENXXXX)"
                 required
               />
               <div className="flex items-center mobile-input-group">
                 <input
                   type="text"
                   value={customBondName}
-                  onChange={(e) => setCustomBondName(e.target.value)}
+                  onChange={(e) => {
+                    // Limit input to 127 characters
+                    if (e.target.value.length <= 127) {
+                      setCustomBondName(e.target.value);
+                    }
+                  }}
+                  maxLength={127}
                   className="bond-create-text-container w-full px-3 py-2 rounded-md mobile-full-width"
                   placeholder={`Default: ob${(tokenMappings[formData.token_denom]?.symbol || formData.token_denom).toUpperCase()}XXXX`}
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 {customBondName ? 
-                  "Using custom bond name" : 
+                  `Using custom bond name (${customBondName.length}/127 characters)` : 
                   "Leave blank to use default format with random 4-digit suffix"
                 }
               </p>
