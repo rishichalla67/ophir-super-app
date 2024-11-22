@@ -16,6 +16,9 @@ import { useSidebar } from '../context/SidebarContext';
 const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const OPHIR_DECIMAL = BigInt(1000000);
+const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes in milliseconds
+
+const nftInfoCache = new Map();
 
 const CountdownTimer = ({ targetDate, label }) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -165,6 +168,47 @@ const Bonds = () => {
     }
   };
 
+  const getNFTInfo = async (contractAddr, tokenId) => {
+    const cacheKey = `${contractAddr}_${tokenId}`;
+    const now = Date.now();
+    
+    // Check cache first
+    if (nftInfoCache.has(cacheKey)) {
+      const cachedData = nftInfoCache.get(cacheKey);
+      if (now - cachedData.timestamp < CACHE_DURATION) {
+        console.log('📦 Using cached NFT info for:', cacheKey);
+        return cachedData.data;
+      } else {
+        // Remove expired cache entry
+        nftInfoCache.delete(cacheKey);
+      }
+    }
+
+    try {
+      const nftClient = await CosmWasmClient.connect(rpc);
+      const nftInfo = await nftClient.queryContractSmart(
+        contractAddr,
+        {
+          nft_info: {
+            token_id: tokenId
+          }
+        }
+      );
+      
+      // Cache the result
+      nftInfoCache.set(cacheKey, {
+        data: nftInfo,
+        timestamp: now
+      });
+      
+      console.log(`📦 Fetched and cached NFT Info for token ${tokenId}:`, nftInfo);
+      return nftInfo;
+    } catch (error) {
+      console.error(`Error fetching NFT info for token ${tokenId}:`, error);
+      throw error;
+    }
+  };
+
   const fetchUserBonds = async (retry = 0) => {
     if (!connectedWalletAddress || !bonds.length) return;
 
@@ -172,9 +216,9 @@ const Bonds = () => {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
-      let allUserBonds = new Map(); // Use Map to prevent duplicates
-      let startAfter = null; // Start with null instead of "0"
-      const limit = 10; // Increased limit per page
+      let allUserBonds = new Map();
+      let startAfter = null;
+      const limit = 10;
       let hasMore = true;
       
       while (hasMore) {
@@ -187,36 +231,56 @@ const Bonds = () => {
             }
           };
 
-          console.log('📤 Querying with:', message);
           const response = await queryContract(message);
-          console.log('📥 Raw response:', response);
           
-          // Check if response has the pairs property and is not empty
           if (!response?.pairs || response.pairs.length === 0) {
-            console.log('No more results found');
             break;
           }
 
-          // Transform and store unique bonds using Map
-          response.pairs.forEach(pair => {
+          // Process each pair individually
+          for (const pair of response.pairs) {
             const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
             if (matchingBond) {
-              // Use bond_id + nft_id as unique key
-              const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
-              if (!allUserBonds.has(uniqueKey)) {
+              try {
+                const nftInfo = await getNFTInfo(pair.contract_addr, pair.nft_id);
+                const attributes = nftInfo.extension?.attributes || [];
+                
+                // Find all relevant attributes
+                const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
+                const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
+                const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
+                const statusAttr = attributes.find(attr => attr.trait_type === 'status');
+                
+                let purchaseTime;
+                if (purchaseTimeAttr?.value) {
+                  purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
+                  console.log(`Converted purchase time for token ${pair.nft_id}:`, purchaseTime);
+                }
+
+                if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
+                  console.warn(`Invalid purchase time for token ${pair.nft_id}, using current time`);
+                  purchaseTime = new Date();
+                }
+
+                const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
                 allUserBonds.set(uniqueKey, {
                   bond_id: pair.bond_id,
                   nft_token_id: pair.nft_id,
                   contract_address: pair.contract_addr,
-                  purchase_time: matchingBond.start_time,
-                  amount: matchingBond.total_amount,
-                  claimed_amount: "0" // This will need to be updated when we implement NFT queries
+                  purchase_time: purchaseTime,
+                  amount: amountAttr?.value || matchingBond.total_amount,
+                  claimed_amount: claimedAmountAttr?.value || "0",
+                  status: statusAttr?.value || "Unclaimed",
+                  name: nftInfo.extension?.name || `Bond #${pair.bond_id}`
                 });
+                
+              } catch (nftError) {
+                console.error(`Error fetching NFT info for token ${pair.nft_id}:`, nftError);
+                continue;
               }
             }
-          });
+          }
 
-          // Update startAfter for next iteration if we got a full page
           if (response.pairs.length === limit) {
             startAfter = response.pairs[response.pairs.length - 1].nft_id;
           } else {
@@ -225,15 +289,11 @@ const Bonds = () => {
           
         } catch (error) {
           console.error('Loop iteration error:', error);
-          if (!error.message.includes('No bond purchase found')) {
-            console.warn('Query error:', error);
-          }
           hasMore = false;
           break;
         }
       }
 
-      // Convert Map values back to array
       const uniqueUserBonds = Array.from(allUserBonds.values());
       console.log('✅ Final unique user bonds array:', uniqueUserBonds);
       setUserBonds(uniqueUserBonds);
@@ -241,14 +301,11 @@ const Bonds = () => {
 
     } catch (error) {
       console.error('❌ Bond fetch failed completely:', error);
-      
       if (retry < maxRetries) {
-        console.log(`🔄 Retrying... Attempt ${retry + 1} of ${maxRetries}`);
         setTimeout(() => {
           fetchUserBonds(retry + 1);
         }, Math.min(1000 * Math.pow(2, retry), 8000));
       } else {
-        console.error('❌ Max retries reached');
         setUserBonds([]);
         setInitialLoadAttempted(true);
       }
@@ -765,8 +822,13 @@ const Bonds = () => {
     );
   };
 
-  const handleClaim = async (bondId, nftTokenId, purchaseIndex) => {
-    // Create a unique key combining bondId and purchaseIndex
+  const handleClaim = async (bondId, nftTokenId, purchaseIndex, event) => {
+    // Prevent any default behavior and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     const claimKey = `${bondId}_${purchaseIndex}`;
     
     try {
@@ -792,14 +854,6 @@ const Bonds = () => {
         gas: "500000",
       };
 
-      console.log('Claiming rewards with:', {
-        bondId,
-        nftTokenId,
-        purchaseIndex,
-        claimKey,
-        message: claimMsg
-      });
-
       const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
@@ -813,13 +867,15 @@ const Bonds = () => {
           ? "https://ping.pfc.zone/narwhal-testnet/tx"
           : "https://inbloc.org/migaloo/transactions";
         const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
+        // Update the alert to prevent focus change
         showAlert(
           `Rewards claimed successfully!`,
           "success",
           `<a href="${txnUrl}" target="_blank">View Transaction</a>`
         );
         
-        // Refresh data
+        // Refresh only user bonds data without changing focus
         await fetchUserBonds();
       }
     } catch (error) {
@@ -835,16 +891,32 @@ const Bonds = () => {
       return false;
     }
     
+    // Check if the bond is already claimed based on status
+    if (userBond.status === "Claimed") {
+      console.log(`Bond ${userBond.bond_id} is already fully claimed`);
+      return false;
+    }
+
+    // Parse the amounts as integers for comparison
+    const totalAmount = parseInt(userBond.amount);
+    const claimedAmount = parseInt(userBond.claimed_amount || "0");
+    
     // Check if claimed_amount exists and is less than amount
-    const hasUnclaimedAmount = !userBond.claimed_amount || 
-      parseInt(userBond.amount) > parseInt(userBond.claimed_amount);
+    const hasUnclaimedAmount = claimedAmount < totalAmount;
+    console.log('Claim check:', {
+      bondId: userBond.bond_id,
+      totalAmount,
+      claimedAmount,
+      hasUnclaimedAmount,
+      status: userBond.status
+    });
 
     // Check if bond is claimable based on time
     const now = new Date();
     const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
     const isAfterClaimStart = now >= claimStartDate;
 
-    return hasUnclaimedAmount && isAfterClaimStart;
+    return hasUnclaimedAmount && isAfterClaimStart && userBond.status !== "Claimed";
   };
 
   const canClaim = (bond) => {
@@ -867,7 +939,8 @@ const Bonds = () => {
             const claimKey = `${purchase.bond_id}_${index}`;
             const isClaimingThis = claimingStates[claimKey];
             const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-            const isClaimed = purchase.claimed_amount && parseInt(purchase.claimed_amount) >= parseInt(purchase.amount);
+            const isClaimed = purchase.status === "Claimed" || 
+              (purchase.claimed_amount && parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
             const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
             const now = new Date();
             const canClaimNow = now >= claimStartDate;
@@ -898,11 +971,11 @@ const Bonds = () => {
                       {bond?.bond_name || `Bond #${purchase.bond_id}`}
                     </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs ${
-                    isClaimed ? 'bg-gray-500/20 text-gray-400' : 'bg-green-500/20 text-green-400'
+                  <div className={`px-3 py-1 rounded-full text-xs ${
+                    purchase.status === "Claimed" ? 'bg-gray-500/20 text-gray-400' : 'bg-green-500/20 text-green-400'
                   }`}>
-                    {isClaimed ? 'Claimed' : 'Unclaimed'}
-                  </span>
+                    {purchase.status}
+                  </div>
                 </div>
                 
                 <div className="space-y-3">
@@ -929,7 +1002,7 @@ const Bonds = () => {
                 {!isClaimed && (
                   <div className="mt-4">
                     <button
-                      onClick={() => handleClaim(purchase.bond_id, purchase.nft_token_id, index)}
+                      onClick={(e) => handleClaim(purchase.bond_id, purchase.nft_token_id, index, e)}
                       disabled={isClaimingThis || !canClaimNow}
                       className="w-full landing-button px-4 py-2 rounded-md 
                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
