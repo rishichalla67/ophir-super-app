@@ -822,6 +822,8 @@ const Bonds = () => {
     );
   };
 
+  const [claimedBonds, setClaimedBonds] = useState(new Set());
+
   const handleClaim = async (bondId, nftTokenId, purchaseIndex, event) => {
     // Prevent any default behavior and stop propagation
     if (event) {
@@ -830,6 +832,7 @@ const Bonds = () => {
     }
     
     const claimKey = `${bondId}_${purchaseIndex}`;
+    const bondKey = `${bondId}_${nftTokenId}`;
     
     try {
       setClaimingStates(prev => ({ ...prev, [claimKey]: true }));
@@ -863,19 +866,30 @@ const Bonds = () => {
       );
 
       if (result.transactionHash) {
+        // Immediately mark this bond as claimed
+        setClaimedBonds(prev => new Set([...prev, bondKey]));
+        
+        // Update the specific user bond's status in the state
+        setUserBonds(prevBonds => 
+          prevBonds.map(bond => 
+            bond.bond_id === bondId && bond.nft_token_id === nftTokenId
+              ? { ...bond, status: "Claimed" }
+              : bond
+          )
+        );
+
         const baseTxnUrl = isTestnet
           ? "https://ping.pfc.zone/narwhal-testnet/tx"
           : "https://inbloc.org/migaloo/transactions";
         const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
         
-        // Update the alert to prevent focus change
         showAlert(
           `Rewards claimed successfully!`,
           "success",
           `<a href="${txnUrl}" target="_blank">View Transaction</a>`
         );
         
-        // Refresh only user bonds data without changing focus
+        // Still fetch user bonds in the background to ensure data consistency
         await fetchUserBonds();
       }
     } catch (error) {
@@ -937,19 +951,23 @@ const Bonds = () => {
           scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-2">
           {userBonds.map((purchase, index) => {
             const claimKey = `${purchase.bond_id}_${index}`;
+            const bondKey = `${purchase.bond_id}_${purchase.nft_token_id}`;
             const isClaimingThis = claimingStates[claimKey];
             const bond = bonds.find(b => b.bond_id === purchase.bond_id);
             const isClaimed = purchase.status === "Claimed" || 
+              claimedBonds.has(bondKey) ||
               (purchase.claimed_amount && parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
-            const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
+            const claimStartDate = convertContractTimeToDate(bond?.claim_start_time);
             const now = new Date();
             const canClaimNow = now >= claimStartDate;
 
             return (
               <div 
                 key={index} 
-                className="bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 
-                  transition-all duration-300 backdrop-blur-sm cursor-pointer flex flex-col min-h-[200px] max-h-[250px]"
+                className={`bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 
+                  hover:border-gray-700 transition-all duration-300 backdrop-blur-sm 
+                  cursor-pointer flex flex-col min-h-[200px] max-h-[250px]
+                  ${isClaimed ? 'opacity-75' : ''}`}
                 onClick={(e) => {
                   if (e.target.tagName === 'BUTTON') {
                     e.stopPropagation();
@@ -1003,7 +1021,7 @@ const Bonds = () => {
                   <div className="mt-4">
                     <button
                       onClick={(e) => handleClaim(purchase.bond_id, purchase.nft_token_id, index, e)}
-                      disabled={isClaimingThis || !canClaimNow}
+                      disabled={isClaimingThis || !canClaimNow || isClaimed}
                       className="w-full landing-button px-4 py-2 rounded-md 
                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
                         hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
@@ -1013,6 +1031,8 @@ const Bonds = () => {
                           <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
                           <span>Claiming...</span>
                         </div>
+                      ) : isClaimed ? (
+                        'Claimed'
                       ) : canClaimNow ? (
                         'Claim'
                       ) : (
