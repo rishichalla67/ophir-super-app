@@ -80,7 +80,7 @@ const Bonds = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [userBonds, setUserBonds] = useState([]);
   const [claimingStates, setClaimingStates] = useState({});
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [denomFilter, setDenomFilter] = useState('all');
   const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
