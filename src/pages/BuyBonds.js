@@ -15,6 +15,7 @@ import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Dialog } from '@headlessui/react'
 import { BigInt } from 'big-integer';
+import { getNFTInfo } from '../utils/nftCache';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -287,17 +288,10 @@ const BuyBonds = () => {
           // Filter for matching bondId
           const matchingPairs = response.pairs.filter(pair => pair.bond_id === parseInt(bondId));
 
-          // Fetch NFT info for each matching pair
+          // Fetch NFT info for each matching pair using shared cache
           const purchasePromises = matchingPairs.map(async pair => {
             try {
-              const nftMessage = {
-                nft_info: {
-                  token_id: pair.nft_id
-                }
-              };
-              
-              console.log(`📤 Querying NFT info for token ${pair.nft_id}:`, nftMessage);
-              const nftInfo = await queryNFTContract(pair.contract_addr, nftMessage);
+              const nftInfo = await getNFTInfo(pair.contract_addr, pair.nft_id, rpc);
               console.log(`📥 NFT info for token ${pair.nft_id}:`, nftInfo);
 
               // Extract attributes

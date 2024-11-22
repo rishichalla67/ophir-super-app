@@ -12,13 +12,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
+import { nftInfoCache, CACHE_DURATION } from '../utils/nftCache';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const OPHIR_DECIMAL = BigInt(1000000);
-const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes in milliseconds
-
-const nftInfoCache = new Map();
 
 const CountdownTimer = ({ targetDate, label }) => {
   const [timeLeft, setTimeLeft] = useState('');
