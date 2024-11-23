@@ -16,6 +16,13 @@ import { useSidebar } from '../context/SidebarContext';
 import { Dialog } from '@headlessui/react'
 import { BigInt } from 'big-integer';
 import { getNFTInfo, nftInfoCache, CACHE_DURATION, invalidateNFTCache } from '../utils/nftCache';
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineDot from '@mui/lab/TimelineDot';
+import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -74,6 +81,64 @@ const formatDate = (timestamp) => {
     console.error('Date formatting error:', error);
     return 'Invalid Date';
   }
+};
+
+const BondTimeline = ({ bond }) => {
+  const now = Date.now();
+  const dates = [
+    {
+      time: parseInt(bond.purchase_start_time) / 1_000_000,
+      label: 'Purchase Start',
+      color: now < parseInt(bond.purchase_start_time) / 1_000_000 ? 'grey' : 'success'
+    },
+    {
+      time: parseInt(bond.purchase_end_time) / 1_000_000,
+      label: 'Purchase End',
+      color: now < parseInt(bond.purchase_end_time) / 1_000_000 ? 'grey' : 'success'
+    },
+    {
+      time: parseInt(bond.claim_start_time) / 1_000_000,
+      label: 'Claim Start',
+      color: now < parseInt(bond.claim_start_time) / 1_000_000 ? 'grey' : 'success'
+    },
+    {
+      time: parseInt(bond.maturity_date) / 1_000_000,
+      label: 'Maturity Date',
+      color: now < parseInt(bond.maturity_date) / 1_000_000 ? 'grey' : 'success'
+    }
+  ].sort((a, b) => a.time - b.time);
+
+  return (
+    <Timeline position="alternate" sx={{ 
+      '& .MuiTimelineItem-root:before': {
+        flex: 0
+      }
+    }}>
+      {dates.map((date, index) => (
+        <TimelineItem key={index}>
+          <TimelineOppositeContent color="white" sx={{ flex: 0.5 }}>
+            {formatDate(date.time * 1_000_000)}
+          </TimelineOppositeContent>
+          <TimelineSeparator>
+            <TimelineDot color={date.color} />
+            {index < dates.length - 1 && <TimelineConnector />}
+          </TimelineSeparator>
+          <TimelineContent sx={{ 
+            color: 'white',
+            flex: 0.5,
+            '&.MuiTimelineContent-root': {
+              px: 2
+            }
+          }}>
+            {date.label}
+            {now >= date.time && now <= dates[index + 1]?.time && (
+              <div className="text-yellow-400 text-sm mt-1">(Current)</div>
+            )}
+          </TimelineContent>
+        </TimelineItem>
+      ))}
+    </Timeline>
+  );
 };
 
 const BuyBonds = () => {
@@ -183,11 +248,13 @@ const BuyBonds = () => {
     const now = Math.floor(Date.now() / 1000);
     const startTime = Math.floor(parseInt(bond.purchase_start_time) / 1_000_000_000);
     const endTime = Math.floor(parseInt(bond.purchase_end_time) / 1_000_000_000);
+    const claimStartTime = Math.floor(parseInt(bond.claim_start_time) / 1_000_000_000);
     const maturityDate = Math.floor(parseInt(bond.maturity_date) / 1_000_000_000);
 
     if (now < startTime) return "Upcoming";
     if (now >= startTime && now <= endTime) return "Active";
-    if (now > endTime && now < maturityDate) return "Ended";
+    if (now > endTime && now < claimStartTime) return "Ended";
+    if (now >= claimStartTime && now < maturityDate) return "Claim Start";
     return "Matured";
   };
 
@@ -957,7 +1024,7 @@ const BuyBonds = () => {
           {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
-        <div className=" backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bg-gray-800/80 border-gray-700">
+        <div className="backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bg-gray-800/80 border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond ID:</p>
@@ -991,7 +1058,7 @@ const BuyBonds = () => {
               </div>
             </div>
 
-            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+            {/* <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Purchase End:</p>
               <p className="text-sm md:text-xl font-bold text-center">
                 {bond?.purchase_end_time ? formatDate(bond.purchase_end_time) : 'N/A'}
@@ -1003,6 +1070,13 @@ const BuyBonds = () => {
               <p className="text-sm md:text-xl font-bold text-center">
                 {bond?.claim_end_time ? formatDate(bond.claim_end_time) : 'N/A'}
               </p>
+            </div> */}
+          </div>
+          
+          <div className="mt-6 pt-6 border-t border-gray-700">
+            <h3 className="text-lg font-semibold mb-4 text-yellow-400">Bond Timeline</h3>
+            <div className="overflow-x-auto">
+              <BondTimeline bond={bond} />
             </div>
           </div>
           

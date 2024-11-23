@@ -230,13 +230,13 @@ const CreateBonds = () => {
       if (formData.immediate_claim) {
         // Set claim start to 1 minute after bond end
         claimStartOffset = endOffset + 1;
-        // Set claim end to 1 minute before maturity
-        claimEndOffset = maturityOffset - 1;
-      } else if (formData.claim_start_date && formData.claim_end_date) {
+        // Set claim end to match maturity
+        claimEndOffset = maturityOffset;
+      } else if (formData.claim_start_date) {
         const claimStart = new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`);
-        const claimEnd = new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`);
         claimStartOffset = Math.ceil((claimStart - now) / (1000 * 60));
-        claimEndOffset = Math.ceil((claimEnd - now) / (1000 * 60));
+        // Always use maturity date as claim end
+        claimEndOffset = maturityOffset;
       } else {
         // Default behavior
         claimStartOffset = endOffset;
@@ -772,7 +772,8 @@ const CreateBonds = () => {
                   </div>
                 </div>
 
-                <div>
+                {/* Remove or comment out the Claim End Date section */}
+                {/* <div>
                   <LabelWithTooltip
                     label="Claim End Date and Time"
                     tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
@@ -796,7 +797,7 @@ const CreateBonds = () => {
                       disabled={formData.immediate_claim}
                     />
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
 
