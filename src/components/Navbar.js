@@ -6,6 +6,26 @@ import { useWallet } from '../context/WalletContext';
 const Navbar = () => {
     const { setConnectedWalletAddress, setIsLedgerConnected } = useWallet();
 
+    React.useEffect(() => {
+        const handleAccountChanged = async () => {
+            if (window.keplr) {
+                try {
+                    const key = await window.keplr.getKey("migaloo-1");
+                    setConnectedWalletAddress(key.bech32Address);
+                } catch (error) {
+                    console.error("Error getting new wallet address:", error);
+                    setConnectedWalletAddress("");
+                }
+            }
+        };
+
+        window.addEventListener("keplr_keystorechange", handleAccountChanged);
+
+        return () => {
+            window.removeEventListener("keplr_keystorechange", handleAccountChanged);
+        };
+    }, [setConnectedWalletAddress]);
+
     const handleConnectedWalletAddress = (address) => {
         setConnectedWalletAddress(address);
     };
