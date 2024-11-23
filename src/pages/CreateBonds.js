@@ -704,7 +704,7 @@ const CreateBonds = () => {
             <div>
               <LabelWithTooltip
                 label="Bond End Date and Time"
-                tooltip="The deadline for purchasing the bond. After this time, no new purchases will be accepted."
+                tooltip="The deadline for purchasing the bond. After this time, no new purchases will be accepted"
                 required
               />
               <div className="flex space-x-2 mobile-date-time">
