@@ -260,7 +260,7 @@ const BuyBonds = () => {
         bondId
       });
       
-      let allPurchases = [];
+      let allPurchases = new Map();
       let startAfter = null;
       const limit = 10;
       let hasMore = true;
@@ -291,6 +291,11 @@ const BuyBonds = () => {
           // Fetch NFT info for each matching pair using shared cache
           const purchasePromises = matchingPairs.map(async pair => {
             try {
+              // Skip if we already have this NFT token ID
+              if (allPurchases.has(pair.nft_id)) {
+                return null;
+              }
+
               const nftInfo = await getNFTInfo(pair.contract_addr, pair.nft_id, rpc);
               console.log(`📥 NFT info for token ${pair.nft_id}:`, nftInfo);
 
@@ -316,8 +321,11 @@ const BuyBonds = () => {
           });
 
           const bondPurchases = (await Promise.all(purchasePromises)).filter(Boolean);
-          console.log('Transformed purchases:', bondPurchases);
-          allPurchases = [...allPurchases, ...bondPurchases];
+          
+          // Add to Map using NFT token ID as key to prevent duplicates
+          bondPurchases.forEach(purchase => {
+            allPurchases.set(purchase.nft_token_id, purchase);
+          });
           
           // Update startAfter for next iteration if we got a full page
           if (response.pairs.length === limit) {
@@ -336,8 +344,10 @@ const BuyBonds = () => {
         }
       }
 
-      console.log('✅ Final filtered purchases:', allPurchases);
-      setUserBondPurchase(allPurchases);
+      // Convert Map values to array for state update
+      const uniquePurchases = Array.from(allPurchases.values());
+      console.log('✅ Final filtered purchases:', uniquePurchases);
+      setUserBondPurchase(uniquePurchases);
 
     } catch (error) {
       console.error("Error fetching user bond purchase:", error);
@@ -411,9 +421,10 @@ const BuyBonds = () => {
           "success",
           `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
         );
-      } else {
-        showAlert('Purchase transaction cancelled', "error");
-      }
+      } 
+      // else {
+      //   showAlert('Purchase transaction cancelled', "error");
+      // }
 
       // Refresh bond data
       fetchBondDetails();
@@ -871,6 +882,17 @@ const BuyBonds = () => {
     }
   };
 
+  // Add this new function for input validation
+  const handlePurchaseAmountChange = (e) => {
+    const value = e.target.value;
+    // Regex to allow only positive numbers with up to 6 decimal places
+    const regex = /^\d*\.?\d{0,6}$/;
+    
+    if (value === '' || regex.test(value)) {
+      setPurchaseAmount(value);
+    }
+  };
+
   if (!bond) {
     return (<>
       <div className="global-bg-new flex flex-col justify-center items-center h-screen">
@@ -1049,9 +1071,9 @@ const BuyBonds = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type="number"
+                    type="text"
                     value={purchaseAmount}
-                    onChange={(e) => setPurchaseAmount(e.target.value)}
+                    onChange={handlePurchaseAmountChange}
                     className="w-full px-4 py-3 text-lg rounded-lg bg-gray-900/50 border border-gray-700 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all duration-200"
                     placeholder="0.0"
                   />

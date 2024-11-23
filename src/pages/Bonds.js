@@ -416,11 +416,11 @@ const Bonds = () => {
     
     sortableBonds.sort((a, b) => {
       const statusOrder = { 
-        'Upcoming': 0, 
-        'Active': 1, 
-        'Sold Out': 2, 
+        'Active': 0,
+        'Upcoming': 1, 
+        'Sold Out': 2,
         'Ended': 3,
-        'Matured': 4  // Matured status will always be last
+        'Matured': 4
       };
       const statusA = getBondStatus(a);
       const statusB = getBondStatus(b);
@@ -1233,6 +1233,16 @@ const Bonds = () => {
   };
 
   const FiltersSection = () => {
+    const hasActiveBonds = useMemo(() => {
+      return bonds.some(bond => getBondStatus(bond) === 'Active');
+    }, [bonds]);
+
+    useEffect(() => {
+      if (!hasActiveBonds) {
+        setStatusFilter('all');
+      }
+    }, [hasActiveBonds]);
+
     return (
       <div className="mb-6 space-y-4">
         <div className="flex flex-wrap gap-4">
