@@ -13,6 +13,7 @@ import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { nftInfoCache, CACHE_DURATION } from '../utils/nftCache';
+import { useCrypto } from '../context/CryptoContext';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -63,9 +64,23 @@ const CountdownTimer = ({ targetDate, label }) => {
   );
 };
 
+const DiscountTooltip = () => (
+  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
+    bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
+    transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
+    <div className="mb-2">
+      <span className="text-green-400">Green (Discount)</span>: Bond price is below market price - potentially profitable
+    </div>
+    <div>
+      <span className="text-red-400">Red (Premium)</span>: Bond price is above market price
+    </div>
+  </div>
+);
+
 const Bonds = () => {
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
+  const { prices } = useCrypto();
   const navigate = useNavigate();
 
   const [isTestnet, setIsTestnet] = useState(true);
@@ -500,6 +515,46 @@ const Bonds = () => {
     }
   };
 
+  const calculateDiscount = useCallback((bond) => {
+    if (!bond || !prices) return null;
+
+    // Convert denoms to lowercase and handle special testnet case
+    let listTokenDenom = tokenMappings[bond.token_denom]?.symbol?.toLowerCase() || bond.token_denom?.toLowerCase();
+    let saleTokenDenom = tokenMappings[bond.purchase_denom]?.symbol?.toLowerCase() || bond.purchase_denom?.toLowerCase();
+    
+    // Map daoOphir to ophir for price lookup
+    if (listTokenDenom?.includes('daoophir')) {
+      listTokenDenom = 'ophir';
+    }
+    if (saleTokenDenom?.includes('daoophir')) {
+      saleTokenDenom = 'ophir';
+    }
+
+    // console.log('Price lookup:', {
+    //   listTokenDenom,
+    //   saleTokenDenom,
+    //   listTokenPrice: prices[listTokenDenom],
+    //   saleTokenPrice: prices[saleTokenDenom]
+    // });
+    
+    // Get prices from context
+    const listTokenPrice = prices[listTokenDenom];
+    const saleTokenPrice = prices[saleTokenDenom];
+
+    if (!listTokenPrice || !saleTokenPrice) return null;
+
+    // Calculate market ratio
+    const marketRatio = listTokenPrice / saleTokenPrice;
+    
+    // Calculate bond ratio (1/price since price is in sale tokens)
+    const bondRatio = 1 / parseFloat(bond.price);
+    
+    // Calculate discount
+    const discount = ((bondRatio - marketRatio) / marketRatio) * 100;
+    
+    return discount;
+  }, [prices]);
+
   const BondCard = ({ bond }) => {
     if (!bond) return null;
 
@@ -509,6 +564,8 @@ const Bonds = () => {
     const bondImage = getTokenImage(bondSymbol);
     const purchasingImage = getTokenImage(purchasingSymbol);
     const isMatured = status === 'Matured';
+    
+    const discount = calculateDiscount(bond);
     
     return (
       <div 
@@ -605,6 +662,20 @@ const Bonds = () => {
             {bond.description}
           </div>
         )}
+
+        {discount !== null && (
+          <div className={`mt-2 text-sm relative group`}>
+            <span className={`${
+              discount > 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {discount > 0 ? 'Discount' : 'Premium'}: {Math.abs(discount).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}%
+            </span>
+            <DiscountTooltip />
+          </div>
+        )}
       </div>
     );
   };
@@ -671,7 +742,7 @@ const Bonds = () => {
     }
 
     return (
-      <table className="w-full">
+      <table className="w-full mb-5">
         <thead>
           <tr className="bond-table-header">
             <th className="bond-table-left-border-radius text-left pl-4 py-2 w-1/4 cursor-pointer" onClick={() => requestSort('bond_denom_name')}>
@@ -699,6 +770,9 @@ const Bonds = () => {
                 {sortConfig.key === 'start_time' ? 'Start Date' : 'Maturity Date'} {renderSortIcon('maturity_date')}
               </span>
             </th>
+            <th className="text-center py-2 w-1/6">
+              Discount
+            </th>
             <th className="bond-table-right-border-radius w-12"></th>
           </tr>
         </thead>
@@ -712,6 +786,7 @@ const Bonds = () => {
             const purchasingImage = getTokenImage(purchasingSymbol);
             const status = getBondStatus(bond);
             const isMatured = status === 'Matured';
+            const discount = calculateDiscount(bond);
 
             return (
               <tr 
@@ -793,6 +868,26 @@ const Bonds = () => {
                     ? formatDate(bond.start_time)
                     : formatDate(bond.maturity_date)
                   }
+                </td>
+                <td className="py-4 text-center relative group">
+                  {discount !== null ? (
+                    <div className="relative inline-block">
+                      <span className={`${
+                        discount > 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {Math.abs(discount).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}%
+                        <span className="text-xs ml-1">
+                          {discount > 0 ? 'Discount' : 'Premium'}
+                        </span>
+                      </span>
+                      <DiscountTooltip />
+                    </div>
+                  ) : (
+                    <span className="text-gray-400">N/A</span>
+                  )}
                 </td>
                 <td className="py-4 text-center pr-2 pl-2">
                   <div className="flex items-center justify-end space-x-2">
