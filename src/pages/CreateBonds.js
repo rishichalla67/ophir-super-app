@@ -726,6 +726,80 @@ const CreateBonds = () => {
               </div>
             </div>
 
+            {/* Moved Immediate Claim section here */}
+            <div className="mb-4">
+              <label className="flex items-center flex-center">
+                <input
+                  type="checkbox"
+                  checked={formData.immediate_claim}
+                  onChange={(e) =>
+                    setFormData({ ...formData, immediate_claim: e.target.checked })
+                  }
+                  className="mr-2"
+                />
+                <span>
+                  Check box for all tokens to be available to claim immediately
+                  after the bond activates.
+                </span>
+              </label>
+            </div>
+
+            <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
+              <div className="space-y-6">
+                <div>
+                  <LabelWithTooltip
+                    label="Claim Start Date and Time"
+                    tooltip="The time when users can start claiming their tokens. Must be after the bond end date."
+                    required={!formData.immediate_claim}
+                  />
+                  <div className="flex space-x-2 mobile-date-time">
+                    <input
+                      type="date"
+                      name="claim_start_date"
+                      value={formData.claim_start_date}
+                      onChange={handleInputChange}
+                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                      disabled={formData.immediate_claim}
+                    />
+                    <input
+                      type="time"
+                      name="claim_start_hour"
+                      value={formData.claim_start_hour}
+                      onChange={handleInputChange}
+                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                      disabled={formData.immediate_claim}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <LabelWithTooltip
+                    label="Claim End Date and Time"
+                    tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
+                    required={!formData.immediate_claim}
+                  />
+                  <div className="flex space-x-2 mobile-date-time">
+                    <input
+                      type="date"
+                      name="claim_end_date"
+                      value={formData.claim_end_date}
+                      onChange={handleInputChange}
+                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                      disabled={formData.immediate_claim}
+                    />
+                    <input
+                      type="time"
+                      name="claim_end_hour"
+                      value={formData.claim_end_hour}
+                      onChange={handleInputChange}
+                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
+                      disabled={formData.immediate_claim}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div>
               <LabelWithTooltip
                 label="Bond Maturity Date"
@@ -895,86 +969,6 @@ const CreateBonds = () => {
               <p className="text-xs text-gray-500 mt-1">
                 Provide details about your bond offering to help users understand its purpose and terms.
               </p>
-            </div>
-          </div>
-        </div>
-
-        <h3 className="text-3xl font-bold mb-4">Immediate Claim</h3>
-        <p className="text-gray-400 mb-8">
-          Optional: Configure when users can claim their tokens.
-        </p>
-
-        <div className="mb-4">
-          <label className="flex items-center flex-center">
-            <input
-              type="checkbox"
-              checked={formData.immediate_claim}
-              onChange={(e) =>
-                setFormData({ ...formData, immediate_claim: e.target.checked })
-              }
-              className="mr-2"
-            />
-            <span>
-              Check box for all tokens to be available to claim immediately
-              after the bond activates.
-            </span>
-          </label>
-        </div>
-
-        <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
-          <div className="claim-div p-6 rounded-lg shadow-lg mb-8">
-            <div className="space-y-6">
-              <div>
-                <LabelWithTooltip
-                  label="Claim Start Date and Time"
-                  tooltip="The time when users can start claiming their tokens. Must be after the bond end date."
-                  required={!formData.immediate_claim}
-                />
-                <div className="flex space-x-2 mobile-date-time">
-                  <input
-                    type="date"
-                    name="claim_start_date"
-                    value={formData.claim_start_date}
-                    onChange={handleInputChange}
-                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                    disabled={formData.immediate_claim}
-                  />
-                  <input
-                    type="time"
-                    name="claim_start_hour"
-                    value={formData.claim_start_hour}
-                    onChange={handleInputChange}
-                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                    disabled={formData.immediate_claim}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <LabelWithTooltip
-                  label="Claim End Date and Time"
-                  tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
-                  required={!formData.immediate_claim}
-                />
-                <div className="flex space-x-2 mobile-date-time">
-                  <input
-                    type="date"
-                    name="claim_end_date"
-                    value={formData.claim_end_date}
-                    onChange={handleInputChange}
-                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                    disabled={formData.immediate_claim}
-                  />
-                  <input
-                    type="time"
-                    name="claim_end_hour"
-                    value={formData.claim_end_hour}
-                    onChange={handleInputChange}
-                    className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                    disabled={formData.immediate_claim}
-                  />
-                </div>
-              </div>
             </div>
           </div>
         </div>
