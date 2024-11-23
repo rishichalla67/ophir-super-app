@@ -1047,7 +1047,7 @@ const BuyBonds = () => {
         )}
 
         {isBondActive && (
-          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700 w-full">
+          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700 w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
               <div className="flex items-center space-x-2">

@@ -7,6 +7,21 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
 
   if (!isOpen) return null;
 
+  const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
+    if (!totalSupply || !price || !purchasingDenom) return null;
+    
+    const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
+    const rawAmount = parseFloat(totalSupply) * parseFloat(price);
+    const feeAmount = rawAmount * 0.05; // 5% fee
+    const netAmount = rawAmount - feeAmount;
+    
+    return {
+      gross: rawAmount.toFixed(decimals),
+      fee: feeAmount.toFixed(decimals),
+      net: netAmount.toFixed(decimals)
+    };
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-[#1a1b23] rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -59,6 +74,25 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
             <span>Price</span>
             <span>{formData.price}</span>
           </div>
+
+          {/* Add Expected Amount Section */}
+          {formData.total_supply && formData.price && formData.purchasing_denom && (
+            <>
+              <div className="flex justify-between text-red-400">
+                <span>Ophir Fee (5%)</span>
+                <span>
+                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).fee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                </span>
+              </div>
+              <div className="flex justify-between text-green-400">
+                <span>Max Net Amount</span>
+                <span>
+                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).net} {tokenMappings[formData.purchasing_denom]?.symbol}
+                </span>
+              </div>
+            </>
+          )}
+
           <div className="flex justify-between">
             <span>Bond Name</span>
             <span>{customBondName || fullBondDenomName}</span>

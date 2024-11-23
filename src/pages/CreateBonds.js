@@ -31,6 +31,21 @@ const PRESET_DURATIONS = [
   { label: '1y Bond', days: 365 },
 ];
 
+const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
+  if (!totalSupply || !price || !purchasingDenom) return null;
+  
+  const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
+  const rawAmount = parseFloat(totalSupply) * parseFloat(price);
+  const feeAmount = rawAmount * 0.05; // 5% fee
+  const netAmount = rawAmount - feeAmount;
+  
+  return {
+    gross: rawAmount.toFixed(decimals),
+    fee: feeAmount.toFixed(decimals),
+    net: netAmount.toFixed(decimals)
+  };
+};
+
 const CreateBonds = () => {
   const { isSidebarOpen } = useSidebar();
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
@@ -736,7 +751,7 @@ const CreateBonds = () => {
             </div>
 
             <div className="flex flex-col space-y-4">
-              <div className="flex space-x-4 align-qtty-and-price">
+              <div className="flex space-x-4">
                 <div className="flex-1 mobile-full-width">
                   <LabelWithTooltip
                     label="List Asset"
@@ -808,6 +823,34 @@ const CreateBonds = () => {
                 </div>
               </div>
             </div>
+
+            {formData.total_supply && formData.price && formData.purchasing_denom && (
+              <div className="mt-2 p-4 rounded-md bg-gray-800/50 border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">Expected Returns</h4>
+                {(() => {
+                  const amounts = calculateExpectedAmount(
+                    formData.total_supply,
+                    formData.price,
+                    formData.purchasing_denom
+                  );
+                  const symbol = tokenMappings[formData.purchasing_denom]?.symbol || formData.purchasing_denom;
+                  
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <p className="text-gray-400">
+                        Gross Amount: {amounts.gross} {symbol}
+                      </p>
+                      <p className="text-red-400">
+                        Fee (5%): {amounts.fee} {symbol}
+                      </p>
+                      <p className="text-green-400">
+                        Max Return: {amounts.net} {symbol}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <div>
               <LabelWithTooltip
