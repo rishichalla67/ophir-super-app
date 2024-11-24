@@ -64,15 +64,15 @@ const CountdownTimer = ({ targetDate, label }) => {
   );
 };
 
-const DiscountTooltip = () => (
+const DiscountTooltip = ({ bondDenom }) => (
   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
     bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
     transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
     <div className="mb-2">
-      <span className="text-green-400">Green (Discount)</span>: Bond price is below market price - potentially profitable
+      <span className="text-green-400">Green (Premium)</span>: {bondDenom} is selling at a premium
     </div>
     <div>
-      <span className="text-red-400">Red (Premium)</span>: Bond price is above market price
+      <span className="text-red-400">Red (Discount)</span>: {bondDenom} is selling at a discount
     </div>
   </div>
 );
@@ -521,13 +521,6 @@ const Bonds = () => {
     if (saleTokenDenom?.includes('daoophir')) {
       saleTokenDenom = 'ophir';
     }
-
-    // console.log('Price lookup:', {
-    //   listTokenDenom,
-    //   saleTokenDenom,
-    //   listTokenPrice: prices[listTokenDenom],
-    //   saleTokenPrice: prices[saleTokenDenom]
-    // });
     
     // Get prices from context
     const listTokenPrice = prices[listTokenDenom];
@@ -535,14 +528,10 @@ const Bonds = () => {
 
     if (!listTokenPrice || !saleTokenPrice) return null;
 
-    // Calculate market ratio
-    const marketRatio = listTokenPrice / saleTokenPrice;
-    
-    // Calculate bond ratio (1/price since price is in sale tokens)
-    const bondRatio = 1 / parseFloat(bond.price);
-    
-    // Calculate discount
-    const discount = ((bondRatio - marketRatio) / marketRatio) * 100;
+    // Calculate using the new formula:
+    // ((Bond Price * Sale Token Market Price) - List Token Market Price) / List Token Market Price
+    const bondPriceInUSD = parseFloat(bond.price) * saleTokenPrice;
+    const discount = ((bondPriceInUSD - listTokenPrice) / listTokenPrice) * 100;
     
     return discount;
   }, [prices]);
@@ -658,14 +647,17 @@ const Bonds = () => {
         {discount !== null && (
           <div className={`mt-2 text-sm relative group`}>
             <span className={`${
-              discount > 0 ? 'text-green-400' : 'text-red-400'
+              discount < 0 ? 'text-green-400' : 'text-red-400'
             }`}>
-              {discount > 0 ? 'Discount' : 'Premium'}: {Math.abs(discount).toLocaleString('en-US', {
+              {Math.abs(discount).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
               })}%
+              <span className="text-xs ml-1">
+                {discount < 0 ? 'Discount' : 'Premium'}
+              </span>
             </span>
-            <DiscountTooltip />
+            <DiscountTooltip bondDenom={getTokenSymbol(bond.token_denom)} />
           </div>
         )}
       </div>
@@ -865,17 +857,17 @@ const Bonds = () => {
                   {discount !== null ? (
                     <div className="relative inline-block">
                       <span className={`${
-                        discount > 0 ? 'text-green-400' : 'text-red-400'
+                        discount < 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
                         {Math.abs(discount).toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}%
                         <span className="text-xs ml-1">
-                          {discount > 0 ? 'Discount' : 'Premium'}
+                          {discount < 0 ? 'Discount' : 'Premium'}
                         </span>
                       </span>
-                      <DiscountTooltip />
+                      <DiscountTooltip bondDenom={getTokenSymbol(bond.token_denom)} />
                     </div>
                   ) : (
                     <span className="text-gray-400">N/A</span>

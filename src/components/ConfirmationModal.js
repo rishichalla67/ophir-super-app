@@ -45,14 +45,6 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
             </span>
           </div>
           <div className="flex justify-between">
-            <span>Claim End</span>
-            <span>
-              {formData.claim_end_date && formData.claim_end_hour
-                ? new Date(`${formData.claim_end_date}T${formData.claim_end_hour}`).toLocaleString()
-                : new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between">
             <span>Maturity</span>
             <span>{new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()}</span>
           </div>
@@ -102,8 +94,8 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
             <span className="text-right max-w-[60%] break-words">{formData.description || "No description provided"}</span>
           </div>
           <div className="flex justify-between">
-            <span>Immediate Claim</span>
-            <span>{formData.immediate_claim ? "Yes" : "No"}</span>
+            <span>Bond Type</span>
+            <span>{formData.bond_type === 'cliff' ? 'Cliff - Claim at maturity' : 'Vested - Custom claim start time'}</span>
           </div>
 
           {/* NFT Metadata Section */}

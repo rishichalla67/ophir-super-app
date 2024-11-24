@@ -17,6 +17,13 @@ import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import Tooltip from '@mui/material/Tooltip';
 import InfoIcon from '@mui/icons-material/Info';
+import Timeline from '@mui/lab/Timeline';
+import TimelineItem from '@mui/lab/TimelineItem';
+import TimelineSeparator from '@mui/lab/TimelineSeparator';
+import TimelineConnector from '@mui/lab/TimelineConnector';
+import TimelineContent from '@mui/lab/TimelineContent';
+import TimelineDot from '@mui/lab/TimelineDot';
+import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 
@@ -44,6 +51,115 @@ const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
     fee: feeAmount.toFixed(decimals),
     net: netAmount.toFixed(decimals)
   };
+};
+
+const BOND_TYPES = [
+  { value: 'cliff', label: 'Cliff - Full claim at maturity' },
+  { value: 'vested', label: 'Vested - Custom claim start time' },
+];
+
+const BondTimelinePreview = ({ formData }) => {
+  const [dates, setDates] = useState([]);
+
+  useEffect(() => {
+    // Only update if all required date fields are present
+    if (formData.start_time && formData.start_time_hour &&
+        formData.end_time && formData.end_time_hour &&
+        formData.maturity_date && formData.maturity_date_hour) {
+      
+      try {
+        const newDates = [
+          {
+            time: new Date(`${formData.start_time}T${formData.start_time_hour}`).getTime(),
+            label: 'Purchase Start',
+            color: 'grey'
+          },
+          {
+            time: new Date(`${formData.end_time}T${formData.end_time_hour}`).getTime(),
+            label: 'Purchase End',
+            color: 'grey'
+          },
+          {
+            time: formData.bond_type === 'vested' && formData.claim_start_date && formData.claim_start_hour ? 
+              new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).getTime() :
+              new Date(`${formData.end_time}T${formData.end_time_hour}`).getTime(),
+            label: 'Claim Start',
+            color: 'grey'
+          },
+          {
+            time: new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).getTime(),
+            label: 'Maturity Date',
+            color: 'grey'
+          }
+        ].sort((a, b) => a.time - b.time);
+
+        setDates(newDates);
+      } catch (error) {
+        console.error('Error updating timeline dates:', error);
+      }
+    }
+  }, [
+    formData.start_time,
+    formData.start_time_hour,
+    formData.end_time,
+    formData.end_time_hour,
+    formData.maturity_date,
+    formData.maturity_date_hour,
+    formData.bond_type,
+    formData.claim_start_date,
+    formData.claim_start_hour
+  ]);
+
+  // Don't render timeline if dates aren't valid
+  if (dates.length === 0) {
+    return (
+      <div className="text-gray-400 text-sm">
+        Please fill in all required date and time fields to see the timeline.
+      </div>
+    );
+  }
+
+  return (
+    <Timeline position="alternate" sx={{ 
+      '& .MuiTimelineItem-root:before': {
+        flex: 0
+      }
+    }}>
+      {dates.map((date, index) => (
+        <TimelineItem key={index}>
+          <TimelineOppositeContent color="white" sx={{ flex: 0.5 }}>
+            {new Date(date.time).toLocaleString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZoneName: 'short'
+            })}
+          </TimelineOppositeContent>
+          <TimelineSeparator>
+            <TimelineDot color={date.color} />
+            {index < dates.length - 1 && <TimelineConnector />}
+          </TimelineSeparator>
+          <TimelineContent sx={{ 
+            color: 'white',
+            flex: 0.5,
+            '&.MuiTimelineContent-root': {
+              px: 2
+            }
+          }}>
+            {date.label}
+            {date.time === Math.min(...dates.map(d => d.time)) && (
+              <div className="text-yellow-400 text-sm mt-1">(Start)</div>
+            )}
+            {date.time === Math.max(...dates.map(d => d.time)) && (
+              <div className="text-yellow-400 text-sm mt-1">(End)</div>
+            )}
+          </TimelineContent>
+        </TimelineItem>
+      ))}
+    </Timeline>
+  );
 };
 
 const CreateBonds = () => {
@@ -99,6 +215,7 @@ const CreateBonds = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
   const [customBondName, setCustomBondName] = useState("");
+  const [bondType, setBondType] = useState('cliff');
 
   const allowedDenoms = [
     "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
@@ -275,9 +392,8 @@ const CreateBonds = () => {
           purchase_start_time: timestamps.start_time.toString(),
           purchase_end_time: timestamps.end_time.toString(),
           claim_start_time: timestamps.claim_start_time.toString(),
-          claim_end_time: timestamps.claim_end_time.toString(),
           maturity_date: timestamps.mature_time.toString(),
-          immediate_claim: formData.immediate_claim,
+          bond_type: bondType,
           description: formData.description,
           nft_metadata: {
             name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
@@ -725,31 +841,41 @@ const CreateBonds = () => {
               </div>
             </div>
 
-            {/* Moved Immediate Claim section here */}
-            <div className="mb-4">
-              <label className="flex items-center flex-center">
-                <input
-                  type="checkbox"
-                  checked={formData.immediate_claim}
-                  onChange={(e) =>
-                    setFormData({ ...formData, immediate_claim: e.target.checked })
-                  }
-                  className="mr-2"
-                />
-                <span>
-                  Check box for all tokens to be available to claim immediately
-                  after the bond activates.
-                </span>
-              </label>
+            <div className="mb-6">
+              <LabelWithTooltip
+                label="Bond Type"
+                tooltip="Cliff: Tokens can only be claimed at maturity. Vested: Tokens can be claimed starting from a specified date after purchase end."
+                required
+              />
+              <select
+                value={bondType}
+                onChange={(e) => setBondType(e.target.value)}
+                className="bond-create-text-container w-full px-3 py-2 rounded-md bg-transparent border border-gray-600 hover:border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors duration-200"
+              >
+                {BOND_TYPES.map((type) => (
+                  <option 
+                    key={type.value} 
+                    value={type.value}
+                    className="bg-[#1a1b23] text-white"
+                  >
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                {bondType === 'cliff' 
+                  ? 'Tokens can only be claimed when the bond reaches maturity.' 
+                  : 'Tokens can be claimed starting from a specified date after the purchase end date.'}
+              </p>
             </div>
 
-            <div className={`${!formData.immediate_claim ? 'block' : 'hidden'}`}>
+            {bondType === 'vested' && (
               <div className="space-y-6">
                 <div>
                   <LabelWithTooltip
                     label="Claim Start Date and Time"
-                    tooltip="The time when users can start claiming their tokens. Must be after the bond end date."
-                    required={!formData.immediate_claim}
+                    tooltip="The time when users can start claiming their tokens. Must be after the bond end date and before maturity."
+                    required={bondType === 'vested'}
                   />
                   <div className="flex space-x-2 mobile-date-time">
                     <input
@@ -758,7 +884,6 @@ const CreateBonds = () => {
                       value={formData.claim_start_date}
                       onChange={handleInputChange}
                       className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                      disabled={formData.immediate_claim}
                     />
                     <input
                       type="time"
@@ -766,39 +891,11 @@ const CreateBonds = () => {
                       value={formData.claim_start_hour}
                       onChange={handleInputChange}
                       className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                      disabled={formData.immediate_claim}
                     />
                   </div>
                 </div>
-
-                {/* Remove or comment out the Claim End Date section */}
-                {/* <div>
-                  <LabelWithTooltip
-                    label="Claim End Date and Time"
-                    tooltip="The deadline for claiming tokens. After this time, no claims will be accepted."
-                    required={!formData.immediate_claim}
-                  />
-                  <div className="flex space-x-2 mobile-date-time">
-                    <input
-                      type="date"
-                      name="claim_end_date"
-                      value={formData.claim_end_date}
-                      onChange={handleInputChange}
-                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                      disabled={formData.immediate_claim}
-                    />
-                    <input
-                      type="time"
-                      name="claim_end_hour"
-                      value={formData.claim_end_hour}
-                      onChange={handleInputChange}
-                      className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
-                      disabled={formData.immediate_claim}
-                    />
-                  </div>
-                </div> */}
               </div>
-            </div>
+            )}
 
             <div>
               <LabelWithTooltip
@@ -821,6 +918,14 @@ const CreateBonds = () => {
                   onChange={handleInputChange}
                   className="bond-create-text-container w-1/2 px-3 py-2 rounded-md mobile-full-width"
                 />
+              </div>
+
+              {/* Add the timeline preview */}
+              <div className="mt-6 pt-6 border-t border-gray-700">
+                <h3 className="text-lg font-semibold mb-4 text-yellow-400">Bond Timeline Preview</h3>
+                <div className="overflow-x-auto">
+                  <BondTimelinePreview formData={formData} />
+                </div>
               </div>
             </div>
 
@@ -1056,7 +1161,10 @@ const CreateBonds = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirm}
-        formData={formData}
+        formData={{
+          ...formData,
+          bond_type: bondType
+        }}
         isLoading={isLoading}
         customBondName={customBondName}
         fullBondDenomName={fullBondDenomName}

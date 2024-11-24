@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { tokenMappings } from "../utils/tokenMappings";
@@ -23,6 +23,7 @@ import TimelineConnector from '@mui/lab/TimelineConnector';
 import TimelineContent from '@mui/lab/TimelineContent';
 import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
+import { useCrypto } from '../context/CryptoContext';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -160,6 +161,7 @@ const BuyBonds = () => {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawLoading, setIsWithdrawLoading] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
+  const { prices } = useCrypto();
 
   const migalooRPC = "https://migaloo-rpc.polkachu.com/";
   const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -960,6 +962,35 @@ const BuyBonds = () => {
     }
   };
 
+  const calculateDiscount = useCallback((bond) => {
+    if (!bond || !prices) return null;
+
+    // Convert denoms to lowercase and handle special testnet case
+    let listTokenDenom = tokenMappings[bond.token_denom]?.symbol?.toLowerCase() || bond.token_denom?.toLowerCase();
+    let saleTokenDenom = tokenMappings[bond.purchase_denom]?.symbol?.toLowerCase() || bond.purchase_denom?.toLowerCase();
+    
+    // Map daoOphir to ophir for price lookup
+    if (listTokenDenom?.includes('daoophir')) {
+      listTokenDenom = 'ophir';
+    }
+    if (saleTokenDenom?.includes('daoophir')) {
+      saleTokenDenom = 'ophir';
+    }
+    
+    // Get prices from context
+    const listTokenPrice = prices[listTokenDenom];
+    const saleTokenPrice = prices[saleTokenDenom];
+
+    if (!listTokenPrice || !saleTokenPrice) return null;
+
+    // Calculate using the formula:
+    // ((Bond Price * Sale Token Market Price) - List Token Market Price) / List Token Market Price
+    const bondPriceInUSD = parseFloat(bond.price) * saleTokenPrice;
+    const discount = ((bondPriceInUSD - listTokenPrice) / listTokenPrice) * 100;
+    
+    return discount;
+  }, [prices]); // Add prices as a dependency
+
   if (!bond) {
     return (<>
       <div className="global-bg-new flex flex-col justify-center items-center h-screen">
@@ -1184,6 +1215,42 @@ const BuyBonds = () => {
                         maximumFractionDigits: 6
                       })} {purchasingSymbol}
                     </span>
+                  </div>
+                )}
+                
+                {purchaseAmount && bond && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Discount:</span>
+                    {calculateDiscount(bond) !== null && (
+                      <div className="flex items-center">
+                        <span className={`font-medium ${
+                          calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}%
+                          <span className="text-xs ml-1">
+                            {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
+                          </span>
+                        </span>
+                        <div className="relative group ml-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
+                            bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
+                            transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
+                            <div className="mb-2">
+                              <span className="text-red-400">Red (Premium)</span>: {bondSymbol} is selling at a premium
+                            </div>
+                            <div>
+                              <span className="text-green-400">Green (Discount)</span>: {bondSymbol} is selling at a discount
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 
