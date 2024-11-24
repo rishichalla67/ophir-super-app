@@ -39,9 +39,11 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
           <div className="flex justify-between">
             <span>Claim Start</span>
             <span>
-              {formData.claim_start_date && formData.claim_start_hour
-                ? new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).toLocaleString()
-                : new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString()}
+              {formData.bond_type === 'cliff' 
+                ? new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()
+                : (formData.claim_start_date && formData.claim_start_hour
+                  ? new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).toLocaleString()
+                  : new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString())}
             </span>
           </div>
           <div className="flex justify-between">
