@@ -191,18 +191,13 @@ const Bonds = () => {
   };
 
   const getNFTInfo = async (contractAddr, tokenId, forceRefresh = false) => {
-    const cacheKey = `${contractAddr}_${tokenId}`;
-    const now = Date.now();
-    
-    // Check cache first (unless force refresh is requested)
-    if (!forceRefresh && nftInfoCache.has(cacheKey)) {
-      const cachedData = nftInfoCache.get(cacheKey);
-      if (now - cachedData.timestamp < CACHE_DURATION) {
-        console.log('📦 Using cached NFT info for:', cacheKey);
-        return cachedData.data;
+    // If not forcing refresh, try to get from cache first
+    if (!forceRefresh) {
+      const cachedData = nftInfoCache.get(contractAddr, tokenId);
+      if (cachedData) {
+        console.log('📦 Using cached NFT info for:', `${contractAddr}_${tokenId}`);
+        return cachedData;
       }
-      // Remove expired cache entry
-      nftInfoCache.delete(cacheKey);
     }
 
     try {
@@ -217,10 +212,7 @@ const Bonds = () => {
       );
       
       // Cache the result
-      nftInfoCache.set(cacheKey, {
-        data: nftInfo,
-        timestamp: now
-      });
+      nftInfoCache.set(contractAddr, tokenId, nftInfo);
       
       console.log(`📦 Fetched and cached NFT Info for token ${tokenId}:`, nftInfo);
       return nftInfo;
@@ -972,16 +964,11 @@ const Bonds = () => {
         // Find the contract address for this bond
         const userBond = userBonds.find(b => b.bond_id === bondId && b.nft_token_id === nftTokenId);
         if (userBond) {
-          // Invalidate the cache for this NFT
-          invalidateNFTCache(userBond.contract_address, nftTokenId);
+          // Delete just this NFT's cache entry
+          nftInfoCache.delete(userBond.contract_address, nftTokenId);
           
-          // Fetch fresh NFT info
-          try {
-            const freshNFTInfo = await getNFTInfo(userBond.contract_address, nftTokenId, true);
-            console.log('Fresh NFT info after claim:', freshNFTInfo);
-          } catch (error) {
-            console.error('Error fetching fresh NFT info:', error);
-          }
+          // The next time this NFT is queried, it will fetch fresh data
+          await fetchUserBonds();
         }
 
         // Immediately mark this bond as claimed
