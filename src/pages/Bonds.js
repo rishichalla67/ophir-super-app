@@ -1307,63 +1307,85 @@ const Bonds = () => {
             }]) => {
               const allClaimed = claimedCount === totalPurchases;
               
+              // Calculate total amounts for this bond group
+              const totalAmount = purchases.reduce((sum, p) => sum + (parseInt(p.amount) || 0), 0);
+              const totalClaimedAmount = purchases.reduce((sum, p) => sum + (parseInt(p.claimed_amount) || 0), 0);
+              
+              // Get the bond details to find the token denom
+              const bond = bonds.find(b => b.bond_id === parseInt(bondId));
+              const tokenImage = bond ? getTokenImage(bond.token_denom) : null;
+              
               return (
                 <div key={bondId} 
                   className="bg-gray-900/30 rounded-lg border border-gray-800 
                     transition-all duration-300 hover:border-gray-700"
                 >
                   <div 
-                    className="p-4 flex items-center justify-between cursor-pointer 
-                      hover:bg-gray-800/50 transition-colors relative"
+                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer 
+                      hover:bg-gray-800/50 transition-colors relative gap-3"
                     onClick={() => toggleGroup(bondId)}
                   >
+                    {/* Bond Name and Info */}
                     <div className="flex items-center space-x-3">
                       {bondImage && (
                         <img src={bondImage} alt={bondName} className="w-8 h-8 rounded-full" />
                       )}
-                      <span className="font-medium">{bondName}</span>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-gray-400 text-sm">({purchases.length})</span>
-                        {!allClaimed && hasClaimable && (
-                          <div className="flex items-center space-x-1">
-                            <div className="w-2 h-2 rounded-full bg-green-500 
-                              animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
-                            />
-                            <span className="text-green-400 text-xs md:text-sm">
-                              {claimableCount}
-                            </span>
-                          </div>
-                        )}
+                      <div>
+                        <span className="font-medium">{bondName}</span>
+                        <div className="flex items-center space-x-2 mt-1 sm:mt-0">
+                          <span className="text-gray-400 text-sm">({purchases.length})</span>
+                          {!allClaimed && hasClaimable && (
+                            <div className="flex items-center space-x-1">
+                              <div className="w-2 h-2 rounded-full bg-green-500 
+                                animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
+                              />
+                              <span className="text-green-400 text-xs md:text-sm">
+                                {claimableCount}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={(e) => handleRefreshBondGroup(bondId, purchases, e)}
-                        disabled={refreshingBonds[bondId]}
-                        className="p-1.5 rounded-md border border-gray-600 hover:border-gray-500
-                          transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-                          group relative"
-                        title="Refresh bond data"
-                      >
-                        {refreshingBonds[bondId] ? (
-                          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-                            />
-                          </svg>
-                        )}
-                        <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 
-                          bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 
-                          group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                          Refresh bond data
+
+                    {/* Stats and Actions */}
+                    <div className="flex items-center justify-between sm:justify-end space-x-4">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-sm text-gray-400">
+                          {formatAmount(totalClaimedAmount)}/{formatAmount(totalAmount)}
                         </span>
-                      </button>
-                      <ChevronUpIcon 
-                        className={`w-5 h-5 transition-transform duration-300 
-                          ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
-                      />
+                        {tokenImage && (
+                          <img 
+                            src={tokenImage} 
+                            alt={bond?.token_denom} 
+                            className="w-4 h-4 rounded-full"
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => handleRefreshBondGroup(bondId, purchases, e)}
+                          disabled={refreshingBonds[bondId]}
+                          className="p-1.5 rounded-md border border-gray-600 hover:border-gray-500
+                            transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                            group relative"
+                          title="Refresh bond data"
+                        >
+                          {refreshingBonds[bondId] ? (
+                            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                              />
+                            </svg>
+                          )}
+                        </button>
+                        <ChevronUpIcon 
+                          className={`w-5 h-5 transition-transform duration-300 
+                            ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
+                        />
+                      </div>
                     </div>
                   </div>
                   
@@ -1529,8 +1551,166 @@ const Bonds = () => {
       return bonds.some(bond => getBondStatus(bond) === 'Active');
     }, [bonds]);
 
+    // Calculate total claimable bonds across all groups
+    const totalClaimableBonds = useMemo(() => {
+      return userBonds.reduce((total, purchase) => {
+        const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+        if (isClaimable(bond, purchase)) {
+          return total + 1;
+        }
+        return total;
+      }, 0);
+    }, [userBonds, bonds]);
+
+    const [isClaimingAll, setIsClaimingAll] = useState(false);
+    const [claimProgress, setClaimProgress] = useState({
+      total: 0,
+      current: 0,
+      isActive: false
+    });
+
+    const handleClaimAllBonds = async () => {
+      try {
+        setIsClaimingAll(true);
+
+        if (!connectedWalletAddress) {
+          showAlert("Please connect your wallet first", "error");
+          return;
+        }
+
+        // Get all claimable purchases
+        const claimablePurchases = userBonds.filter(purchase => {
+          const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+          return isClaimable(bond, purchase);
+        });
+
+        if (claimablePurchases.length === 0) {
+          showAlert("No claimable rewards found", "info");
+          return;
+        }
+
+        // Set initial progress
+        setClaimProgress({
+          total: claimablePurchases.length,
+          current: 0,
+          isActive: true
+        });
+
+        // Create array of instructions
+        const instructions = claimablePurchases.map(purchase => ({
+          contractAddress: contractAddress,
+          msg: {
+            claim_rewards: {
+              bond_id: parseInt(purchase.bond_id),
+              nft_token_id: purchase.nft_token_id
+            }
+          }
+        }));
+
+        const signer = await getSigner();
+        const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+
+        const gasPerMsg = 500000;
+        const totalGas = Math.min(2000000, gasPerMsg * instructions.length);
+
+        const fee = {
+          amount: [{ denom: "uwhale", amount: "50000" }],
+          gas: totalGas.toString(),
+        };
+
+        const result = await client.executeMultiple(
+          connectedWalletAddress,
+          instructions,
+          fee,
+          "Claim All Available Bond Rewards"
+        );
+
+        if (result.transactionHash) {
+          // Update progress to complete
+          setClaimProgress(prev => ({
+            ...prev,
+            current: prev.total,
+          }));
+
+          // Invalidate cache for all claimed NFTs
+          for (const purchase of claimablePurchases) {
+            const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+            const bondQuery = { 
+              get_bond_offer: { 
+                bond_id: parseInt(purchase.bond_id) 
+              } 
+            };
+            const bondData = await queryContract(bondQuery);
+            const nftContractAddr = bondData?.bond_offer?.nft_contract_addr || purchase.contract_address;
+            
+            if (nftContractAddr) {
+              nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
+            }
+          }
+
+          const baseTxnUrl = isTestnet
+            ? "https://ping.pfc.zone/narwhal-testnet/tx"
+            : "https://inbloc.org/migaloo/transactions";
+          const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+          
+          showAlert(
+            `Successfully claimed all available rewards! (${claimablePurchases.length} bonds)`,
+            "success",
+            `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          );
+          
+          setTimeout(async () => {
+            await fetchData();
+            await fetchUserBonds();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error("Error claiming all rewards:", error);
+        showAlert(`Error claiming rewards: ${error.message}`, "error");
+      } finally {
+        setIsClaimingAll(false);
+        // Reset progress after a delay
+        setTimeout(() => {
+          setClaimProgress({
+            total: 0,
+            current: 0,
+            isActive: false
+          });
+        }, 2000);
+      }
+    };
+
     return (
       <div className="mb-6 space-y-4">
+        {totalClaimableBonds > 0 && (
+          <button
+            onClick={handleClaimAllBonds}
+            disabled={isClaimingAll}
+            className="w-full px-4 py-3 rounded-lg border border-green-600 
+              bg-green-500/20 text-green-400 hover:bg-green-500/30 hover:border-green-500
+              transition duration-300 flex items-center justify-center space-x-2
+              disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+          >
+            {isClaimingAll ? (
+              <>
+                <div className="w-5 h-5 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                <span>
+                  {claimProgress.isActive 
+                    ? `Claiming Rewards (${claimProgress.current}/${claimProgress.total})`
+                    : 'Claiming All Available Rewards...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Claim All Available Rewards ({totalClaimableBonds})</span>
+              </>
+            )}
+          </button>
+        )}
+
         <div className="flex flex-wrap gap-4">
           {/* Status filter */}
           <select
