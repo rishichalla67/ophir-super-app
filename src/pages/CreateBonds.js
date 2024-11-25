@@ -27,8 +27,8 @@ import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
 
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
-
-const ADDITIONAL_MINUTES_BUFFER = 5; // Easily adjustable buffer time in minutes
+const ADDITIONAL_MINUTES_BUFFER = 5;
+const BOND_PURCHASE_FEE_PERCENTAGE = 3; // 5% fee, easily adjustable
 
 const PRESET_DURATIONS = [
   { label: 'Testing', minutes: { start: 5, end: 30, maturity: 180 } },
@@ -44,7 +44,7 @@ const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
   
   const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
   const rawAmount = parseFloat(totalSupply) * parseFloat(price);
-  const feeAmount = rawAmount * 0.05; // 5% fee
+  const feeAmount = rawAmount * (BOND_PURCHASE_FEE_PERCENTAGE / 100); // Use the constant
   const netAmount = rawAmount - feeAmount;
   
   return {
@@ -1087,7 +1087,7 @@ const CreateBonds = () => {
                         Gross Amount: {amounts.gross} {symbol}
                       </p>
                       <p className="text-red-400">
-                        Fee (5%): {amounts.fee} {symbol}
+                        Fee ({BOND_PURCHASE_FEE_PERCENTAGE}%): {amounts.fee} {symbol}
                       </p>
                       <p className="text-green-400">
                         Max Return: {amounts.net} {symbol}

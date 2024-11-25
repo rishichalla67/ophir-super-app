@@ -60,15 +60,19 @@ const Issuers = () => {
       totalValueUSD: 0,
       remainingValueUSD: 0,
       soldValueUSD: 0,
-      averagePriceUSD: 0
+      averagePriceUSD: 0,
+      totalsByPurchaseDenom: {},
+      averagePriceByPurchaseDenom: {}
     };
 
     const now = new Date();
     let totalValueUSD = 0;
     let remainingValueUSD = 0;
     let soldValueUSD = 0;
+    let totalsByPurchaseDenom = {};
+    let countByPurchaseDenom = {};
 
-    // Calculate USD values for each bond
+    // Calculate USD values and totals by purchase denom
     bonds.forEach(bond => {
       let tokenDenom = tokenMappings[bond.bond_offer.token_denom]?.symbol?.toLowerCase();
       // Map daoOphir to ophir for price lookup
@@ -91,6 +95,18 @@ const Issuers = () => {
       remainingValueUSD += remainingValue;
       soldValueUSD += soldValue;
 
+      // Calculate totals by purchase denom
+      const purchaseDenom = bond.bond_offer.purchase_denom;
+      const price = parseFloat(bond.bond_offer.price);
+      const totalInPurchaseDenom = soldAmount * price;
+
+      if (!totalsByPurchaseDenom[purchaseDenom]) {
+        totalsByPurchaseDenom[purchaseDenom] = 0;
+        countByPurchaseDenom[purchaseDenom] = 0;
+      }
+      totalsByPurchaseDenom[purchaseDenom] += totalInPurchaseDenom;
+      countByPurchaseDenom[purchaseDenom]++;
+
       // Debug logs
       console.log('Bond:', bond.bond_offer.bond_id, {
         tokenDenom,
@@ -102,6 +118,12 @@ const Issuers = () => {
       });
     });
     
+    // Calculate average price by purchase denom
+    const averagePriceByPurchaseDenom = {};
+    Object.keys(totalsByPurchaseDenom).forEach(denom => {
+      averagePriceByPurchaseDenom[denom] = totalsByPurchaseDenom[denom] / countByPurchaseDenom[denom];
+    });
+
     return {
       totalBonds: bonds.length,
       activeBonds: bonds.filter(bond => {
@@ -112,7 +134,9 @@ const Issuers = () => {
       totalValueUSD,
       remainingValueUSD,
       soldValueUSD,
-      averagePriceUSD: bonds.length > 0 ? totalValueUSD / bonds.length : 0
+      averagePriceUSD: bonds.length > 0 ? totalValueUSD / bonds.length : 0,
+      totalsByPurchaseDenom,
+      averagePriceByPurchaseDenom
     };
   };
 
@@ -265,6 +289,19 @@ const Issuers = () => {
     navigate(`/bonds/${bondId}`);
   };
 
+  const calculateBondFinancials = (bond) => {
+    const price = parseFloat(bond.bond_offer.price);
+    const totalAmount = parseInt(bond.bond_offer.total_amount);
+    const remainingSupply = parseInt(bond.bond_offer.remaining_supply);
+    const soldAmount = (totalAmount - remainingSupply) / Math.pow(10, 6);
+    
+    const fundsReceived = soldAmount * price;
+    const feePercentage = parseFloat(bond.bond_offer.fee_percentage) / 100;
+    const feesPaid = fundsReceived * feePercentage;
+    
+    return { fundsReceived, feesPaid };
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -304,7 +341,16 @@ const Issuers = () => {
             <p className="text-white text-lg md:text-2xl font-bold">
               ${stats.totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
-            <p className="text-gray-400 text-xs md:text-sm">Total bonds issued</p>
+            {Object.entries(stats.totalsByPurchaseDenom).map(([denom, total]) => (
+              <p key={denom} className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+                {total.toFixed(2)}
+                <img 
+                  src={tokenImages[tokenMappings[denom]?.symbol?.toLowerCase()]} 
+                  alt=""
+                  className="w-3 h-3 md:w-4 md:h-4"
+                />
+              </p>
+            ))}
           </div>
 
           <div className="bg-gray-800/50 rounded-lg p-3 md:p-6 border border-gray-700">
@@ -336,6 +382,8 @@ const Issuers = () => {
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Amount</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Price</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Progress</th>
+                <th className="px-1 py-2 md:px-4 md:py-3 text-left">Funds Received</th>
+                <th className="px-1 py-2 md:px-4 md:py-3 text-left">Fees Paid</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Status</th>
               </tr>
             </thead>
@@ -420,6 +468,36 @@ const Issuers = () => {
                           </span>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-1 py-2 md:px-4 md:py-3">
+                      {(() => {
+                        const { fundsReceived } = calculateBondFinancials(bond);
+                        return (
+                          <span className="whitespace-nowrap flex items-center gap-1">
+                            {fundsReceived.toFixed(3)}
+                            <img 
+                              src={tokenImages[tokenMappings[bond.bond_offer.purchase_denom]?.symbol?.toLowerCase()]} 
+                              alt=""
+                              className="w-4 h-4 md:w-5 md:h-5 inline-block"
+                            />
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-1 py-2 md:px-4 md:py-3">
+                      {(() => {
+                        const { feesPaid } = calculateBondFinancials(bond);
+                        return (
+                          <span className="whitespace-nowrap flex items-center gap-1">
+                            {feesPaid.toFixed(3)}
+                            <img 
+                              src={tokenImages[tokenMappings[bond.bond_offer.purchase_denom]?.symbol?.toLowerCase()]} 
+                              alt=""
+                              className="w-4 h-4 md:w-5 md:h-5 inline-block"
+                            />
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
                       {renderStatusCell(bond)}
