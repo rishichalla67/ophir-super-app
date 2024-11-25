@@ -924,32 +924,14 @@ const BuyBonds = () => {
           invalidateNFTCache(purchase.contract_address, nftId);
         }
 
-        // Immediately update the local state to reflect the claim
-        setUserBondPurchase(prevPurchases => 
-          prevPurchases.map(purchase => {
-            if (purchase.nft_token_id === nftId) {
-              return {
-                ...purchase,
-                status: "Claimed",
-                claimed_amount: purchase.amount // Set claimed amount equal to total amount
-              };
-            }
-            return purchase;
-          })
-        );
-
-        const baseTxnUrl = isTestnet
-          ? "https://ping.pfc.zone/narwhal-testnet/tx"
-          : "https://inbloc.org/migaloo/transactions";
-        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
-        
+        const txnUrl = `${explorerUrl}/${result.transactionHash}`;
         showAlert(
           "Successfully claimed bond rewards!",
           "success",
-          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
         );
         
-        // Refresh the data in the background
+        // Refresh the data
         await fetchUserBondPurchase(connectedWalletAddress);
       }
     } catch (error) {
@@ -1019,7 +1001,12 @@ const BuyBonds = () => {
   const isBondActive = getBondStatus(bond) === "Active";
 
   const getTokenImage = (denom) => {
-    return tokenImages[denom] || tokenImages['default'];
+    // Convert daoOphir to ophir for image mapping
+    const mappedDenom = denom?.toLowerCase().includes('daoophir') 
+      ? 'ophir' 
+      : denom;
+    
+    return tokenImages[mappedDenom] || tokenImages['default'];
   };
 
 
@@ -1328,51 +1315,72 @@ const BuyBonds = () => {
             
             <div className="space-y-3">
               {userBondPurchase.map((purchase, index) => {
-                const isClaimingThis = claimingStates[purchase.nft_token_id];
+                const isClaimingThis = claimingStates[index];
                 const canClaimNow = canClaimBond(bond?.claim_start_time);
-                const isClaimed = parseInt(purchase.claimed_amount) > 0;
+                const isClaimed = purchase.status === "Claimed" || 
+                  (purchase.claimed_amount && 
+                    parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
+                const isClaimable = canClaimNow && !isClaimed;
 
                 return (
                   <div 
-                    key={purchase.nft_token_id} 
-                    className="bond-buy-text-container rounded-lg p-4 border border-gray-700/50 hover:border-gray-600 transition-all duration-300"
+                    key={purchase.nft_token_id}
+                    className={`bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 
+                      hover:border-gray-700 transition-all duration-300 backdrop-blur-sm 
+                      cursor-pointer flex flex-col relative
+                      ${isClaimed ? 'opacity-75' : ''}
+                      ${isClaimable ? 'shadow-[0_0_15px_-3px_rgba(34,197,94,0.3)]' : ''}`}
                   >
-                    <div className="flex flex-col space-y-3">
-                      {/* Top row with amount and status */}
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-gray-400 text-xs">Amount</p>
-                          <p className="text-sm font-semibold">
-                            {formatAmount(purchase.amount)} {bondSymbol}
-                          </p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          isClaimed 
-                            ? 'bg-gray-700/50 text-gray-300' 
-                            : 'bg-green-900/50 text-green-400'
-                        }`}>
-                          {isClaimed ? 'Claimed' : 'Unclaimed'}
-                        </span>
+                    {isClaimable && (
+                      <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 
+                        animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
+                      />
+                    )}
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium">NFT #{purchase.nft_token_id}</span>
                       </div>
+                      <div className={`px-3 py-1 rounded-full text-xs ${
+                        isClaimed ? 'bg-gray-500/20 text-gray-400' : 
+                        isClaimable ? 'bg-green-500/20 text-green-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {isClaimed ? 'Claimed' : 
+                         isClaimable ? 'Ready to Claim' : 
+                         'Pending'}
+                      </div>
+                    </div>
 
-                      {/* Middle row with claimed amount and purchase date */}
+                    <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-gray-400 text-xs">Claimed</p>
-                          <p className="text-sm font-semibold">
-                            {formatAmount(purchase.claimed_amount)} {bondSymbol}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-gray-400 text-xs">Purchase Date</p>
-                          <p className="text-sm font-semibold">
-                            {formatDate(purchase.purchase_time)}
-                          </p>
+                        <span className="text-gray-400">Amount:</span>
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
+                            {bond?.token_denom && (
+                              <img
+                                src={getTokenImage(bond.token_denom)}
+                                alt={getTokenSymbol(bond.token_denom)}
+                                className="w-5 h-5 rounded-full"
+                              />
+                            )}
+                          </div>
+                          {purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0 && (
+                            <span className="text-sm text-gray-400">
+                              Claimed: {formatAmount(purchase.claimed_amount)} / {formatAmount(purchase.amount)}
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Claim button */}
-                      {!isClaimed && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Purchase Date:</span>
+                        <span>{formatDate(purchase.purchase_time)}</span>
+                      </div>
+                    </div>
+
+                    {!isClaimed && (
+                      <div className="mt-4">
                         <button
                           onClick={(e) => handleClaim(bondId, purchase.nft_token_id, index, e)}
                           disabled={isClaimingThis || !canClaimNow}
@@ -1391,8 +1399,8 @@ const BuyBonds = () => {
                             `Claim available on ${formatDate(bond?.claim_start_time)}`
                           )}
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
