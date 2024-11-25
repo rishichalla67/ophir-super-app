@@ -790,14 +790,7 @@ const Bonds = () => {
                     ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
                     : 'hover:bg-gray-700'
                   }`}
-                onClick={(e) => {
-                  // Prevent navigation if clicking action buttons
-                  if (e.target.tagName === 'BUTTON') {
-                    e.stopPropagation();
-                    return;
-                  }
-                  handleBondClick(bond.bond_id);
-                }}
+                onClick={() => handleBondClick(bond.bond_id)}
               >
                 <td className="py-4 pl-4">
                   <div className="flex items-center">
@@ -1261,7 +1254,8 @@ const Bonds = () => {
                   {expandedBondGroups.has(bondId) && (
                     <div className="p-4 pt-0">
                       <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 
-                        scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+                        scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4"
+                        onClick={() => handleBondClick(bondId)}>
                         {purchases
                           .sort((a, b) => {
                             const bond = bonds.find(b => b.bond_id === a.bond_id);
