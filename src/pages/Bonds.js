@@ -1140,11 +1140,19 @@ const Bonds = () => {
         };
       }
       
+      // Add debug logs
+      console.log(`Checking purchase for bond ${purchase.bond_id}:`, {
+        status: purchase.status,
+        amount: purchase.amount,
+        claimed_amount: purchase.claimed_amount,
+        canClaim: canClaim(bond)
+      });
+      
       // Check if this purchase is claimable
       const isClaimable = canClaim(bond) && 
         purchase.status !== "Claimed" && 
         (!purchase.claimed_amount || 
-          (parseInt(purchase.claimed_amount) - parseInt(purchase.amount)) >= 0);
+          parseInt(purchase.amount) > parseInt(purchase.claimed_amount || '0'));
       
       // Update counters
       acc[purchase.bond_id].totalPurchases++;
@@ -1157,6 +1165,14 @@ const Bonds = () => {
         acc[purchase.bond_id].hasClaimable = true;
         acc[purchase.bond_id].claimableCount++;
       }
+      
+      // Add debug log for group status
+      console.log(`Bond group ${purchase.bond_id} status:`, {
+        hasClaimable: acc[purchase.bond_id].hasClaimable,
+        claimableCount: acc[purchase.bond_id].claimableCount,
+        totalPurchases: acc[purchase.bond_id].totalPurchases,
+        claimedCount: acc[purchase.bond_id].claimedCount
+      });
       
       acc[purchase.bond_id].purchases.push(purchase);
       return acc;
@@ -1195,7 +1211,7 @@ const Bonds = () => {
                 >
                   <div 
                     className="p-4 flex items-center justify-between cursor-pointer 
-                      hover:bg-gray-800/50 transition-colors"
+                      hover:bg-gray-800/50 transition-colors relative"
                     onClick={() => toggleGroup(bondId)}
                   >
                     <div className="flex items-center space-x-3">
@@ -1203,22 +1219,19 @@ const Bonds = () => {
                         <img src={bondImage} alt={bondName} className="w-8 h-8 rounded-full" />
                       )}
                       <span className="font-medium">{bondName}</span>
-                      <span className="text-gray-400 text-sm">({purchases.length} purchases)</span>
-                      {!allClaimed && hasClaimable && (
-                        <div 
-                          className="relative group"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="w-3 h-3 rounded-full bg-green-500 
-                            animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
-                          />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 
-                            bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
-                            transition-opacity duration-200 whitespace-nowrap z-10">
-                            {claimableCount} {claimableCount === 1 ? 'purchase' : 'purchases'} ready to claim
+                      <div className="flex items-center space-x-2">
+                        <span className="text-gray-400 text-sm">({purchases.length})</span>
+                        {!allClaimed && hasClaimable && (
+                          <div className="flex items-center space-x-1">
+                            <div className="w-2 h-2 rounded-full bg-green-500 
+                              animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
+                            />
+                            <span className="text-green-400 text-xs md:text-sm">
+                              {claimableCount}
+                            </span>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       <button
