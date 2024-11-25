@@ -1058,6 +1058,13 @@ const BuyBonds = () => {
         <div className="backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bg-gray-800/80 border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond Type:</p>
+              <p className="text-sm md:text-xl font-bold text-center">
+                {bond?.bond_type ? bond.bond_type.charAt(0).toUpperCase() + bond.bond_type.slice(1).toLowerCase() : 'N/A'}
+              </p>
+            </div>
+
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond ID:</p>
               <p className="text-sm md:text-xl font-bold text-center">{bond?.bond_id || 'N/A'}</p>
             </div>

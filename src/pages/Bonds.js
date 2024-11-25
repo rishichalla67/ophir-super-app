@@ -1021,7 +1021,7 @@ const Bonds = () => {
     const claimedAmount = parseInt(userBond.claimed_amount || "0");
     
     // Check if claimed_amount exists and is less than amount
-    const hasUnclaimedAmount = claimedAmount < totalAmount;
+    const hasUnclaimedAmount = (claimedAmount - totalAmount) < 0;
     console.log('Claim check:', {
       bondId: userBond.bond_id,
       totalAmount,
@@ -1092,7 +1092,7 @@ const Bonds = () => {
       const isClaimable = canClaim(bond) && 
         purchase.status !== "Claimed" && 
         (!purchase.claimed_amount || 
-          parseInt(purchase.claimed_amount) < parseInt(purchase.amount));
+          (parseInt(purchase.claimed_amount) - parseInt(purchase.amount)) >= 0);
       
       // Update counters
       acc[purchase.bond_id].totalPurchases++;
@@ -1183,10 +1183,12 @@ const Bonds = () => {
                             const bond = bonds.find(b => b.bond_id === a.bond_id);
                             const isClaimableA = canClaim(bond) && 
                               a.status !== "Claimed" && 
-                              (!a.claimed_amount || parseInt(a.claimed_amount) < parseInt(a.amount));
+                              (!a.claimed_amount || 
+                                (parseInt(a.claimed_amount) - parseInt(a.amount)) >= 0);
                             const isClaimableB = canClaim(bond) && 
                               b.status !== "Claimed" && 
-                              (!b.claimed_amount || parseInt(b.claimed_amount) < parseInt(b.amount));
+                              (!b.claimed_amount || 
+                                (parseInt(b.claimed_amount) - parseInt(b.amount)) >= 0);
                             
                             // Sort by claimable status first
                             if (isClaimableA && !isClaimableB) return -1;
@@ -1208,7 +1210,8 @@ const Bonds = () => {
                             const bond = bonds.find(b => b.bond_id === purchase.bond_id);
                             const isClaimed = purchase.status === "Claimed" || 
                               claimedBonds.has(bondKey) ||
-                              (purchase.claimed_amount && parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
+                              (purchase.claimed_amount && 
+                                (parseInt(purchase.claimed_amount) - parseInt(purchase.amount)) >= 0);
                             const claimStartDate = convertContractTimeToDate(bond?.claim_start_time);
                             const now = new Date();
                             const canClaimNow = now >= claimStartDate;
@@ -1310,12 +1313,6 @@ const Bonds = () => {
     const hasActiveBonds = useMemo(() => {
       return bonds.some(bond => getBondStatus(bond) === 'Active');
     }, [bonds]);
-
-    useEffect(() => {
-      if (!hasActiveBonds) {
-        setStatusFilter('all');
-      }
-    }, [hasActiveBonds]);
 
     return (
       <div className="mb-6 space-y-4">

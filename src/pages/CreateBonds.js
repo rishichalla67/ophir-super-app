@@ -24,6 +24,7 @@ import TimelineConnector from '@mui/lab/TimelineConnector';
 import TimelineContent from '@mui/lab/TimelineContent';
 import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
+import { useCrypto } from '../context/CryptoContext';
 
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 
@@ -58,6 +59,30 @@ const BOND_TYPES = [
   { value: 'vested', label: 'Vested - Custom claim start time' },
 ];
 
+const calculateDiscount = (listTokenDenom, saleTokenDenom, bondPrice, prices) => {
+  if (!prices || !listTokenDenom || !saleTokenDenom || !bondPrice) return null;
+
+  // Convert denoms to lowercase and handle special testnet case
+  let listTokenSymbol = tokenMappings[listTokenDenom]?.symbol?.toLowerCase() || listTokenDenom?.toLowerCase();
+  let saleTokenSymbol = tokenMappings[saleTokenDenom]?.symbol?.toLowerCase() || saleTokenDenom?.toLowerCase();
+  
+  // Map daoOphir to ophir for price lookup
+  if (listTokenSymbol?.includes('daoophir')) listTokenSymbol = 'ophir';
+  if (saleTokenSymbol?.includes('daoophir')) saleTokenSymbol = 'ophir';
+  
+  // Get prices from context
+  const listTokenPrice = prices[listTokenSymbol];
+  const saleTokenPrice = prices[saleTokenSymbol];
+
+  if (!listTokenPrice || !saleTokenPrice) return null;
+
+  // Calculate discount/premium percentage
+  const bondPriceInUSD = parseFloat(bondPrice) * saleTokenPrice;
+  const discount = ((bondPriceInUSD - listTokenPrice) / listTokenPrice) * 100;
+  
+  return discount;
+};
+
 const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
   // Add refs for each input
   const inputRefs = {
@@ -87,17 +112,23 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
     }));
   };
 
+  // Helper function to format datetime for input value
+  const formatDateTimeForInput = (dateTime) => {
+    const [date, time] = dateTime.split('T');
+    return `${date}T${time}`;
+  };
+
   const dates = [
     {
       id: 'start',
-      time: new Date(`${formData.start_time}T${formData.start_time_hour}`).getTime(),
+      time: `${formData.start_time}T${formData.start_time_hour}`,
       label: 'Purchase Start',
       color: 'grey',
       editable: true
     },
     {
       id: 'end',
-      time: new Date(`${formData.end_time}T${formData.end_time_hour}`).getTime(),
+      time: `${formData.end_time}T${formData.end_time_hour}`,
       label: 'Purchase End',
       color: 'grey',
       editable: true
@@ -105,20 +136,20 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
     ...(bondType === 'vested' ? [{
       id: 'claim_start',
       time: formData.claim_start_date && formData.claim_start_hour ? 
-        new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).getTime() :
-        new Date(`${formData.end_time}T${formData.end_time_hour}`).getTime() + (2 * 60 * 1000),
+        `${formData.claim_start_date}T${formData.claim_start_hour}` :
+        `${formData.end_time}T${formData.end_time_hour}`,
       label: 'Claim Start',
       color: 'grey',
       editable: true
     }] : []),
     {
       id: 'maturity',
-      time: new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).getTime(),
+      time: `${formData.maturity_date}T${formData.maturity_date_hour}`,
       label: bondType === 'cliff' ? 'Maturity & Claim Start' : 'Maturity',
       color: 'grey',
       editable: true
     }
-  ].sort((a, b) => a.time - b.time);
+  ].sort((a, b) => new Date(a.time) - new Date(b.time));
 
   return (
     <div className="bg-gray-800/50 rounded-lg p-4 md:p-6">
@@ -131,12 +162,8 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
           >
             <div className="flex items-center justify-between">
               <span className="text-yellow-500 font-medium">{date.label}</span>
-              {date.time === Math.min(...dates.map(d => d.time)) && (
-                <span className="text-xs text-yellow-400">(Start)</span>
-              )}
-              {date.time === Math.max(...dates.map(d => d.time)) && (
-                <span className="text-xs text-yellow-400">(End)</span>
-              )}
+              {index === 0 && <span className="text-xs text-yellow-400">(Start)</span>}
+              {index === dates.length - 1 && <span className="text-xs text-yellow-400">(End)</span>}
             </div>
             <div 
               onClick={() => handleDateClick(date.id)}
@@ -149,7 +176,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
               <input
                 ref={inputRefs[date.id]}
                 type="datetime-local"
-                value={new Date(date.time).toISOString().slice(0, 16)}
+                value={formatDateTimeForInput(date.time)}
                 onChange={(e) => handleDateChange(date.id, e.target.value)}
                 className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
               />
@@ -163,11 +190,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
 
       {/* Desktop View */}
       <div className="hidden md:block">
-        <Timeline position="alternate" sx={{ 
-          '& .MuiTimelineItem-root:before': {
-            flex: 0
-          }
-        }}>
+        <Timeline position="alternate">
           {dates.map((date, index) => (
             <TimelineItem key={date.id}>
               <TimelineOppositeContent 
@@ -190,7 +213,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
                   <input
                     ref={inputRefs[date.id]}
                     type="datetime-local"
-                    value={new Date(date.time).toISOString().slice(0, 16)}
+                    value={formatDateTimeForInput(date.time)}
                     onChange={(e) => handleDateChange(date.id, e.target.value)}
                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                   />
@@ -217,12 +240,8 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
                 }
               }}>
                 {date.label}
-                {date.time === Math.min(...dates.map(d => d.time)) && (
-                  <div className="text-yellow-400 text-sm mt-1">(Start)</div>
-                )}
-                {date.time === Math.max(...dates.map(d => d.time)) && (
-                  <div className="text-yellow-400 text-sm mt-1">(End)</div>
-                )}
+                {index === 0 && <div className="text-yellow-400 text-sm mt-1">(Start)</div>}
+                {index === dates.length - 1 && <div className="text-yellow-400 text-sm mt-1">(End)</div>}
               </TimelineContent>
             </TimelineItem>
           ))}
@@ -286,6 +305,7 @@ const CreateBonds = () => {
   const navigate = useNavigate();
   const [customBondName, setCustomBondName] = useState("");
   const [bondType, setBondType] = useState('cliff');
+  const { prices } = useCrypto();
 
   const allowedDenoms = [
     "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
@@ -1023,6 +1043,14 @@ const CreateBonds = () => {
                   );
                   const symbol = tokenMappings[formData.purchasing_denom]?.symbol || formData.purchasing_denom;
                   
+                  // Calculate discount/premium
+                  const discount = calculateDiscount(
+                    formData.token_denom,
+                    formData.purchasing_denom,
+                    formData.price,
+                    prices
+                  );
+                  
                   return (
                     <div className="space-y-1 text-sm">
                       <p className="text-gray-400">
@@ -1034,6 +1062,14 @@ const CreateBonds = () => {
                       <p className="text-green-400">
                         Max Return: {amounts.net} {symbol}
                       </p>
+                      {discount !== null && (
+                        <p className={`mt-2 ${discount < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {Math.abs(discount).toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}% {discount < 0 ? 'Discount' : 'Premium'}
+                        </p>
+                      )}
                     </div>
                   );
                 })()}
