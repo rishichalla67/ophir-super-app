@@ -107,6 +107,7 @@ const Bonds = () => {
   const [expandedBondGroups, setExpandedBondGroups] = useState(new Set());
   const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
   const [refreshingBonds, setRefreshingBonds] = useState({});
+  const [claimingAllStates, setClaimingAllStates] = useState({});
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -370,7 +371,11 @@ const Bonds = () => {
   };
 
   const getTokenImage = (denom) => {
-    const token = tokenMappings[denom] || denom;
+    let token = tokenMappings[denom]?.symbol || denom;
+    // Map daoOphir to ophir for image lookup
+    if (token?.toLowerCase().includes('daoophir')) {
+      token = 'ophir';
+    }
     return tokenImages[token];
   };
 
@@ -1104,6 +1109,111 @@ const Bonds = () => {
     }
   };
 
+  const handleClaimAll = async (bondId, purchases, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      setClaimingAllStates(prev => ({ ...prev, [bondId]: true }));
+
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      const bond = bonds.find(b => b.bond_id === parseInt(bondId));
+      if (!bond) {
+        throw new Error("Bond not found");
+      }
+
+      // Filter only claimable purchases
+      const claimablePurchases = purchases.filter(purchase => {
+        return isClaimable(bond, purchase);
+      });
+
+      if (claimablePurchases.length === 0) {
+        showAlert("No claimable rewards found", "info");
+        return;
+      }
+
+      // Create array of instructions with proper structure
+      const instructions = claimablePurchases.map(purchase => ({
+        contractAddress: contractAddress,
+        msg: {
+          claim_rewards: {
+            bond_id: parseInt(bondId),
+            nft_token_id: purchase.nft_token_id
+          }
+        }
+      }));
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+
+      // Increase gas per message significantly
+      const gasPerMsg = 500000; // Doubled from 250000 to 500000
+      const totalGas = Math.min(2000000, gasPerMsg * instructions.length); // Increased cap from 1M to 2M
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: totalGas.toString(),
+      };
+
+      // Execute all messages in a single transaction
+      const result = await client.executeMultiple(
+        connectedWalletAddress,
+        instructions,
+        fee,
+        "Claim All Bond Rewards"
+      );
+
+      if (result.transactionHash) {
+        // Query the bond's NFT contract address first
+        const bondQuery = { 
+          get_bond_offer: { 
+            bond_id: parseInt(bondId) 
+          } 
+        };
+        const bondData = await queryContract(bondQuery);
+        const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
+
+        // Find the first purchase to get the contract address as fallback
+        const firstPurchase = purchases[0];
+        const contractAddr = nftContractAddr || firstPurchase?.contract_address;
+
+        if (contractAddr) {
+          console.log('🗑️ Invalidating NFT cache for all purchases of bond:', bondId);
+          // Invalidate cache for all NFTs in this bond
+          purchases.forEach(purchase => {
+            nftInfoCache.delete(contractAddr, purchase.nft_token_id);
+          });
+        }
+
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
+        showAlert(
+          `Successfully claimed rewards for ${claimablePurchases.length} bonds!`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+        );
+        
+        // Refresh data after a short delay
+        setTimeout(async () => {
+          await fetchData();
+          await fetchUserBonds();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Error claiming all rewards:", error);
+      showAlert(`Error claiming rewards: ${error.message}`, "error");
+    } finally {
+      setClaimingAllStates(prev => ({ ...prev, [bondId]: false }));
+    }
+  };
+
   const UserBondsSection = () => {
     const [activeBondId, setActiveBondId] = useState(null);
     const prevUserBondsRef = useRef(userBonds);
@@ -1226,12 +1336,13 @@ const Bonds = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
                       <button
                         onClick={(e) => handleRefreshBondGroup(bondId, purchases, e)}
                         disabled={refreshingBonds[bondId]}
-                        className="p-2 rounded-md border border-gray-600 hover:border-gray-500
-                          transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-1.5 rounded-md border border-gray-600 hover:border-gray-500
+                          transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                          group relative"
                         title="Refresh bond data"
                       >
                         {refreshingBonds[bondId] ? (
@@ -1243,6 +1354,11 @@ const Bonds = () => {
                             />
                           </svg>
                         )}
+                        <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 
+                          bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 
+                          group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                          Refresh bond data
+                        </span>
                       </button>
                       <ChevronUpIcon 
                         className={`w-5 h-5 transition-transform duration-300 
@@ -1253,9 +1369,36 @@ const Bonds = () => {
                   
                   {expandedBondGroups.has(bondId) && (
                     <div className="p-4 pt-0">
+                      {claimableCount > 0 && (
+                        <div className="mb-4">
+                          <button
+                            onClick={(e) => handleClaimAll(bondId, purchases, e)}
+                            disabled={claimingAllStates[bondId]}
+                            className="w-full px-3 py-2 rounded-md border border-green-600 
+                              bg-green-500/20 text-green-400 hover:bg-green-500/30 hover:border-green-500
+                              transition duration-300 text-sm flex items-center justify-center space-x-2
+                              disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {claimingAllStates[bondId] ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                                <span>Claiming {claimableCount} Rewards...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                    d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Claim All Available Rewards ({claimableCount})</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                       <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 
-                        scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4"
-                        onClick={() => handleBondClick(bondId)}>
+                        scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                      >
                         {purchases
                           .sort((a, b) => {
                             const bond = bonds.find(b => b.bond_id === a.bond_id);
@@ -1322,10 +1465,10 @@ const Bonds = () => {
                                     <div className="flex flex-col items-end">
                                       <div className="flex items-center gap-2">
                                         <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
-                                        {bond?.backing_denom && (
+                                        {bond?.token_denom && (
                                           <img
-                                            src={getTokenImage(bond.backing_denom)}
-                                            alt={bond.backing_denom}
+                                            src={getTokenImage(bond.token_denom)}
+                                            alt={getTokenSymbol(bond.token_denom)}
                                             className="w-5 h-5 rounded-full"
                                           />
                                         )}
