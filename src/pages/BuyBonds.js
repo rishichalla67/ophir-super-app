@@ -1001,12 +1001,19 @@ const BuyBonds = () => {
   const isBondActive = getBondStatus(bond) === "Active";
 
   const getTokenImage = (denom) => {
-    // Convert daoOphir to ophir for image mapping
-    const mappedDenom = denom?.toLowerCase().includes('daoophir') 
-      ? 'ophir' 
-      : denom;
+    if (!denom) return tokenImages['default'];
     
-    return tokenImages[mappedDenom] || tokenImages['default'];
+    // Get the symbol from tokenMappings first
+    const tokenInfo = tokenMappings[denom];
+    const symbol = tokenInfo?.symbol?.toLowerCase() || denom.toLowerCase();
+    
+    // Handle daoOphir case
+    if (symbol.includes('daoophir')) {
+      return tokenImages['ophir'];
+    }
+    
+    // For all other cases, try to find the image using the symbol
+    return tokenImages[symbol] || tokenImages['default'];
   };
 
 

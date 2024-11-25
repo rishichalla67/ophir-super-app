@@ -12,6 +12,8 @@ import { Dialog } from '@headlessui/react';
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
+import { useCrypto } from '../context/CryptoContext';
+import { useNavigate } from 'react-router-dom';
 
 const Issuers = () => {
   const { isSidebarOpen } = useSidebar();
@@ -22,6 +24,8 @@ const Issuers = () => {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [selectedBond, setSelectedBond] = useState(null);
   const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
+  const { prices } = useCrypto();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchBonds();
@@ -53,13 +57,50 @@ const Issuers = () => {
     if (!bonds.length) return {
       totalBonds: 0,
       activeBonds: 0,
-      totalValue: 0,
-      remainingValue: 0,
-      soldValue: 0,
-      averagePrice: 0
+      totalValueUSD: 0,
+      remainingValueUSD: 0,
+      soldValueUSD: 0,
+      averagePriceUSD: 0
     };
 
     const now = new Date();
+    let totalValueUSD = 0;
+    let remainingValueUSD = 0;
+    let soldValueUSD = 0;
+
+    // Calculate USD values for each bond
+    bonds.forEach(bond => {
+      let tokenDenom = tokenMappings[bond.bond_offer.token_denom]?.symbol?.toLowerCase();
+      // Map daoOphir to ophir for price lookup
+      if (tokenDenom?.includes('daoophir')) {
+        tokenDenom = 'ophir';
+      }
+      
+      const tokenPrice = prices[tokenDenom] || 0;
+      console.log('Token:', tokenDenom, 'Price:', tokenPrice); // Debug log
+      
+      const totalAmount = parseInt(bond.bond_offer.total_amount) / Math.pow(10, 6);
+      const remainingSupply = parseInt(bond.bond_offer.remaining_supply) / Math.pow(10, 6);
+      const soldAmount = totalAmount - remainingSupply;
+
+      const totalValue = totalAmount * tokenPrice;
+      const remainingValue = remainingSupply * tokenPrice;
+      const soldValue = soldAmount * tokenPrice;
+
+      totalValueUSD += totalValue;
+      remainingValueUSD += remainingValue;
+      soldValueUSD += soldValue;
+
+      // Debug logs
+      console.log('Bond:', bond.bond_offer.bond_id, {
+        tokenDenom,
+        tokenPrice,
+        totalAmount,
+        totalValue,
+        remainingValue,
+        soldValue
+      });
+    });
     
     return {
       totalBonds: bonds.length,
@@ -68,11 +109,10 @@ const Issuers = () => {
         const endTime = new Date(parseInt(bond.bond_offer.purchase_end_time) / 1_000_000);
         return now >= startTime && now <= endTime && !bond.bond_offer.closed;
       }).length,
-      totalValue: bonds.reduce((acc, bond) => acc + parseInt(bond.bond_offer.total_amount), 0),
-      remainingValue: bonds.reduce((acc, bond) => acc + parseInt(bond.bond_offer.remaining_supply), 0),
-      soldValue: bonds.reduce((acc, bond) => 
-        acc + (parseInt(bond.bond_offer.total_amount) - parseInt(bond.bond_offer.remaining_supply)), 0),
-      averagePrice: bonds.reduce((acc, bond) => acc + parseFloat(bond.bond_offer.price), 0) / bonds.length
+      totalValueUSD,
+      remainingValueUSD,
+      soldValueUSD,
+      averagePriceUSD: bonds.length > 0 ? totalValueUSD / bonds.length : 0
     };
   };
 
@@ -221,6 +261,10 @@ const Issuers = () => {
     );
   };
 
+  const handleBondClick = (bondId) => {
+    navigate(`/bonds/${bondId}`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -258,7 +302,7 @@ const Issuers = () => {
           <div className="bg-gray-800/50 rounded-lg p-3 md:p-6 border border-gray-700">
             <h3 className="text-ophir-gold text-sm md:text-lg mb-1 md:mb-2">Total Value</h3>
             <p className="text-white text-lg md:text-2xl font-bold">
-              {(stats.totalValue / 1_000_000).toLocaleString()} OPHIR
+              ${stats.totalValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
             <p className="text-gray-400 text-xs md:text-sm">Total bonds issued</p>
           </div>
@@ -266,19 +310,19 @@ const Issuers = () => {
           <div className="bg-gray-800/50 rounded-lg p-3 md:p-6 border border-gray-700">
             <h3 className="text-ophir-gold text-sm md:text-lg mb-1 md:mb-2">Sold Value</h3>
             <p className="text-white text-lg md:text-2xl font-bold">
-              {(stats.soldValue / 1_000_000).toLocaleString()} OPHIR
+              ${stats.soldValueUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
             <p className="text-gray-400 text-xs md:text-sm">
-              {((stats.soldValue / stats.totalValue) * 100).toFixed(1)}% of total supply
+              {((stats.soldValueUSD / stats.totalValueUSD) * 100).toFixed(1)}% of total supply
             </p>
           </div>
 
           <div className="bg-gray-800/50 rounded-lg p-3 md:p-6 border border-gray-700">
-            <h3 className="text-ophir-gold text-sm md:text-lg mb-1 md:mb-2">Average Price</h3>
+            <h3 className="text-ophir-gold text-sm md:text-lg mb-1 md:mb-2">Average Value</h3>
             <p className="text-white text-lg md:text-2xl font-bold">
-              {stats.averagePrice.toFixed(3)} WHALE
+              ${stats.averagePriceUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
-            <p className="text-gray-400 text-xs md:text-sm">Per OPHIR token</p>
+            <p className="text-gray-400 text-xs md:text-sm">Per bond</p>
           </div>
         </div>
 
@@ -317,7 +361,11 @@ const Issuers = () => {
                 );
 
                 return (
-                  <tr key={bond.bond_offer.bond_id} className="border-b border-gray-700">
+                  <tr 
+                    key={bond.bond_offer.bond_id} 
+                    className="border-b border-gray-700 hover:bg-gray-800/50 cursor-pointer transition-colors"
+                    onClick={() => handleBondClick(bond.bond_offer.bond_id)}
+                  >
                     <td className="px-1 py-2 md:px-4 md:py-3">{bond.bond_offer.bond_id}</td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
                       <div className="max-w-[80px] md:max-w-none truncate">
