@@ -198,10 +198,9 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
             </div>
             <div 
               onClick={() => handleDateClick(date.id)}
-              className="w-full bg-transparent border border-gray-600 rounded px-2 py-1.5
-                        hover:border-yellow-500 cursor-pointer transition-colors duration-200"
+              className="relative w-full bg-transparent border border-gray-600 rounded px-2 py-1.5 cursor-pointer hover:border-yellow-500 transition-colors duration-200"
             >
-              <div className="text-sm">
+              <div className="text-sm text-center">
                 {new Date(date.time).toLocaleString()}
               </div>
               <input
@@ -209,7 +208,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
                 type="datetime-local"
                 value={date.time}
                 onChange={(e) => handleDateChange(date.id, e.target.value)}
-                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                className="absolute opacity-0 w-0 h-0"
               />
             </div>
             {index < dates.length - 1 && (
