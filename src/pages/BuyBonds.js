@@ -142,6 +142,15 @@ const BondTimeline = ({ bond }) => {
   );
 };
 
+const CountdownTimer = ({ date, renderer }) => {
+  return (
+    <Countdown 
+      date={date}
+      renderer={renderer}
+    />
+  );
+};
+
 const BuyBonds = () => {
   const { bondId } = useParams();
   const navigate = useNavigate();
@@ -1162,15 +1171,27 @@ const BuyBonds = () => {
           <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700 w-full">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-400">Price:</span>
-                <span className="text-lg font-bold">{bond?.price || 'N/A'}</span>
-                <div className="flex items-center">
-                  <span className="text-lg">{purchasingSymbol}</span>
-                  <img 
-                    src={getTokenImage(purchasingSymbol)} 
-                    alt={purchasingSymbol}
-                    className="w-5 h-5 ml-2 rounded-full"
+              <div className="flex flex-col items-end">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-400">Price:</span>
+                  <span className="text-lg font-bold">{bond?.price || 'N/A'}</span>
+                  <div className="flex items-center">
+                    <span className="text-lg">{purchasingSymbol}</span>
+                    <img 
+                      src={getTokenImage(purchasingSymbol)} 
+                      alt={purchasingSymbol}
+                      className="w-5 h-5 ml-2 rounded-full"
+                    />
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  <CountdownTimer
+                    date={new Date(Number(bond.purchase_end_time) / 1_000_000)}
+                    renderer={({ days, hours, minutes, seconds }) => (
+                      <span>
+                        Sale ends in: {days}d {hours}h {minutes}m {seconds}s
+                      </span>
+                    )}
                   />
                 </div>
               </div>
@@ -1242,10 +1263,10 @@ const BuyBonds = () => {
                           </span>
                         </span>
                         <div className="relative group ml-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          {/* <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
+                          </svg> */}
+                          {/* <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
                             bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
                             transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
                             <div className="mb-2">
@@ -1254,7 +1275,7 @@ const BuyBonds = () => {
                             <div>
                               <span className="text-green-400">Green (Discount)</span>: {bondSymbol} is selling at a discount
                             </div>
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     )}

@@ -19,7 +19,7 @@ const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const OPHIR_DECIMAL = BigInt(1000000);
 
-const CountdownTimer = ({ targetDate, label }) => {
+const CountdownTimer = ({ targetDate, label, onEnd, bondId }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -28,6 +28,9 @@ const CountdownTimer = ({ targetDate, label }) => {
       const difference = targetDate.getTime() - now;
 
       if (difference <= 0) {
+        if (onEnd) {
+          onEnd(bondId);
+        }
         return 'Ended';
       }
 
@@ -54,7 +57,7 @@ const CountdownTimer = ({ targetDate, label }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [targetDate]);
+  }, [targetDate, onEnd, bondId]);
 
   return (
     <div className="text-xs text-gray-400">
@@ -65,14 +68,14 @@ const CountdownTimer = ({ targetDate, label }) => {
 };
 
 const DiscountTooltip = ({ bondDenom }) => (
-  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
+  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 
     bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
     transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
     <div className="mb-2">
-      <span className="text-green-400">Green (Premium)</span>: {bondDenom} is selling at a premium
+      <span className="text-green-400">Discount</span>: Token is selling below market price
     </div>
     <div>
-      <span className="text-red-400">Red (Discount)</span>: {bondDenom} is selling at a discount
+      <span className="text-red-400">Premium</span>: Token is selling above market price
     </div>
   </div>
 );
@@ -102,6 +105,8 @@ const Bonds = () => {
   const [isLoadingUserBonds, setIsLoadingUserBonds] = useState(false);
   const maxRetries = 3;
   const [expandedBondGroups, setExpandedBondGroups] = useState(new Set());
+  const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
+  const [refreshingBonds, setRefreshingBonds] = useState({});
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -582,6 +587,8 @@ const Bonds = () => {
               <CountdownTimer 
                 targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time} 
                 label={status === 'Active' ? 'Ends in:' : undefined}
+                onEnd={() => refreshBond(bond.bond_id)}
+                bondId={bond.bond_id}
               />
             )}
           </div>
@@ -754,8 +761,11 @@ const Bonds = () => {
                 {sortConfig.key === 'start_time' ? 'Start Date' : 'Maturity Date'} {renderSortIcon('maturity_date')}
               </span>
             </th>
-            <th className="text-center py-2 w-1/6">
-              Discount
+            <th className="text-center py-2 w-1/6 relative group">
+              <span className="flex items-center justify-center">
+                Markup
+                <DiscountTooltip />
+              </span>
             </th>
             <th className="bond-table-right-border-radius w-12"></th>
           </tr>
@@ -816,6 +826,8 @@ const Bonds = () => {
                       <CountdownTimer 
                         targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time}
                         label={status === 'Active' ? 'Ends in:' : undefined}
+                        onEnd={() => refreshBond(bond.bond_id)}
+                        bondId={bond.bond_id}
                       />
                     )}
                   </div>
@@ -853,22 +865,19 @@ const Bonds = () => {
                     : formatDate(bond.maturity_date)
                   }
                 </td>
-                <td className="py-4 text-center relative group">
+                <td className="py-4 text-center">
                   {discount !== null ? (
-                    <div className="relative inline-block">
-                      <span className={`${
-                        discount < 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {Math.abs(discount).toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}%
-                        <span className="text-xs ml-1">
-                          {discount < 0 ? 'Discount' : 'Premium'}
-                        </span>
+                    <span className={`${
+                      discount < 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {Math.abs(discount).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}%
+                      <span className="text-xs ml-1">
+                        {discount < 0 ? 'Discount' : 'Premium'}
                       </span>
-                      <DiscountTooltip bondDenom={getTokenSymbol(bond.token_denom)} />
-                    </div>
+                    </span>
                   ) : (
                     <span className="text-gray-400">N/A</span>
                   )}
@@ -916,7 +925,6 @@ const Bonds = () => {
     event.stopPropagation();
     
     const claimKey = `${bondId}_${purchaseIndex}`;
-    const bondKey = `${bondId}_${nftTokenId}`;
     
     try {
       setClaimingStates(prev => ({ ...prev, [claimKey]: true }));
@@ -929,6 +937,23 @@ const Bonds = () => {
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
       
+      // Query the bond's NFT contract address first
+      const bondQuery = { 
+        get_bond_offer: { 
+          bond_id: parseInt(bondId) 
+        } 
+      };
+      const bondData = await queryContract(bondQuery);
+      const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
+
+      // Find the user bond to get the contract address as fallback
+      const userBond = userBonds.find(b => b.bond_id === bondId && b.nft_token_id === nftTokenId);
+      const contractAddr = nftContractAddr || userBond?.contract_address;
+
+      if (!contractAddr) {
+        throw new Error("Could not find NFT contract address for this bond");
+      }
+
       const claimMsg = {
         claim_rewards: {
           bond_id: parseInt(bondId),
@@ -953,32 +978,11 @@ const Bonds = () => {
         // Set the last claimed bondId
         lastClaimedBondIdRef.current = bondId;
 
-        // Find the contract address for this bond
-        const userBond = userBonds.find(b => b.bond_id === bondId && b.nft_token_id === nftTokenId);
-        if (userBond) {
-          // Delete just this NFT's cache entry
-          nftInfoCache.delete(userBond.contract_address, nftTokenId);
-          
-          // The next time this NFT is queried, it will fetch fresh data
-          await fetchUserBonds();
-        }
-
-        // Immediately mark this bond as claimed
-        setClaimedBonds(prev => new Set([...prev, bondKey]));
+        // Invalidate the NFT cache with the found contract address
+        nftInfoCache.delete(contractAddr, nftTokenId);
         
-        // Update the user bond status
-        setUserBonds(prevBonds => 
-          prevBonds.map(bond => {
-            if (bond.bond_id === bondId && bond.nft_token_id === nftTokenId) {
-              return {
-                ...bond,
-                status: "Claimed",
-                claimed_amount: bond.amount
-              };
-            }
-            return bond;
-          })
-        );
+        // The next time this NFT is queried, it will fetch fresh data
+        await fetchUserBonds();
 
         const baseTxnUrl = isTestnet
           ? "https://ping.pfc.zone/narwhal-testnet/tx"
@@ -1021,7 +1025,7 @@ const Bonds = () => {
     const claimedAmount = parseInt(userBond.claimed_amount || "0");
     
     // Check if claimed_amount exists and is less than amount
-    const hasUnclaimedAmount = (claimedAmount - totalAmount) < 0;
+    const hasUnclaimedAmount = (totalAmount - claimedAmount) > 0;
     console.log('Claim check:', {
       bondId: userBond.bond_id,
       totalAmount,
@@ -1035,7 +1039,7 @@ const Bonds = () => {
     const claimStartDate = convertContractTimeToDate(bond.claim_start_time);
     const isAfterClaimStart = now >= claimStartDate;
 
-    return hasUnclaimedAmount && isAfterClaimStart && userBond.status !== "Claimed";
+    return hasUnclaimedAmount && isAfterClaimStart;
   };
 
   const canClaim = (bond) => {
@@ -1058,16 +1062,64 @@ const Bonds = () => {
     });
   };
 
+  const handleRefreshBondGroup = async (bondId, purchases, event) => {
+    event.stopPropagation();
+    
+    try {
+      setRefreshingBonds(prev => ({ ...prev, [bondId]: true }));
+      
+      // Query the bond's NFT contract address
+      const bondQuery = { 
+        get_bond_offer: { 
+          bond_id: parseInt(bondId) 
+        } 
+      };
+      const bondData = await queryContract(bondQuery);
+      const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
+
+      if (!nftContractAddr) {
+        // If we can't get the contract address from the bond offer,
+        // try using the contract address from the first purchase
+        const firstPurchase = purchases[0];
+        if (firstPurchase?.contract_address) {
+          console.log('Using contract address from purchase:', firstPurchase.contract_address);
+          // Invalidate cache for all NFTs using the contract address from the purchase
+          for (const purchase of purchases) {
+            nftInfoCache.delete(firstPurchase.contract_address, purchase.nft_token_id);
+          }
+        } else {
+          throw new Error("Could not find NFT contract address for this bond");
+        }
+      } else {
+        // Use the contract address from the bond offer
+        console.log('Using contract address from bond offer:', nftContractAddr);
+        // Invalidate cache for all NFTs
+        for (const purchase of purchases) {
+          nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
+        }
+      }
+
+      // Refresh the data
+      await fetchUserBonds();
+      
+      showAlert("Bond data refreshed successfully!", "success");
+    } catch (error) {
+      console.error("Error refreshing bond data:", error);
+      showAlert("Failed to refresh bond data", "error");
+    } finally {
+      setRefreshingBonds(prev => ({ ...prev, [bondId]: false }));
+    }
+  };
+
   const UserBondsSection = () => {
-    const [expandedGroups, setExpandedGroups] = useState(new Set());
+    const [activeBondId, setActiveBondId] = useState(null);
     const prevUserBondsRef = useRef(userBonds);
 
     useEffect(() => {
-      if (lastClaimedBondIdRef.current) {
-        setExpandedGroups(prev => new Set([...prev, lastClaimedBondIdRef.current]));
-        lastClaimedBondIdRef.current = null;
+      if (activeBondId) {
+        setExpandedBondGroups(prev => new Set([...prev, activeBondId]));
       }
-    }, [userBonds]);
+    }, [userBonds, activeBondId]);
 
     if (!connectedWalletAddress || userBonds.length === 0) return null;
 
@@ -1168,10 +1220,29 @@ const Bonds = () => {
                         </div>
                       )}
                     </div>
-                    <ChevronUpIcon 
-                      className={`w-5 h-5 transition-transform duration-300 
-                        ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
-                    />
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={(e) => handleRefreshBondGroup(bondId, purchases, e)}
+                        disabled={refreshingBonds[bondId]}
+                        className="p-2 rounded-md border border-gray-600 hover:border-gray-500
+                          transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh bond data"
+                      >
+                        {refreshingBonds[bondId] ? (
+                          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                            />
+                          </svg>
+                        )}
+                      </button>
+                      <ChevronUpIcon 
+                        className={`w-5 h-5 transition-transform duration-300 
+                          ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
+                      />
+                    </div>
                   </div>
                   
                   {expandedBondGroups.has(bondId) && (
@@ -1181,14 +1252,8 @@ const Bonds = () => {
                         {purchases
                           .sort((a, b) => {
                             const bond = bonds.find(b => b.bond_id === a.bond_id);
-                            const isClaimableA = canClaim(bond) && 
-                              a.status !== "Claimed" && 
-                              (!a.claimed_amount || 
-                                (parseInt(a.claimed_amount) - parseInt(a.amount)) >= 0);
-                            const isClaimableB = canClaim(bond) && 
-                              b.status !== "Claimed" && 
-                              (!b.claimed_amount || 
-                                (parseInt(b.claimed_amount) - parseInt(b.amount)) >= 0);
+                            const isClaimableA = isClaimable(bond, a);
+                            const isClaimableB = isClaimable(bond, b);
                             
                             // Sort by claimable status first
                             if (isClaimableA && !isClaimableB) return -1;
@@ -1205,13 +1270,11 @@ const Bonds = () => {
                           })
                           .map((purchase, index) => {
                             const claimKey = `${purchase.bond_id}_${index}`;
-                            const bondKey = `${purchase.bond_id}_${purchase.nft_token_id}`;
                             const isClaimingThis = claimingStates[claimKey];
                             const bond = bonds.find(b => b.bond_id === purchase.bond_id);
                             const isClaimed = purchase.status === "Claimed" || 
-                              claimedBonds.has(bondKey) ||
                               (purchase.claimed_amount && 
-                                (parseInt(purchase.claimed_amount) - parseInt(purchase.amount)) >= 0);
+                                parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
                             const claimStartDate = convertContractTimeToDate(bond?.claim_start_time);
                             const now = new Date();
                             const canClaimNow = now >= claimStartDate;
@@ -1225,13 +1288,6 @@ const Bonds = () => {
                                   cursor-pointer flex flex-col relative
                                   ${isClaimed ? 'opacity-75' : ''}
                                   ${isClaimable ? 'shadow-[0_0_15px_-3px_rgba(34,197,94,0.3)]' : ''}`}
-                                onClick={(e) => {
-                                  if (e.target.tagName === 'BUTTON') {
-                                    e.stopPropagation();
-                                    return;
-                                  }
-                                  handleBondClick(purchase.bond_id);
-                                }}
                               >
                                 {isClaimable && (
                                   <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 
@@ -1240,26 +1296,37 @@ const Bonds = () => {
                                 )}
                                 <div className="flex justify-between items-start mb-3">
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-medium">Purchase #{index + 1}</span>
+                                    <span className="text-sm font-medium">NFT #{purchase.nft_token_id}</span>
                                   </div>
                                   <div className={`px-3 py-1 rounded-full text-xs ${
-                                    purchase.status === "Claimed" ? 'bg-gray-500/20 text-gray-400' : 'bg-green-500/20 text-green-400'
+                                    isClaimed ? 'bg-gray-500/20 text-gray-400' : 
+                                    isClaimable ? 'bg-green-500/20 text-green-400' :
+                                    'bg-yellow-500/20 text-yellow-400'
                                   }`}>
-                                    {purchase.status}
+                                    {isClaimed ? 'Claimed' : 
+                                     isClaimable ? 'Ready to Claim' : 
+                                     'Pending'}
                                   </div>
                                 </div>
                                 
                                 <div className="space-y-3">
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-400">Amount:</span>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
-                                      {bond?.backing_denom && (
-                                        <img
-                                          src={getTokenImage(bond.backing_denom)}
-                                          alt={bond.backing_denom}
-                                          className="w-5 h-5 rounded-full"
-                                        />
+                                    <div className="flex flex-col items-end">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
+                                        {bond?.backing_denom && (
+                                          <img
+                                            src={getTokenImage(bond.backing_denom)}
+                                            alt={bond.backing_denom}
+                                            className="w-5 h-5 rounded-full"
+                                          />
+                                        )}
+                                      </div>
+                                      {purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0 && (
+                                        <span className="text-sm text-gray-400">
+                                          Claimed: {formatAmount(purchase.claimed_amount)} / {formatAmount(purchase.amount)}
+                                        </span>
                                       )}
                                     </div>
                                   </div>
@@ -1274,7 +1341,7 @@ const Bonds = () => {
                                   <div className="mt-4">
                                     <button
                                       onClick={(e) => handleClaim(purchase.bond_id, purchase.nft_token_id, index, e)}
-                                      disabled={isClaimingThis || !canClaimNow || isClaimed}
+                                      disabled={isClaimingThis || !canClaimNow}
                                       className="w-full landing-button px-4 py-2 rounded-md 
                                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
                                         hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
@@ -1284,10 +1351,8 @@ const Bonds = () => {
                                           <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
                                           <span>Claiming...</span>
                                         </div>
-                                      ) : isClaimed ? (
-                                        'Claimed'
                                       ) : canClaimNow ? (
-                                        'Claim'
+                                        purchase.claimed_amount ? 'Claim' : 'Claim'
                                       ) : (
                                         `Claim available on ${formatDate(claimStartDate)}`
                                       )}
@@ -1366,6 +1431,48 @@ const Bonds = () => {
         </div>
       </div>
     );
+  };
+
+  // Add this effect to handle the initial status filter
+  useEffect(() => {
+    if (!hasSetInitialFilter && !isLoading && bonds.length > 0) {
+      const hasActiveBonds = bonds.some(bond => getBondStatus(bond) === 'Active');
+      if (!hasActiveBonds) {
+        setStatusFilter('all');
+      }
+      setHasSetInitialFilter(true);
+    }
+  }, [bonds, isLoading, hasSetInitialFilter]);
+
+  // Add this function to refresh a specific bond
+  const refreshBond = async (bondId) => {
+    try {
+      console.log('🔄 Refreshing bond data for bond:', bondId);
+      const message = { 
+        get_bond_offer: {
+          bond_id: parseInt(bondId)
+        }
+      };
+      const data = await queryContract(message);
+      
+      if (data && data.bond_offer) {
+        setBonds(prevBonds => {
+          return prevBonds.map(bond => {
+            if (bond.bond_id === bondId) {
+              return {
+                ...data.bond_offer,
+                start_time: convertContractTimeToDate(data.bond_offer.purchase_start_time),
+                end_time: convertContractTimeToDate(data.bond_offer.purchase_end_time),
+                maturity_date: convertContractTimeToDate(data.bond_offer.maturity_date)
+              };
+            }
+            return bond;
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing bond:", error);
+    }
   };
 
   return (

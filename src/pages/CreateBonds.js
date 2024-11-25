@@ -93,63 +93,94 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
   };
 
   const handleDateClick = (id) => {
-    // Trigger the datetime picker when the div is clicked
     inputRefs[id].current?.showPicker();
   };
 
   const handleDateChange = (dateType, newDateTime) => {
-    const date = new Date(newDateTime).toLocaleDateString('en-CA');
-    const time = new Date(newDateTime).toLocaleTimeString('en-US', { 
+    const date = new Date(newDateTime);
+    
+    // Format date and time according to the required format
+    const formattedDate = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+    const formattedTime = date.toLocaleTimeString('en-US', { 
       hour12: false,
       hour: '2-digit',
       minute: '2-digit'
     });
 
+    // Update the form data based on the date type
+    const updates = {
+      start: {
+        start_time: formattedDate,
+        start_time_hour: formattedTime
+      },
+      end: {
+        end_time: formattedDate,
+        end_time_hour: formattedTime
+      },
+      claim_start: {
+        claim_start_date: formattedDate,
+        claim_start_hour: formattedTime
+      },
+      maturity: {
+        maturity_date: formattedDate,
+        maturity_date_hour: formattedTime
+      }
+    };
+
     setFormData(prev => ({
       ...prev,
-      [`${dateType}_time`]: date,
-      [`${dateType}_hour`]: time,
+      ...updates[dateType]
     }));
   };
 
-  // Helper function to format datetime for input value
-  const formatDateTimeForInput = (dateTime) => {
-    const [date, time] = dateTime.split('T');
-    return `${date}T${time}`;
+  const getDateTime = (dateType) => {
+    const dateTimeMap = {
+      start: `${formData.start_time}T${formData.start_time_hour}`,
+      end: `${formData.end_time}T${formData.end_time_hour}`,
+      claim_start: formData.claim_start_date && formData.claim_start_hour ? 
+        `${formData.claim_start_date}T${formData.claim_start_hour}` :
+        `${formData.end_time}T${formData.end_time_hour}`,
+      maturity: `${formData.maturity_date}T${formData.maturity_date_hour}`
+    };
+
+    return dateTimeMap[dateType] || '';
   };
 
   const dates = [
     {
       id: 'start',
-      time: `${formData.start_time}T${formData.start_time_hour}`,
+      time: getDateTime('start'),
       label: 'Purchase Start',
       color: 'grey',
       editable: true
     },
     {
       id: 'end',
-      time: `${formData.end_time}T${formData.end_time_hour}`,
+      time: getDateTime('end'),
       label: 'Purchase End',
       color: 'grey',
       editable: true
     },
     ...(bondType === 'vested' ? [{
       id: 'claim_start',
-      time: formData.claim_start_date && formData.claim_start_hour ? 
-        `${formData.claim_start_date}T${formData.claim_start_hour}` :
-        `${formData.end_time}T${formData.end_time_hour}`,
+      time: getDateTime('claim_start'),
       label: 'Claim Start',
       color: 'grey',
       editable: true
     }] : []),
     {
       id: 'maturity',
-      time: `${formData.maturity_date}T${formData.maturity_date_hour}`,
+      time: getDateTime('maturity'),
       label: bondType === 'cliff' ? 'Maturity & Claim Start' : 'Maturity',
       color: 'grey',
       editable: true
     }
   ].sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  // Add console logs to debug
+  React.useEffect(() => {
+    console.log('Current formData:', formData);
+  }, [formData]);
 
   return (
     <div className="bg-gray-800/50 rounded-lg p-4 md:p-6">
@@ -176,7 +207,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
               <input
                 ref={inputRefs[date.id]}
                 type="datetime-local"
-                value={formatDateTimeForInput(date.time)}
+                value={date.time}
                 onChange={(e) => handleDateChange(date.id, e.target.value)}
                 className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
               />
@@ -213,7 +244,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
                   <input
                     ref={inputRefs[date.id]}
                     type="datetime-local"
-                    value={formatDateTimeForInput(date.time)}
+                    value={date.time}
                     onChange={(e) => handleDateChange(date.id, e.target.value)}
                     className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                   />
