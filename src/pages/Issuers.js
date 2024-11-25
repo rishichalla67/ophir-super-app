@@ -8,12 +8,20 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
 import { tokenMappings } from '../utils/tokenMappings';
 import { tokenImages } from '../utils/tokenImages';
+import { Dialog } from '@headlessui/react';
+import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
+import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
 
 const Issuers = () => {
   const { isSidebarOpen } = useSidebar();
   const [isLoading, setIsLoading] = useState(true);
   const [bonds, setBonds] = useState([]);
   const { connectedWalletAddress } = useWallet();
+  const [isWithdrawLoading, setIsWithdrawLoading] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedBond, setSelectedBond] = useState(null);
+  const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
 
   useEffect(() => {
     fetchBonds();
@@ -80,6 +88,137 @@ const Issuers = () => {
     if (!amount) return '0';
     const decimals = tokenMappings[denom]?.decimals || 6;
     return (parseInt(amount) / Math.pow(10, decimals)).toLocaleString();
+  };
+
+  const getSigner = async () => {
+    if (window.keplr?.experimentalSuggestChain) {
+      await window.keplr?.experimentalSuggestChain({
+        chainId: "narwhal-2",
+        chainName: "Migaloo Testnet",
+        rpc: "https://migaloo-testnet-rpc.polkachu.com:443",
+        rest: "https://migaloo-testnet-api.polkachu.com",
+        bip44: { coinType: 118 },
+        bech32Config: {
+          bech32PrefixAccAddr: "migaloo",
+          bech32PrefixAccPub: "migaloopub",
+          bech32PrefixValAddr: "migaloovaloper",
+          bech32PrefixValPub: "migaloovaloperpub",
+          bech32PrefixConsAddr: "migaloovalcons",
+          bech32PrefixConsPub: "migaloovalconspub",
+        },
+        currencies: [{ coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 }],
+        feeCurrencies: [{ coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 }],
+        stakeCurrency: { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
+        gasPriceStep: { low: 0.2, average: 0.45, high: 0.75 },
+      });
+    }
+  
+    await window.keplr?.enable("narwhal-2");
+    const offlineSigner = window.keplr?.getOfflineSigner("narwhal-2");
+    return offlineSigner;
+  };
+
+  const handleWithdraw = async (bond) => {
+    setSelectedBond(bond);
+    setShowWithdrawModal(true);
+  };
+
+  const showAlert = (message, severity = "info", htmlContent = null) => {
+    setAlertInfo({ open: true, message, severity, htmlContent });
+  };
+
+  const handleWithdrawConfirm = async () => {
+    setIsWithdrawLoading(true);
+    try {
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(
+        "https://migaloo-testnet-rpc.polkachu.com:443",
+        signer
+      );
+      
+      const withdrawMsg = {
+        withdraw: {
+          bond_id: parseInt(selectedBond.bond_offer.bond_id)
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
+        connectedWalletAddress,
+        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        withdrawMsg,
+        fee,
+        `Withdraw Bond: ${selectedBond.bond_offer.bond_id}`
+      );
+
+      // Refresh bonds data
+      await fetchBonds();
+      setShowWithdrawModal(false);
+
+      // Show success message with transaction link
+      if (result.transactionHash) {
+        const txnUrl = `https://ping.pfc.zone/narwhal-testnet/tx/${result.transactionHash}`;
+        showAlert(
+          "Successfully withdrew bond tokens!",
+          "success",
+          `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
+        );
+      }
+    } catch (error) {
+      console.error("Error withdrawing:", error);
+      showAlert(`Error withdrawing: ${error.message}`, "error");
+    } finally {
+      setIsWithdrawLoading(false);
+    }
+  };
+
+  const renderStatusCell = (bond) => {
+    const now = new Date();
+    const startTime = new Date(parseInt(bond.bond_offer.purchase_start_time) / 1_000_000);
+    const endTime = new Date(parseInt(bond.bond_offer.purchase_end_time) / 1_000_000);
+    const maturityDate = new Date(parseInt(bond.bond_offer.maturity_date) / 1_000_000);
+    const isSoldOut = parseInt(bond.bond_offer.remaining_supply) === 0;
+    const isMatured = now > maturityDate;
+    const hasRemainingSupply = parseInt(bond.bond_offer.remaining_supply) > 0;
+    
+    let status = 'Inactive';
+    if (now >= startTime && now <= endTime && !bond.bond_offer.closed) {
+      status = 'Active';
+    } else if (now < startTime) {
+      status = 'Upcoming';
+    } else if (isSoldOut) {
+      status = 'Sold Out';
+    } else if (isMatured) {
+      status = 'Matured';
+    }
+
+    const canWithdraw = isMatured && hasRemainingSupply && !bond.bond_offer.closed;
+
+    return (
+      <div className="flex items-center gap-2">
+        <span className={`px-1 py-0.5 md:px-2 md:py-1 rounded-full text-[10px] md:text-xs ${
+          status === 'Active' ? 'bg-green-500/20 text-green-400' :
+          status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
+          status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
+          status === 'Matured' ? 'bg-yellow-500/20 text-yellow-400' :
+          'bg-gray-500/20 text-gray-400'
+        }`}>
+          {status}
+        </span>
+        {canWithdraw && (
+          <button
+            onClick={() => handleWithdraw(bond)}
+            className="px-2 py-1 bg-yellow-500 hover:bg-yellow-400 text-black rounded-md text-xs transition-colors"
+          >
+            Withdraw
+          </button>
+        )}
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -235,14 +374,7 @@ const Issuers = () => {
                       </div>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
-                      <span className={`px-1 py-0.5 md:px-2 md:py-1 rounded-full text-[10px] md:text-xs ${
-                        status === 'Active' ? 'bg-green-500/20 text-green-400' :
-                        status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
-                        status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {status}
-                      </span>
+                      {renderStatusCell(bond)}
                     </td>
                   </tr>
                 );
@@ -257,6 +389,91 @@ const Issuers = () => {
           </div>
         )}
       </div>
+
+      {/* Add Withdraw Modal */}
+      <Dialog
+        open={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+        
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="bg-gray-800 rounded-lg p-6 max-w-sm w-full border border-gray-700">
+            <Dialog.Title className="text-xl font-bold text-yellow-300 mb-4">
+              Confirm Withdrawal
+            </Dialog.Title>
+            
+            {selectedBond && (
+              <div className="space-y-4">
+                <div className="bg-gray-900/50 p-3 rounded-lg">
+                  <p className="text-gray-400 text-sm">You will withdraw:</p>
+                  <p className="text-lg font-bold">
+                    {formatTokenAmount(selectedBond.bond_offer.remaining_supply, selectedBond.bond_offer.token_denom)}{' '}
+                    {tokenMappings[selectedBond.bond_offer.token_denom]?.symbol?.toUpperCase() || 'OPHIR'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowWithdrawModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWithdrawConfirm}
+                disabled={isWithdrawLoading}
+                className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isWithdrawLoading ? (
+                  <div className="flex items-center justify-center">
+                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Withdrawing...
+                  </div>
+                ) : (
+                  'Confirm Withdrawal'
+                )}
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      <Snackbar
+        open={alertInfo.open}
+        autoHideDuration={6000}
+        onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ 
+          top: '24px',
+          width: '90%',
+          maxWidth: '600px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}
+      >
+        <Alert 
+          onClose={() => setAlertInfo({ ...alertInfo, open: false })} 
+          severity={alertInfo.severity}
+          sx={{
+            width: '100%',
+            '& .MuiAlert-message': {
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              wordBreak: 'break-word'
+            }
+          }}
+        >
+          {alertInfo.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

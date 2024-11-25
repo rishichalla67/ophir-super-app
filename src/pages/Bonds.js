@@ -1390,7 +1390,7 @@ const Bonds = () => {
                   </div>
                   
                   {expandedBondGroups.has(bondId) && (
-                    <div className="p-4 pt-0">
+                    <div className="p-4 pt-0" onClick={() => handleBondClick(bond.bond_id)}>
                       {claimableCount > 0 && (
                         <div className="mb-4">
                           <button
