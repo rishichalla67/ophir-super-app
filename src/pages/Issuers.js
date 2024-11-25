@@ -256,30 +256,34 @@ const Issuers = () => {
       status = 'Upcoming';
     } else if (isSoldOut) {
       status = 'Sold Out';
-    } else if (isMatured) {
-      status = 'Matured';
+    } else if (bond.bond_offer.closed) {
+      status = 'Withdrawn';
     }
 
     const canWithdraw = isMatured && hasRemainingSupply && !bond.bond_offer.closed;
 
     return (
       <div className="flex items-center gap-2">
-        <span className={`px-1 py-0.5 md:px-2 md:py-1 rounded-full text-[10px] md:text-xs ${
-          status === 'Active' ? 'bg-green-500/20 text-green-400' :
-          status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
-          status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
-          status === 'Matured' ? 'bg-yellow-500/20 text-yellow-400' :
-          'bg-gray-500/20 text-gray-400'
-        }`}>
-          {status}
-        </span>
-        {canWithdraw && (
+        {canWithdraw ? (
           <button
-            onClick={() => handleWithdraw(bond)}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent row click when clicking button
+              handleWithdraw(bond);
+            }}
             className="px-2 py-1 bg-yellow-500 hover:bg-yellow-400 text-black rounded-md text-xs transition-colors"
           >
             Withdraw
           </button>
+        ) : (
+          <span className={`px-1 py-0.5 md:px-2 md:py-1 rounded-full text-[10px] md:text-xs ${
+            status === 'Active' ? 'bg-green-500/20 text-green-400' :
+            status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
+            status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
+            status === 'Withdrawn' ? 'bg-yellow-500/20 text-yellow-400' :
+            'bg-gray-500/20 text-gray-400'
+          }`}>
+            {status}
+          </span>
         )}
       </div>
     );
@@ -380,10 +384,10 @@ const Issuers = () => {
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">ID</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Name</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Amount</th>
-                <th className="px-1 py-2 md:px-4 md:py-3 text-left">Price</th>
+                <th className="hidden sm:table-cell px-1 py-2 md:px-4 md:py-3 text-left">Price</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Progress</th>
-                <th className="px-1 py-2 md:px-4 md:py-3 text-left">Funds Received</th>
-                <th className="px-1 py-2 md:px-4 md:py-3 text-left">Fees Paid</th>
+                <th className="hidden sm:table-cell px-1 py-2 md:px-4 md:py-3 text-left">Funds Received</th>
+                <th className="hidden md:table-cell px-1 py-2 md:px-4 md:py-3 text-left">Fees Paid</th>
                 <th className="px-1 py-2 md:px-4 md:py-3 text-left">Status</th>
               </tr>
             </thead>
@@ -421,10 +425,8 @@ const Issuers = () => {
                       </div>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
-                      <span className="whitespace-nowrap flex items-center justify-end gap-1">
-                        <span className="text-right">
-                          {formatTokenAmount(bond.bond_offer.total_amount, bond.bond_offer.token_denom)}
-                        </span>
+                      <span className="whitespace-nowrap flex items-center gap-1">
+                        {formatTokenAmount(bond.bond_offer.total_amount, bond.bond_offer.token_denom)}
                         <img 
                           src={tokenImages[tokenMappings[bond.bond_offer.token_denom]?.symbol?.toLowerCase()]} 
                           alt=""
@@ -432,7 +434,7 @@ const Issuers = () => {
                         />
                       </span>
                     </td>
-                    <td className="px-1 py-2 md:px-4 md:py-3">
+                    <td className="hidden sm:table-cell px-1 py-2 md:px-4 md:py-3">
                       <span className="whitespace-nowrap flex items-center gap-1">
                         {parseFloat(bond.bond_offer.price).toFixed(3)}
                         <img 
@@ -440,7 +442,6 @@ const Issuers = () => {
                           alt=""
                           className="w-4 h-4 md:w-5 md:h-5 inline-block"
                         />
-                        {/* {tokenMappings[bond.bond_offer.purchase_denom]?.symbol?.toUpperCase() || 'WHALE'} */}
                       </span>
                     </td>
                     <td className="px-1 py-2 md:px-4 md:py-3">
@@ -457,19 +458,9 @@ const Issuers = () => {
                             })}
                           />
                         </div>
-                        <div className="text-[10px] md:text-sm">
-                          <span className="text-gray-400 block text-[8px] md:text-xs">
-                            {formatTokenAmount(
-                              parseInt(bond.bond_offer.total_amount) - parseInt(bond.bond_offer.remaining_supply),
-                              bond.bond_offer.token_denom
-                            )}/
-                            {formatTokenAmount(bond.bond_offer.total_amount, bond.bond_offer.token_denom)} {' '}
-                            {tokenMappings[bond.bond_offer.token_denom]?.symbol?.toUpperCase() || 'OPHIR'}
-                          </span>
-                        </div>
                       </div>
                     </td>
-                    <td className="px-1 py-2 md:px-4 md:py-3">
+                    <td className="hidden sm:table-cell px-1 py-2 md:px-4 md:py-3">
                       {(() => {
                         const { fundsReceived } = calculateBondFinancials(bond);
                         return (
@@ -484,7 +475,7 @@ const Issuers = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-1 py-2 md:px-4 md:py-3">
+                    <td className="hidden md:table-cell px-1 py-2 md:px-4 md:py-3">
                       {(() => {
                         const { feesPaid } = calculateBondFinancials(bond);
                         return (

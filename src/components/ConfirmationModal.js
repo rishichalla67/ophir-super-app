@@ -130,6 +130,10 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
                     <span className="text-right max-w-[60%] break-words">{formData.nft_metadata.token_uri}</span>
                   </div>
                 )}
+                {formData.nft_metadata.image && <div className="flex justify-between">
+                  <span>Image URL</span>
+                  <span className="text-right max-w-[60%] break-words">{formData.nft_metadata.image}</span>
+                </div>}
               </div>
             )}
           </div>

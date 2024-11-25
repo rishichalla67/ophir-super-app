@@ -168,18 +168,46 @@ const Bonds = () => {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const message = { get_all_bond_offers: {} };
-      const data = await queryContract(message);
-      
-      if (data && Array.isArray(data.bond_offers)) {
+      let allBonds = [];
+      let startAfter = null;
+      const limit = 10;
+      let hasMore = true;
+
+      while (hasMore) {
+        const message = {
+          get_all_bond_offers: {
+            limit: limit,
+            ...(startAfter && { start_after: startAfter.toString() })  // Convert to string
+          }
+        };
+
+        const data = await queryContract(message);
+        
+        if (!data?.bond_offers || data.bond_offers.length === 0) {
+          break;
+        }
+
         const transformedBonds = data.bond_offers.map(offer => ({
           ...offer.bond_offer,
           start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
           end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
           maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
         }));
-        setBonds(transformedBonds);
+
+        allBonds = [...allBonds, ...transformedBonds];
+
+        // If we got less than the limit, we've reached the end
+        if (data.bond_offers.length < limit) {
+          hasMore = false;
+        } else {
+          // Convert the bond_id to string for the next query
+          startAfter = data.bond_offers[data.bond_offers.length - 1].bond_offer.bond_id.toString();
+        }
       }
+
+      console.log(`📦 Fetched total of ${allBonds.length} bonds`);
+      setBonds(allBonds);
+
     } catch (error) {
       console.error("Error fetching bonds:", error);
       showAlert("Failed to fetch bonds. Please try again later.", "error");
@@ -720,7 +748,7 @@ const Bonds = () => {
         showAlert(
           `Bond withdrawn successfully!`,
           "success",
-          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
         );
         
         // Refresh data
@@ -990,7 +1018,7 @@ const Bonds = () => {
         showAlert(
           `Rewards claimed successfully!`,
           "success",
-          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
         );
         
         // Refresh data after a short delay
@@ -1197,7 +1225,7 @@ const Bonds = () => {
         showAlert(
           `Successfully claimed rewards for ${claimablePurchases.length} bonds!`,
           "success",
-          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+          `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
         );
         
         // Refresh data after a short delay
@@ -1232,6 +1260,7 @@ const Bonds = () => {
       const bondName = bond?.bond_name || `Bond #${purchase.bond_id}`;
       
       if (!acc[purchase.bond_id]) {
+        // Initialize with token image as default
         acc[purchase.bond_id] = {
           bondName,
           bondImage: bond?.backing_denom ? getTokenImage(bond.backing_denom) : null,
@@ -1239,8 +1268,23 @@ const Bonds = () => {
           hasClaimable: false,
           claimableCount: 0,
           totalPurchases: 0,
-          claimedCount: 0
+          claimedCount: 0,
+          contract_address: purchase.contract_address,
+          first_token_id: purchase.nft_token_id
         };
+
+        // Try to get NFT image asynchronously
+        getNFTInfo(purchase.contract_address, purchase.nft_token_id)
+          .then(nftInfo => {
+            if (nftInfo?.extension?.image) {
+              acc[purchase.bond_id].bondImage = nftInfo.extension.image;
+              // Force a re-render
+              setBonds(prev => [...prev]);
+            }
+          })
+          .catch(error => {
+            console.warn('Failed to get NFT image:', error);
+          });
       }
       
       // Add debug logs
@@ -1328,7 +1372,18 @@ const Bonds = () => {
                     {/* Bond Name and Info */}
                     <div className="flex items-center space-x-3">
                       {bondImage && (
-                        <img src={bondImage} alt={bondName} className="w-8 h-8 rounded-full" />
+                        <img 
+                          src={bondImage} 
+                          alt={bondName} 
+                          className="w-8 h-8 rounded-full object-cover"
+                          onError={(e) => {
+                            // Fallback to token image if NFT image fails to load
+                            const bond = bonds.find(b => b.bond_id === parseInt(bondId));
+                            if (bond?.backing_denom) {
+                              e.target.src = getTokenImage(bond.backing_denom);
+                            }
+                          }}
+                        />
                       )}
                       <div>
                         <span className="font-medium">{bondName}</span>
@@ -1578,10 +1633,18 @@ const Bonds = () => {
           return;
         }
 
-        // Get all claimable purchases
+        // Get all claimable purchases with proper validation
         const claimablePurchases = userBonds.filter(purchase => {
           const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-          return isClaimable(bond, purchase);
+          const isValidPurchase = isClaimable(bond, purchase);
+          console.log(`Purchase ${purchase.nft_token_id} claimable status:`, {
+            bondId: purchase.bond_id,
+            isValidPurchase,
+            amount: purchase.amount,
+            claimedAmount: purchase.claimed_amount,
+            status: purchase.status
+          });
+          return isValidPurchase;
         });
 
         if (claimablePurchases.length === 0) {
@@ -1596,7 +1659,7 @@ const Bonds = () => {
           isActive: true
         });
 
-        // Create array of instructions
+        // Create array of instructions with proper validation
         const instructions = claimablePurchases.map(purchase => ({
           contractAddress: contractAddress,
           msg: {
@@ -1610,13 +1673,20 @@ const Bonds = () => {
         const signer = await getSigner();
         const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
 
-        const gasPerMsg = 500000;
-        const totalGas = Math.min(2000000, gasPerMsg * instructions.length);
+        // Increase gas limit for multiple transactions
+        const gasPerMsg = 750000; // Increased from 500000
+        const totalGas = Math.min(3000000, gasPerMsg * instructions.length); // Increased from 2000000
 
         const fee = {
-          amount: [{ denom: "uwhale", amount: "50000" }],
+          amount: [{ denom: "uwhale", amount: "75000" }], // Increased from 50000
           gas: totalGas.toString(),
         };
+
+        console.log('Executing claim all with:', {
+          instructions: instructions.length,
+          totalGas,
+          fee
+        });
 
         const result = await client.executeMultiple(
           connectedWalletAddress,
@@ -1634,17 +1704,21 @@ const Bonds = () => {
 
           // Invalidate cache for all claimed NFTs
           for (const purchase of claimablePurchases) {
-            const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-            const bondQuery = { 
-              get_bond_offer: { 
-                bond_id: parseInt(purchase.bond_id) 
-              } 
-            };
-            const bondData = await queryContract(bondQuery);
-            const nftContractAddr = bondData?.bond_offer?.nft_contract_addr || purchase.contract_address;
-            
-            if (nftContractAddr) {
-              nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
+            try {
+              const bondQuery = { 
+                get_bond_offer: { 
+                  bond_id: parseInt(purchase.bond_id) 
+                } 
+              };
+              const bondData = await queryContract(bondQuery);
+              const nftContractAddr = bondData?.bond_offer?.nft_contract_addr || purchase.contract_address;
+              
+              if (nftContractAddr) {
+                console.log(`Invalidating cache for NFT ${purchase.nft_token_id}`);
+                nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
+              }
+            } catch (error) {
+              console.warn(`Failed to invalidate cache for NFT ${purchase.nft_token_id}:`, error);
             }
           }
 
@@ -1656,13 +1730,15 @@ const Bonds = () => {
           showAlert(
             `Successfully claimed all available rewards! (${claimablePurchases.length} bonds)`,
             "success",
-            `<a href="${txnUrl}" target="_blank">View Transaction</a>`
+            `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
           );
           
-          setTimeout(async () => {
-            await fetchData();
-            await fetchUserBonds();
-          }, 2000);
+          // Add delay before refreshing data
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Refresh data sequentially
+          await fetchData();
+          await fetchUserBonds();
         }
       } catch (error) {
         console.error("Error claiming all rewards:", error);

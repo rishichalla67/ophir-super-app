@@ -320,7 +320,7 @@ const CreateBonds = () => {
       nft_metadata: {
         name: "",
         symbol: "",
-        token_uri: ""
+        image: ""
       },
       claim_start_date: "",
       claim_start_hour: "",
@@ -504,6 +504,7 @@ const CreateBonds = () => {
           nft_metadata: {
             name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
             symbol: formData.nft_metadata.symbol || fullBondDenomName,
+            image: formData.nft_metadata.image || ""
           }
         },
       };
@@ -614,7 +615,7 @@ const CreateBonds = () => {
           nft_metadata: {
             name: "",
             symbol: "",
-            token_uri: ""
+            image: ""
           },
           claim_start_date: "",
           claim_start_hour: "",
@@ -1190,18 +1191,18 @@ const CreateBonds = () => {
 
             <div>
               <label className="block text-sm font-medium pb-2">
-                Token URI (Optional)
+                Image URL (Optional)
               </label>
               <input
                 type="text"
-                name="nft_metadata.token_uri"
-                value={formData.nft_metadata.token_uri}
+                name="nft_metadata.image"
+                value={formData.nft_metadata.image}
                 onChange={handleInputChange}
                 className="bond-create-text-container w-full px-3 py-2 rounded-md"
                 placeholder="https://example.com/metadata/1"
               />
               <p className="text-xs text-gray-500 mt-1">
-                External URI for additional NFT metadata (optional)
+                External URL for the NFT image (optional)
               </p>
             </div>
           </div>
