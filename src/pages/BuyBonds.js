@@ -942,7 +942,7 @@ const BuyBonds = () => {
     }
   };
 
-  // Add this new function for input validation
+  // Update this function to enforce 6 decimal places
   const handlePurchaseAmountChange = (e) => {
     const value = e.target.value;
     // Regex to allow only positive numbers with up to 6 decimal places

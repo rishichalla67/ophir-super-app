@@ -116,8 +116,21 @@ const Bonds = () => {
   };
 
   const convertContractTimeToDate = (contractTime) => {
-    // Convert from nanoseconds to milliseconds by dividing by 1_000_000
-    return new Date(parseInt(contractTime) / 1_000_000);
+    try {
+      // Ensure contractTime is treated as a string and handle both number and string inputs
+      const timeString = contractTime?.toString() || '0';
+      
+      // Check if the time is already in milliseconds (less than 13 digits)
+      if (timeString.length <= 13) {
+        return new Date(parseInt(timeString));
+      }
+      
+      // Otherwise, convert from nanoseconds to milliseconds
+      return new Date(parseInt(timeString) / 1_000_000);
+    } catch (error) {
+      console.error('Error converting contract time:', error, contractTime);
+      return new Date();
+    }
   };
 
   const getSigner = async () => {
@@ -177,7 +190,7 @@ const Bonds = () => {
         const message = {
           get_all_bond_offers: {
             limit: limit,
-            ...(startAfter && { start_after: startAfter.toString() })  // Convert to string
+            ...(startAfter && { start_after: startAfter.toString() })
           }
         };
 
@@ -187,25 +200,39 @@ const Bonds = () => {
           break;
         }
 
-        const transformedBonds = data.bond_offers.map(offer => ({
-          ...offer.bond_offer,
-          start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
-          end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
-          maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
-        }));
+        const transformedBonds = data.bond_offers.map(offer => {
+          // Add debug logging for date conversions
+          console.log('Raw date values:', {
+            start: offer.bond_offer.purchase_start_time,
+            end: offer.bond_offer.purchase_end_time,
+            maturity: offer.bond_offer.maturity_date
+          });
+
+          return {
+            ...offer.bond_offer,
+            start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
+            end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
+            maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
+          };
+        });
 
         allBonds = [...allBonds, ...transformedBonds];
 
-        // If we got less than the limit, we've reached the end
         if (data.bond_offers.length < limit) {
           hasMore = false;
         } else {
-          // Convert the bond_id to string for the next query
           startAfter = data.bond_offers[data.bond_offers.length - 1].bond_offer.bond_id.toString();
         }
       }
 
-      console.log(`📦 Fetched total of ${allBonds.length} bonds`);
+      console.log(`📦 Fetched total of ${allBonds.length} bonds with dates:`, 
+        allBonds.map(b => ({
+          id: b.bond_id,
+          start: b.start_time,
+          end: b.end_time,
+          maturity: b.maturity_date
+        }))
+      );
       setBonds(allBonds);
 
     } catch (error) {
@@ -583,9 +610,13 @@ const Bonds = () => {
     const bondImage = getTokenImage(bondSymbol);
     const purchasingImage = getTokenImage(purchasingSymbol);
     const isMatured = status === 'Matured';
-    
     const discount = calculateDiscount(bond);
     
+    // Get the correct date based on status
+    const displayDate = status === 'Upcoming' 
+      ? bond.start_time
+      : bond.maturity_date || bond.end_time; // Fallback to end_time if maturity_date is not set
+
     return (
       <div 
         className={`backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
@@ -661,10 +692,7 @@ const Bonds = () => {
               {status === 'Upcoming' ? 'Opens' : 'Maturity Date'}
             </span>
             <span className="font-medium">
-              {status === 'Upcoming' 
-                ? formatDate(bond.start_time)
-                : formatDate(bond.maturity_date)
-              }
+              {formatDate(displayDate)}
             </span>
           </div>
         </div>
@@ -815,6 +843,9 @@ const Bonds = () => {
             const isMatured = status === 'Matured';
             const discount = calculateDiscount(bond);
 
+            // Get the correct date based on status
+            const displayDate = bond?.maturity_date ;
+
             return (
               <tr 
                 key={bond.bond_id}
@@ -886,10 +917,7 @@ const Bonds = () => {
                   </div>
                 </td>
                 <td className="py-4 text-center">
-                  {status === 'Upcoming' 
-                    ? formatDate(bond.start_time)
-                    : formatDate(bond.maturity_date)
-                  }
+                  {formatDate(displayDate)}
                 </td>
                 <td className="py-4 text-center">
                   {discount !== null ? (

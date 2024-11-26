@@ -146,135 +146,158 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
     return dateTimeMap[dateType] || '';
   };
 
+  // Define fixed order for timeline items
   const dates = [
     {
       id: 'start',
       time: getDateTime('start'),
       label: 'Purchase Start',
       color: 'grey',
-      editable: true
+      editable: true,
+      order: 1
     },
     {
       id: 'end',
       time: getDateTime('end'),
       label: 'Purchase End',
       color: 'grey',
-      editable: true
+      editable: true,
+      order: 2
     },
     ...(bondType === 'vested' ? [{
       id: 'claim_start',
       time: getDateTime('claim_start'),
       label: 'Claim Start',
       color: 'grey',
-      editable: true
+      editable: true,
+      order: 3
     }] : []),
     {
       id: 'maturity',
       time: getDateTime('maturity'),
       label: bondType === 'cliff' ? 'Maturity & Claim Start' : 'Maturity',
       color: 'grey',
-      editable: true
+      editable: true,
+      order: 4
     }
-  ].sort((a, b) => new Date(a.time) - new Date(b.time));
+  ].sort((a, b) => a.order - b.order); // Sort by fixed order instead of dates
 
   // Add console logs to debug
   React.useEffect(() => {
     console.log('Current formData:', formData);
   }, [formData]);
 
+  const isDateInvalid = (dateType, dateTime) => {
+    const now = new Date();
+    const date = new Date(dateTime);
+    
+    // Basic past date validation
+    if (date <= now) return true;
+    
+    // Additional validation rules based on date type
+    switch (dateType) {
+      case 'end':
+        return date <= new Date(getDateTime('start'));
+      case 'maturity':
+        return date <= new Date(getDateTime('end'));
+      default:
+        return false;
+    }
+  };
+
+  // Modify the date display component to include validation
+  const DateDisplay = ({ date, isInvalid }) => (
+    <div 
+      onClick={() => handleDateClick(date.id)}
+      className={`relative bg-transparent border rounded px-3 py-1.5 cursor-pointer transition-colors duration-200
+        ${isInvalid 
+          ? 'border-red-500 text-red-400 hover:border-red-400' 
+          : 'border-gray-600 hover:border-yellow-500'}`}
+    >
+      <div className="text-sm whitespace-nowrap">
+        {new Date(date.time).toLocaleString()}
+      </div>
+      <input
+        ref={inputRefs[date.id]}
+        type="datetime-local"
+        value={date.time}
+        onChange={(e) => handleDateChange(date.id, e.target.value)}
+        className="absolute opacity-0 w-0 h-0"
+      />
+    </div>
+  );
+
   return (
     <div className="bg-gray-800/50 rounded-lg p-4 md:p-6">
       {/* Mobile View */}
       <div className="md:hidden space-y-4">
-        {dates.map((date, index) => (
-          <div 
-            key={date.id}
-            className="relative flex flex-col space-y-2 bg-gray-900/50 p-3 rounded-lg"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-yellow-500 font-medium">{date.label}</span>
-              {index === 0 && <span className="text-xs text-yellow-400">(Start)</span>}
-              {index === dates.length - 1 && <span className="text-xs text-yellow-400">(End)</span>}
-            </div>
+        {dates.map((date, index) => {
+          const isInvalid = isDateInvalid(date.id, date.time);
+          return (
             <div 
-              onClick={() => handleDateClick(date.id)}
-              className="relative w-full bg-transparent border border-gray-600 rounded px-2 py-1.5 cursor-pointer hover:border-yellow-500 transition-colors duration-200"
+              key={date.id}
+              className="relative flex flex-col space-y-2 bg-gray-900/50 p-3 rounded-lg"
             >
-              <div className="text-sm text-center">
-                {new Date(date.time).toLocaleString()}
+              <div className="flex items-center justify-between">
+                <span className={`font-medium ${isInvalid ? 'text-red-400' : 'text-yellow-500'}`}>
+                  {date.label}
+                </span>
+                {index === 0 && <span className="text-xs text-yellow-400">(Start)</span>}
+                {index === dates.length - 1 && <span className="text-xs text-yellow-400">(End)</span>}
               </div>
-              <input
-                ref={inputRefs[date.id]}
-                type="datetime-local"
-                value={date.time}
-                onChange={(e) => handleDateChange(date.id, e.target.value)}
-                className="absolute opacity-0 w-0 h-0"
-              />
+              <DateDisplay date={date} isInvalid={isInvalid} />
+              {index < dates.length - 1 && (
+                <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-0.5 h-4 bg-gray-600" />
+              )}
             </div>
-            {index < dates.length - 1 && (
-              <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-0.5 h-4 bg-gray-600" />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Desktop View */}
       <div className="hidden md:block">
         <Timeline position="alternate">
-          {dates.map((date, index) => (
-            <TimelineItem key={date.id}>
-              <TimelineOppositeContent 
-                color="white" 
-                sx={{ 
-                  flex: 0.5,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: index % 2 === 0 ? 'flex-end' : 'flex-start'
-                }}
-              >
-                <div 
-                  onClick={() => handleDateClick(date.id)}
-                  className="relative bg-transparent border border-gray-600 rounded px-3 py-1.5
-                            hover:border-yellow-500 transition-colors duration-200 inline-block"
-                >
-                  <div className="text-sm whitespace-nowrap">
-                    {new Date(date.time).toLocaleString()}
-                  </div>
-                  <input
-                    ref={inputRefs[date.id]}
-                    type="datetime-local"
-                    value={date.time}
-                    onChange={(e) => handleDateChange(date.id, e.target.value)}
-                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
-                  />
-                </div>
-              </TimelineOppositeContent>
-              <TimelineSeparator>
-                <TimelineDot 
-                  color={date.color}
-                  sx={{
+          {dates.map((date, index) => {
+            const isInvalid = isDateInvalid(date.id, date.time);
+            return (
+              <TimelineItem key={date.id}>
+                <TimelineOppositeContent 
+                  sx={{ 
+                    flex: 0.5,
                     cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: '#fbbf24',
-                    }
+                    display: 'flex',
+                    justifyContent: index % 2 === 0 ? 'flex-end' : 'flex-start'
                   }}
-                  onClick={() => handleDateClick(date.id)}
-                />
-                {index < dates.length - 1 && <TimelineConnector />}
-              </TimelineSeparator>
-              <TimelineContent sx={{ 
-                color: 'white',
-                flex: 0.5,
-                '&.MuiTimelineContent-root': {
-                  px: 2
-                }
-              }}>
-                {date.label}
-                {index === 0 && <div className="text-yellow-400 text-sm mt-1">(Start)</div>}
-                {index === dates.length - 1 && <div className="text-yellow-400 text-sm mt-1">(End)</div>}
-              </TimelineContent>
-            </TimelineItem>
-          ))}
+                >
+                  <DateDisplay date={date} isInvalid={isInvalid} />
+                </TimelineOppositeContent>
+                <TimelineSeparator>
+                  <TimelineDot 
+                    sx={{
+                      cursor: 'pointer',
+                      backgroundColor: isInvalid ? '#ef4444' : '#808080',
+                      '&:hover': {
+                        backgroundColor: isInvalid ? '#dc2626' : '#fbbf24',
+                      }
+                    }}
+                    onClick={() => handleDateClick(date.id)}
+                  />
+                  {index < dates.length - 1 && <TimelineConnector />}
+                </TimelineSeparator>
+                <TimelineContent sx={{ 
+                  color: isInvalid ? '#ef4444' : 'white',
+                  flex: 0.5,
+                  '&.MuiTimelineContent-root': {
+                    px: 2
+                  }
+                }}>
+                  {date.label}
+                  {index === 0 && <div className="text-yellow-400 text-sm mt-1">(Start)</div>}
+                  {index === dates.length - 1 && <div className="text-yellow-400 text-sm mt-1">(End)</div>}
+                </TimelineContent>
+              </TimelineItem>
+            );
+          })}
         </Timeline>
       </div>
     </div>
@@ -336,6 +359,9 @@ const CreateBonds = () => {
   const [customBondName, setCustomBondName] = useState("");
   const [bondType, setBondType] = useState('cliff');
   const { prices } = useCrypto();
+
+  // Add new state for tracking selected preset
+  const [selectedPreset, setSelectedPreset] = useState(null);
 
   const allowedDenoms = [
     "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
@@ -765,6 +791,8 @@ const CreateBonds = () => {
   );
 
   const handlePresetDuration = (preset) => {
+    setSelectedPreset(preset.label); // Track which preset is selected
+    
     // Get current time in local timezone
     const now = new Date();
     // Add buffer to ensure we're not setting times in the past due to UTC conversion
@@ -783,7 +811,7 @@ const CreateBonds = () => {
       
       setFormData(prev => ({
         ...prev,
-        start_time: startDate.toLocaleDateString('en-CA'), // Format as YYYY-MM-DD in local timezone
+        start_time: startDate.toLocaleDateString('en-CA'),
         start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
         end_time: endDate.toLocaleDateString('en-CA'),
         end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
@@ -852,6 +880,14 @@ const CreateBonds = () => {
     }
   }, [formData.immediate_claim, formData.end_time, formData.end_time_hour, formData.maturity_date, formData.maturity_date_hour]);
 
+  // Add this near the top with other state declarations
+  const [showUsdAmounts, setShowUsdAmounts] = useState({
+    pricePer: false,
+    gross: false,
+    fee: false,
+    maxReturn: false
+  });
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -894,7 +930,10 @@ const CreateBonds = () => {
                   <button
                     key={duration.label}
                     onClick={() => handlePresetDuration(duration)}
-                    className="px-4 py-2 text-sm rounded-md bond-create-text-container hover:bg-[#3c3d4a] transition-colors duration-200 text-white border border-gray-600 hover:border-gray-500"
+                    className={`px-4 py-2 text-sm rounded-md bond-create-text-container hover:bg-[#3c3d4a] transition-colors duration-200 text-white border 
+                      ${selectedPreset === duration.label 
+                        ? 'border-yellow-500 border-2' 
+                        : 'border-gray-600 hover:border-gray-500'}`}
                   >
                     {duration.label}
                   </button>
@@ -1074,6 +1113,23 @@ const CreateBonds = () => {
                   );
                   const symbol = tokenMappings[formData.purchasing_denom]?.symbol || formData.purchasing_denom;
                   
+                  // Get token price for USD conversion
+                  const purchasingTokenSymbol = tokenMappings[formData.purchasing_denom]?.symbol?.toLowerCase() || formData.purchasing_denom?.toLowerCase();
+                  const purchasingTokenPrice = prices[purchasingTokenSymbol === 'daoophir' ? 'ophir' : purchasingTokenSymbol];
+                  const singleBondUsdPrice = purchasingTokenPrice ? (parseFloat(formData.price) * purchasingTokenPrice) : null;
+                  
+                  // Calculate USD values
+                  const grossUsd = purchasingTokenPrice ? (parseFloat(amounts.gross) * purchasingTokenPrice) : null;
+                  const feeUsd = purchasingTokenPrice ? (parseFloat(amounts.fee) * purchasingTokenPrice) : null;
+                  const maxReturnUsd = purchasingTokenPrice ? (parseFloat(amounts.net) * purchasingTokenPrice) : null;
+
+                  const formatUsd = (amount) => amount?.toLocaleString('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  });
+
                   // Calculate discount/premium
                   const discount = calculateDiscount(
                     formData.token_denom,
@@ -1081,18 +1137,49 @@ const CreateBonds = () => {
                     formData.price,
                     prices
                   );
-                  
+
                   return (
                     <div className="space-y-1 text-sm">
-                      <p className="text-gray-400">
-                        Gross Amount: {amounts.gross} {symbol}
+                      <p 
+                        className="text-gray-400 mb-2 cursor-pointer hover:text-gray-300 transition-colors"
+                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, pricePer: !prev.pricePer }))}
+                      >
+                        Price per Bond: {showUsdAmounts.pricePer 
+                          ? formatUsd(singleBondUsdPrice)
+                          : `${formData.price} ${symbol}`
+                        }
                       </p>
-                      <p className="text-red-400">
-                        Fee ({BOND_PURCHASE_FEE_PERCENTAGE}%): {amounts.fee} {symbol}
+                      
+                      <p 
+                        className="text-gray-400 cursor-pointer hover:text-gray-300 transition-colors"
+                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, gross: !prev.gross }))}
+                      >
+                        Gross Amount: {showUsdAmounts.gross 
+                          ? formatUsd(grossUsd)
+                          : `${amounts.gross} ${symbol}`
+                        }
                       </p>
-                      <p className="text-green-400">
-                        Max Return: {amounts.net} {symbol}
+                      
+                      <p 
+                        className="text-red-400 cursor-pointer hover:text-red-300 transition-colors"
+                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, fee: !prev.fee }))}
+                      >
+                        Fee ({BOND_PURCHASE_FEE_PERCENTAGE}%): {showUsdAmounts.fee 
+                          ? formatUsd(feeUsd)
+                          : `${amounts.fee} ${symbol}`
+                        }
                       </p>
+                      
+                      <p 
+                        className="text-green-400 cursor-pointer hover:text-green-300 transition-colors"
+                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, maxReturn: !prev.maxReturn }))}
+                      >
+                        Max Return: {showUsdAmounts.maxReturn 
+                          ? formatUsd(maxReturnUsd)
+                          : `${amounts.net} ${symbol}`
+                        }
+                      </p>
+                      
                       {discount !== null && (
                         <p className={`mt-2 ${discount < 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {Math.abs(discount).toLocaleString('en-US', {
@@ -1154,9 +1241,14 @@ const CreateBonds = () => {
           </div>
         </div>
 
-        <h3 className="text-3xl font-bold mb-4">NFT Metadata</h3>
+        <h3 className="text-3xl font-bold mb-4">
+          NFT Metadata
+          <Tooltip title="Each bond is represented as an NFT (Non-Fungible Token) that proves ownership. When you purchase a bond, you receive an NFT that you can later redeem for the promised tokens." arrow placement="top">
+            <InfoIcon className="h-5 w-5 ml-2 text-gray-400 cursor-help inline-block" />
+          </Tooltip>
+        </h3>
         <p className="text-gray-400 mb-8">
-          Configure the metadata for the NFT that represents this bond.
+          Each bond is represented as an NFT that proves ownership and enables trading. The NFT will be automatically minted to bond purchasers and can be used to claim the underlying tokens at maturity.
         </p>
 
         <div className="nft-metadata-div p-6 rounded-lg shadow-lg mb-8">

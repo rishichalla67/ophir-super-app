@@ -12,7 +12,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
     
     const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
     const rawAmount = parseFloat(totalSupply) * parseFloat(price);
-    const feeAmount = rawAmount * 0.05; // 5% fee
+    const feeAmount = rawAmount * 0.03; // 3% fee
     const netAmount = rawAmount - feeAmount;
     
     return {
@@ -73,7 +73,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
           {formData.total_supply && formData.price && formData.purchasing_denom && (
             <>
               <div className="flex justify-between text-red-400">
-                <span>Ophir Fee (5%)</span>
+                <span>Ophir Fee (3%)</span>
                 <span>
                   {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).fee} {tokenMappings[formData.purchasing_denom]?.symbol}
                 </span>
