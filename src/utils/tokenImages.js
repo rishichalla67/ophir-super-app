@@ -141,4 +141,5 @@ export const tokenImages = {
     "https://assets.coingecko.com/coins/images/36524/standard/ampOSMO.png?1711700382",
   bOsmo:
     "https://assets.coingecko.com/coins/images/37082/standard/bOSMO.png?1713251122",
+  dgn: "https://assets.coingecko.com/coins/images/51986/standard/IMG_0773.jpg?1732293578",
 };

@@ -210,5 +210,9 @@ export const tokenMappings = {
   "factory/kujira1w4yaama77v53fp0f9343t9w2f932z526vj970n2jv5055a7gt92sxgwypf/urcpt": {
     symbol: "xusk",
     decimals: 6
+  },
+  'ibc/D8C6D71032EC7CC4C9CCD0FF709CF87D34A7311FE5491E70F7EDE2351D189C10': {
+    symbol: 'dgn',
+    decimals: 6
   }
 };
