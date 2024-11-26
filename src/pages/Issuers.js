@@ -244,23 +244,20 @@ const Issuers = () => {
     const now = new Date();
     const startTime = new Date(parseInt(bond.bond_offer.purchase_start_time) / 1_000_000);
     const endTime = new Date(parseInt(bond.bond_offer.purchase_end_time) / 1_000_000);
-    const maturityDate = new Date(parseInt(bond.bond_offer.maturity_date) / 1_000_000);
-    const isSoldOut = parseInt(bond.bond_offer.remaining_supply) === 0;
-    const isMatured = now > maturityDate;
     const hasRemainingSupply = parseInt(bond.bond_offer.remaining_supply) > 0;
     
-    let status = 'Inactive';
+    let status = 'Ended';
     if (now >= startTime && now <= endTime && !bond.bond_offer.closed) {
       status = 'Active';
     } else if (now < startTime) {
       status = 'Upcoming';
-    } else if (isSoldOut) {
+    } else if (parseInt(bond.bond_offer.remaining_supply) === 0) {
       status = 'Sold Out';
     } else if (bond.bond_offer.closed) {
       status = 'Withdrawn';
     }
 
-    const canWithdraw = isMatured && hasRemainingSupply && !bond.bond_offer.closed;
+    const canWithdraw = now > endTime && hasRemainingSupply && !bond.bond_offer.closed;
 
     return (
       <div className="flex items-center gap-2">

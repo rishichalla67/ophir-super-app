@@ -848,17 +848,17 @@ const BuyBonds = () => {
     if (!bond) return false;
     
     const now = Math.floor(Date.now() / 1000);
-    const maturityTime = Math.floor(parseInt(bond.maturity_date) / 1_000_000_000);
+    const purchaseEndTime = Math.floor(parseInt(bond.purchase_end_time) / 1_000_000_000);
     const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
     
     // Add check for bond issuer
     const isIssuer = connectedWalletAddress === bond.issuer;
     
     return connectedWalletAddress && 
-           now > maturityTime && 
+           now > purchaseEndTime && 
            hasRemainingSupply && 
            !bond.closed && 
-           isIssuer; // Only show withdraw if connected wallet is the issuer
+           isIssuer;
   };
 
   const calculateWithdrawAmount = () => {
