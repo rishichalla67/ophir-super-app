@@ -33,10 +33,10 @@ const Issuers = () => {
 
   const fetchBonds = async () => {
     try {
-      const rpc = "https://migaloo-testnet-rpc.polkachu.com:443";
+      const rpc = "https://migaloo-rpc.polkachu.com/";
       const client = await CosmWasmClient.connect(rpc);
       const response = await client.queryContractSmart(
-        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        daoConfig.BONDS_CONTRACT_ADDRESS,
         { get_all_bond_offers: {} }
       );
 
@@ -157,10 +157,10 @@ const Issuers = () => {
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
       await window.keplr?.experimentalSuggestChain({
-        chainId: "narwhal-2",
-        chainName: "Migaloo Testnet",
-        rpc: "https://migaloo-testnet-rpc.polkachu.com:443",
-        rest: "https://migaloo-testnet-api.polkachu.com",
+        chainId: "migaloo-1",
+        chainName: "Migaloo",
+        rpc: "https://migaloo-rpc.polkachu.com/",
+        rest: "https://migaloo-api.polkachu.com",
         bip44: { coinType: 118 },
         bech32Config: {
           bech32PrefixAccAddr: "migaloo",
@@ -177,8 +177,8 @@ const Issuers = () => {
       });
     }
   
-    await window.keplr?.enable("narwhal-2");
-    const offlineSigner = window.keplr?.getOfflineSigner("narwhal-2");
+    await window.keplr?.enable("migaloo-1");
+    const offlineSigner = window.keplr?.getOfflineSigner("migaloo-1");
     return offlineSigner;
   };
 
@@ -196,7 +196,7 @@ const Issuers = () => {
     try {
       const signer = await getSigner();
       const client = await SigningCosmWasmClient.connectWithSigner(
-        "https://migaloo-testnet-rpc.polkachu.com:443",
+        "https://migaloo-rpc.polkachu.com/",
         signer
       );
       
@@ -213,7 +213,7 @@ const Issuers = () => {
 
       const result = await client.execute(
         connectedWalletAddress,
-        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        daoConfig.BONDS_CONTRACT_ADDRESS,
         withdrawMsg,
         fee,
         `Withdraw Bond: ${selectedBond.bond_offer.bond_id}`
@@ -225,7 +225,7 @@ const Issuers = () => {
 
       // Show success message with transaction link
       if (result.transactionHash) {
-        const txnUrl = `https://ping.pfc.zone/narwhal-testnet/tx/${result.transactionHash}`;
+        const txnUrl = `https://inbloc.org/migaloo/transactions/${result.transactionHash}`;
         showAlert(
           "Successfully withdrew bond tokens!",
           "success",

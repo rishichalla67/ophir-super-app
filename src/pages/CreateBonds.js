@@ -26,6 +26,7 @@ import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
 
+const migalooRPC = "https://migaloo-rpc.polkachu.com";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const ADDITIONAL_MINUTES_BUFFER = 5;
 const BOND_PURCHASE_FEE_PERCENTAGE = 3; // 5% fee, easily adjustable
@@ -308,8 +309,8 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
 const CreateBonds = () => {
   const { isSidebarOpen } = useSidebar();
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
-  const [isTestnet, setIsTestnet] = useState(true);
-  const [rpc, setRPC] = useState(migalooTestnetRPC);
+  const [isTestnet, setIsTestnet] = useState(false);
+  const [rpc, setRPC] = useState(migalooRPC);
   const [alertInfo, setAlertInfo] = useState({
     open: false,
     message: "",
@@ -379,7 +380,7 @@ const CreateBonds = () => {
         };
         
         const response = await client.queryContractSmart(
-          daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+          daoConfig.BONDS_CONTRACT_ADDRESS,
           query
         );
         if (response?.denoms) {
@@ -607,7 +608,7 @@ const CreateBonds = () => {
 
       const result = await client.execute(
         connectedWalletAddress,
-        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        daoConfig.BONDS_CONTRACT_ADDRESS,
         message,
         fee,
         `Create Bond: ${fullBondDenomName}`,

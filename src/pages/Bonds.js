@@ -86,8 +86,8 @@ const Bonds = () => {
   const { prices } = useCrypto();
   const navigate = useNavigate();
 
-  const [isTestnet, setIsTestnet] = useState(true);
-  const [rpc, setRPC] = useState(migalooTestnetRPC);
+  const [isTestnet, setIsTestnet] = useState(false);
+  const [rpc, setRPC] = useState(migalooRPC);
   const [alertInfo, setAlertInfo] = useState({
     open: false,
     message: "",

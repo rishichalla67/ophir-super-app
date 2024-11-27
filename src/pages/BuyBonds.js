@@ -159,7 +159,7 @@ const BuyBonds = () => {
   const [bond, setBond] = useState(null);
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
-  const [isTestnet, setIsTestnet] = useState(true);
+  const [isTestnet, setIsTestnet] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [userBalance, setUserBalance] = useState(null);
   const [userBonds, setUserBonds] = useState([]);
@@ -175,7 +175,7 @@ const BuyBonds = () => {
   const migalooRPC = "https://migaloo-rpc.polkachu.com/";
   const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
   const rpc = isTestnet ? migalooTestnetRPC : migalooRPC;
-  const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET;
+  const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS;
 
   const explorerUrl = isTestnet 
     ? "https://ping.pfc.zone/narwhal-testnet/tx"
@@ -188,10 +188,10 @@ const BuyBonds = () => {
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
       await window.keplr?.experimentalSuggestChain({
-        chainId: "narwhal-2",
-        chainName: "Migaloo Testnet",
+        chainId: "migaloo-1",
+        chainName: "Migaloo",
         rpc: rpc,
-        rest: "https://migaloo-testnet-api.polkachu.com",
+        rest: "https://migaloo-api.polkachu.com",
         bip44: { coinType: 118 },
         bech32Config: {
           bech32PrefixAccAddr: "migaloo",
@@ -208,8 +208,8 @@ const BuyBonds = () => {
       });
     }
   
-    await window.keplr?.enable("narwhal-2");
-    const offlineSigner = window.keplr?.getOfflineSigner("narwhal-2");
+    await window.keplr?.enable("migaloo-1");
+    const offlineSigner = window.keplr?.getOfflineSigner("migaloo-1");
     return offlineSigner;
   };
 
