@@ -17,20 +17,26 @@ const Sidebar = () => {
     if (!connectedWalletAddress) return;
 
     try {
-      const rpc = "https://migaloo-testnet-rpc.polkachu.com:443"; // Use your RPC
-      const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET; // Use your contract address
+      const rpc = "https://migaloo-rpc.polkachu.com";
+      const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS;
       
       const client = await CosmWasmClient.connect(rpc);
+      
+      console.log("Checking issuer status for address:", connectedWalletAddress);
+      console.log("Contract address:", contractAddress);
+      
       const response = await client.queryContractSmart(
         contractAddress,
         { get_all_bond_offers: {} }
       );
       
-      // Check if any bond offer was created by this wallet
+      console.log("Bond offers response:", response);
+      
       const isWalletIssuer = response.bond_offers.some(
-        offer => offer.bond_offer.issuer === connectedWalletAddress
+        offer => offer.bond_offer.issuer.toLowerCase() === connectedWalletAddress.toLowerCase()
       );
       
+      console.log("Is wallet issuer:", isWalletIssuer);
       setIsIssuer(isWalletIssuer);
     } catch (error) {
       console.error("Error checking issuer status:", error);
