@@ -181,7 +181,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
           </div>
           <div className="flex justify-between">
             <span>Bond Type</span>
-            <span>{formData.bond_type === 'cliff' ? 'Cliff - Claim at maturity' : 'Vested - Custom claim start time'}</span>
+            <span>{bondType === 'cliff' ? 'Cliff - Claim at maturity' : 'Vested - Custom claim start time'}</span>
           </div>
 
           {/* NFT Metadata Section */}

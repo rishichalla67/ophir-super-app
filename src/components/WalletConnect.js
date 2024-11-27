@@ -19,6 +19,18 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
             if (window.leap) {
                 try {
                     const chainId = "migaloo-1";
+                    
+                    // Force suggest chain before enabling
+                    if (window.leap.experimentalSuggestChain) {
+                        await window.leap.experimentalSuggestChain({
+                            chainId: chainId,
+                            chainName: "Migaloo",
+                            rpc: "https://rpc.migaloo.co",
+                            rest: "https://rest.migaloo.co",
+                            // ... rest of your chain config ...
+                        });
+                    }
+                    
                     await window.leap.enable(chainId);
                     const offlineSigner = window.leap.getOfflineSigner(chainId);
                     const accounts = await offlineSigner.getAccounts();
@@ -26,15 +38,25 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
                         walletConnected(accounts, false);
                         return;
                     }
-                } catch (error) {
-                    console.log("No LEAP wallet connected");
-                }
+                } catch (error) {}
             }
 
             // Try Keplr if LEAP fails
             if (window.keplr) {
                 try {
                     const chainId = "migaloo-1";
+                    
+                    // Force suggest chain before enabling
+                    if (window.keplr.experimentalSuggestChain) {
+                        await window.keplr.experimentalSuggestChain({
+                            chainId: chainId,
+                            chainName: "Migaloo",
+                            rpc: "https://migaloo-rpc.polkachu.com/",
+                            rest: "https://ww-migaloo-rest.polkachu.com/",
+                            // ... rest of your chain config ...
+                        });
+                    }
+                    
                     await window.keplr.enable(chainId);
                     const offlineSigner = window.keplr.getOfflineSigner(chainId);
                     const accounts = await offlineSigner.getAccounts();
@@ -42,19 +64,33 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
                         walletConnected(accounts, false);
                         return;
                     }
-                } catch (error) {
-                    console.log("No Keplr wallet connected");
-                }
+                } catch (error) {}
             }
         };
 
-        // Add a small delay to ensure wallet extensions are loaded
-        const timer = setTimeout(() => {
-            autoConnect();
-        }, 500);
+        // Try multiple times with increasing delays
+        const attemptConnection = () => {
+            const attempts = [0, 500, 1000, 2000];
+            attempts.forEach(delay => {
+                setTimeout(() => {
+                    if (!connectedWalletAddress) {
+                        autoConnect();
+                    }
+                }, delay);
+            });
+        };
 
-        return () => clearTimeout(timer);
-    }, []); // Empty dependency array means this runs once on mount
+        attemptConnection();
+
+        // Add event listeners for wallet changes
+        window.addEventListener("leap_keystorechange", autoConnect);
+        window.addEventListener("keplr_keystorechange", autoConnect);
+
+        return () => {
+            window.removeEventListener("leap_keystorechange", autoConnect);
+            window.removeEventListener("keplr_keystorechange", autoConnect);
+        };
+    }, [connectedWalletAddress]);
 
     const showAlert = (message, severity = 'info', htmlContent = null) => {
         setAlertInfo({ open: true, message, severity, htmlContent });
