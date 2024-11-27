@@ -10,11 +10,15 @@ import { WalletIcon } from '@heroicons/react/24/solid';
 
 const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBool }) => {
     const [connectedWalletAddress, setConnectedWalletAddress] = useState('');
+    const [manuallyDisconnected, setManuallyDisconnected] = useState(false);
     const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
         const autoConnect = async () => {
+            // Don't auto-connect if manually disconnected
+            if (manuallyDisconnected) return;
+            
             // Try LEAP first
             if (window.leap) {
                 try {
@@ -90,17 +94,19 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
             window.removeEventListener("leap_keystorechange", autoConnect);
             window.removeEventListener("keplr_keystorechange", autoConnect);
         };
-    }, [connectedWalletAddress]);
+    }, [connectedWalletAddress, manuallyDisconnected]);
 
     const showAlert = (message, severity = 'info', htmlContent = null) => {
         setAlertInfo({ open: true, message, severity, htmlContent });
     };
 
     const connectWalletLeap = async () => {
+        setManuallyDisconnected(false);
+        
         if (window.leap) {
             try {
-                const chainId = "migaloo-1"; // Make sure to use the correct chain ID for Migaloo
-    
+                const chainId = "migaloo-1";
+
                 // Add chain information to Keplr
                 if (window.leap.experimentalSuggestChain) {
                     await window.leap.experimentalSuggestChain({
@@ -145,17 +151,16 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
                         },
                     });
                 }
-    
+
                 await window.leap.enable(chainId);
                 const offlineSigner = window.leap.getOfflineSigner(chainId);
                 const accounts = await offlineSigner.getAccounts();
                 walletConnected(accounts, false);
-                return; // Exit the function after successful connection
+                return;
             } catch (error) {
                 console.error("Error connecting to LEAP:", error);
                 showAlert(`Error connecting to LEAP: ${error.message}`, "error");
-                setIsModalOpen(false); // Close the modal after successful connection
-                // Don't return here, try connecting with Ledger next
+                setIsModalOpen(false);
             }
         } else {
             showAlert("LEAP extension not found...", "error");
@@ -269,19 +274,28 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
         setConnectedWalletAddress(accounts[0].address);
         handleLedgerConnectionBool(isLedger); // Indicate that the connection is not through Ledger
         setIsModalOpen(false); // Close the modal after successful connection
+        setManuallyDisconnected(false);
     }
     
+    const handleWalletClick = () => {
+        if (connectedWalletAddress) {
+            disconnectWallet();
+        }
+        setIsModalOpen(true);
+    };
+
     const disconnectWallet = async () => {
         if (window.leap) {
-            await window.leap.disconnect("migaloo-1")
-            .then(() => {
-                resetWalletState();
-            });
+            try {
+                await window.leap.disconnect("migaloo-1");
+            } catch (error) {
+                console.error("Error disconnecting from LEAP:", error);
+            }
         } else if (window.keplr) {
-            // Assuming Keplr has a similar disconnect method
-            resetWalletState();
-            
+            // Keplr doesn't have a disconnect method, so we just reset the state
         }
+        setManuallyDisconnected(true);
+        resetWalletState();
     };
 
     const formatAddress = (address) => {
@@ -339,7 +353,7 @@ const WalletConnect = ({ handleConnectedWalletAddress, handleLedgerConnectionBoo
             </Snackbar>
             {connectedWalletAddress ? (
                 <div 
-                    onClick={disconnectWallet}
+                    onClick={handleWalletClick}
                     className="py-2 px-4 m-2 font-medium rounded flex items-center justify-center gap-2 bg-black text-yellow-400 border border-yellow-400 shadow-lg transition-colors duration-300 md:hover:bg-yellow-400 md:hover:text-black cursor-pointer"
                     style={{
                         maxWidth: '200px',
