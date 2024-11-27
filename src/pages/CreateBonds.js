@@ -212,7 +212,8 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
       className={`relative bg-transparent border rounded px-3 py-1.5 cursor-pointer transition-colors duration-200
         ${isInvalid 
           ? 'border-red-500 text-red-400 hover:border-red-400' 
-          : 'border-gray-600 hover:border-yellow-500'}`}
+          : 'border-gray-600 hover:border-yellow-500'}
+        flex items-center justify-center min-w-[200px]`}
     >
       <div className="text-sm whitespace-nowrap">
         {new Date(date.time).toLocaleString()}
@@ -363,11 +364,37 @@ const CreateBonds = () => {
   // Add new state for tracking selected preset
   const [selectedPreset, setSelectedPreset] = useState(null);
 
-  const allowedDenoms = [
-    "factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir",
-    "uwhale",
-  ];
+  // Remove the hardcoded allowedDenoms array
+  const [allowedDenoms, setAllowedDenoms] = useState([]);
 
+  // Add useEffect to fetch allowed denoms when component mounts
+  useEffect(() => {
+    const fetchAllowedDenoms = async () => {
+      try {
+        const signer = await getSigner();
+        const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+        
+        const query = {
+          get_allowed_resale_denoms: {}
+        };
+        
+        const response = await client.queryContractSmart(
+          daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+          query
+        );
+        if (response?.denoms) {
+          setAllowedDenoms(response.denoms);
+        }
+      } catch (error) {
+        console.error("Error fetching allowed denoms:", error);
+        showAlert("Error fetching allowed tokens", "error");
+      }
+    };
+
+    fetchAllowedDenoms();
+  }, []);
+
+  // Update the filteredTokenMappings to use the fetched allowedDenoms
   const filteredTokenMappings = Object.entries(tokenMappings).reduce(
     (acc, [denom, value]) => {
       if (allowedDenoms.includes(denom)) {
@@ -1041,6 +1068,7 @@ const CreateBonds = () => {
                     value={formData.token_denom}
                     onChange={handleInputChange}
                     allowedDenoms={allowedDenoms}
+                    isTestnet={isTestnet}
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
@@ -1084,6 +1112,7 @@ const CreateBonds = () => {
                     value={formData.purchasing_denom}
                     onChange={handleInputChange}
                     allowedDenoms={allowedDenoms}
+                    isTestnet={isTestnet}
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">
@@ -1329,13 +1358,12 @@ const CreateBonds = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirm}
-        formData={{
-          ...formData,
-          bond_type: bondType
-        }}
+        formData={formData}
+        setFormData={setFormData}
         isLoading={isLoading}
         customBondName={customBondName}
         fullBondDenomName={fullBondDenomName}
+        bondType={bondType}
         className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-8 shadow-xl border border-gray-700"
       />
 

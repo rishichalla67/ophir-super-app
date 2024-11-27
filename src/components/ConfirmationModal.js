@@ -1,11 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { tokenMappings } from '../utils/tokenMappings';
-import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
+import { ChevronDownIcon, ChevronUpIcon, ClockIcon } from '@heroicons/react/24/solid';
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, customBondName, fullBondDenomName }) => {
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, isLoading, customBondName, fullBondDenomName, bondType }) => {
   const [isNFTExpanded, setIsNFTExpanded] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const isDatePast = (dateString) => {
+    const date = new Date(dateString);
+    return date <= currentTime;
+  };
+
+  const formatDateForInput = (date) => {
+    return {
+      date: date.toLocaleDateString('en-CA'),
+      time: date.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)
+    };
+  };
+
+  const addTwoMinutes = (dateString) => {
+    const date = new Date(dateString);
+    date.setMinutes(date.getMinutes() + 2);
+    return formatDateForInput(date);
+  };
+
+  const updateDateTime = (field, newDateTime) => {
+    setFormData(prev => ({
+      ...prev,
+      [`${field}_time`]: newDateTime.date,
+      [`${field}_time_hour`]: newDateTime.time
+    }));
+  };
 
   const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
     if (!totalSupply || !price || !purchasingDenom) return null;
@@ -28,32 +65,79 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
         <h2 className="text-2xl font-bold mb-4 text-center text-white">Confirm Bond Creation</h2>
         
         <div className="space-y-3 text-gray-300">
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span>Bond Start</span>
-            <span>{new Date(`${formData.start_time}T${formData.start_time_hour}`).toLocaleString()}</span>
+            <div className="flex items-center gap-2">
+              <span>{new Date(`${formData.start_time}T${formData.start_time_hour}`).toLocaleString()}</span>
+              {isDatePast(`${formData.start_time}T${formData.start_time_hour}`) && (
+                <button
+                  onClick={() => updateDateTime('start', addTwoMinutes(new Date()))}
+                  className="p-1 rounded-full hover:bg-gray-700 transition-colors"
+                  title="Add 2 minutes to current time"
+                >
+                  <ClockIcon className="h-4 w-4 text-yellow-500" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between">
+
+          <div className="flex justify-between items-center">
             <span>Bond End</span>
-            <span>{new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString()}</span>
+            <div className="flex items-center gap-2">
+              <span>{new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString()}</span>
+              {isDatePast(`${formData.end_time}T${formData.end_time_hour}`) && (
+                <button
+                  onClick={() => updateDateTime('end', addTwoMinutes(new Date()))}
+                  className="p-1 rounded-full hover:bg-gray-700 transition-colors"
+                  title="Add 2 minutes to current time"
+                >
+                  <ClockIcon className="h-4 w-4 text-yellow-500" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between">
+
+          <div className="flex justify-between items-center">
             <span>Claim Start</span>
-            <span>
-              {formData.bond_type === 'cliff' 
-                ? new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()
-                : (formData.claim_start_date && formData.claim_start_hour
-                  ? new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).toLocaleString()
-                  : new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString())}
-            </span>
+            <div className="flex items-center gap-2">
+              <span>
+                {bondType === 'cliff' 
+                  ? new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()
+                  : (formData.claim_start_date && formData.claim_start_hour
+                    ? new Date(`${formData.claim_start_date}T${formData.claim_start_hour}`).toLocaleString()
+                    : new Date(`${formData.end_time}T${formData.end_time_hour}`).toLocaleString())}
+              </span>
+              {bondType !== 'cliff' && formData.claim_start_date && formData.claim_start_hour && 
+                isDatePast(`${formData.claim_start_date}T${formData.claim_start_hour}`) && (
+                <button
+                  onClick={() => updateDateTime('claim_start', addTwoMinutes(new Date()))}
+                  className="p-1 rounded-full hover:bg-gray-700 transition-colors"
+                  title="Add 2 minutes to current time"
+                >
+                  <ClockIcon className="h-4 w-4 text-yellow-500" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between">
+
+          <div className="flex justify-between items-center">
             <span>Maturity</span>
-            <span>{new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()}</span>
+            <div className="flex items-center gap-2">
+              <span>{new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`).toLocaleString()}</span>
+              {isDatePast(`${formData.maturity_date}T${formData.maturity_date_hour}`) && (
+                <button
+                  onClick={() => updateDateTime('maturity', addTwoMinutes(new Date()))}
+                  className="p-1 rounded-full hover:bg-gray-700 transition-colors"
+                  title="Add 2 minutes to current time"
+                >
+                  <ClockIcon className="h-4 w-4 text-yellow-500" />
+                </button>
+              )}
+            </div>
           </div>
-            
 
           <div className="flex justify-between">
-            <span>Token</span>
+            <span>Backing Token</span>
             <span>{tokenMappings[formData.token_denom]?.symbol || formData.token_denom}</span>
           </div>
           <div className="flex justify-between">
@@ -61,7 +145,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, isLoading, cu
             <span>{formData.total_supply}</span>
           </div>
           <div className="flex justify-between">
-            <span>Purchasing</span>
+            <span>Purchasing Token</span>
             <span>{tokenMappings[formData.purchasing_denom]?.symbol || formData.purchasing_denom}</span>
           </div>
           <div className="flex justify-between">

@@ -2,21 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { tokenImages } from '../utils/tokenImages';
 import { tokenMappings } from '../utils/tokenMappings';
 
-const TokenDropdown = ({ name, value, onChange, label, allowedDenoms }) => {
+const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTestnet = true }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Convert tokenMappings keys to an array of token objects
-  let tokens = Object.keys(tokenMappings).map((denom) => ({
-    denom,
-    symbol: tokenMappings[denom].symbol,
-    image: tokenImages[tokenMappings[denom].symbol] || '', // Fallback if image not found
-  }));
-
-  // If allowedDenoms is provided, filter tokens accordingly
-  if (allowedDenoms && allowedDenoms.length > 0) {
-    tokens = tokens.filter(token => allowedDenoms.includes(token.denom));
-  }
+  // Filter tokens based on isTestnet flag
+  const tokens = allowedDenoms
+    .filter(denom => {
+      const token = tokenMappings[denom];
+      // Allow whale tokens (uwhale) in both testnet and mainnet
+      if (denom === 'uwhale') return true;
+      
+      return isTestnet 
+        ? token?.chain === 'migaloo-testnet'
+        : token?.chain !== 'migaloo-testnet';
+    })
+    .map((denom) => ({
+      denom,
+      symbol: tokenMappings[denom]?.symbol || denom,
+      image: tokenImages[tokenMappings[denom]?.symbol] || '',
+    }));
 
   // Find the selected token based on the current value
   const selectedToken = tokens.find((token) => token.denom === value);
@@ -54,9 +59,7 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms }) => {
                 className="w-5 h-5 mr-2"
               />
             ) : (
-              // Display a default icon or placeholder if no image is available
               <div className="w-5 h-5 mr-2 bg-gray-400 rounded-full flex items-center justify-center">
-                {/* You can replace the initials with any placeholder as needed */}
                 <span className="text-xs text-white">
                   {selectedToken.symbol.charAt(0)}
                 </span>
@@ -84,32 +87,35 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms }) => {
         </svg>
       </button>
       {isOpen && (
-        <ul className="absolute mt-1 bond-create-text-container w-full rounded-md shadow-lg max-h-60 overflow-auto z-10">
+        <ul className="absolute z-50 mt-1 bond-create-text-container w-full rounded-md shadow-lg max-h-60 overflow-auto">
           {tokens.map((token) => (
             <li
               key={token.denom}
-              className="px-3 py-2 flex items-center cursor-pointer hover:bg-[#3a3b44]"
+              className="px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-[#3a3b44]"
               onClick={() => {
                 onChange({ target: { name, value: token.denom } });
                 setIsOpen(false);
               }}
             >
-              {token.image ? (
-                <img
-                  src={token.image}
-                  alt={token.symbol}
-                  className="w-5 h-5 mr-2"
-                />
-              ) : (
-                // Display a default icon or placeholder if no image is available
-                <div className="w-5 h-5 mr-2 bg-gray-400 rounded-full flex items-center justify-center">
-                  {/* You can replace the initials with any placeholder as needed */}
-                  <span className="text-xs text-white">
-                    {token.symbol.charAt(0)}
-                  </span>
-                </div>
-              )}
-              <span>{token.symbol}</span>
+              <div className="flex items-center">
+                {token.image ? (
+                  <img
+                    src={token.image}
+                    alt={token.symbol}
+                    className="w-5 h-5 mr-2"
+                  />
+                ) : (
+                  <div className="w-5 h-5 mr-2 bg-gray-400 rounded-full flex items-center justify-center">
+                    <span className="text-xs text-white">
+                      {token.symbol.charAt(0)}
+                    </span>
+                  </div>
+                )}
+                <span>{token.symbol}</span>
+              </div>
+              <span className="hidden md:inline text-sm text-gray-400 capitalize truncate max-w-[120px]">
+                {tokenMappings[token.denom]?.chain || 'unknown'}
+              </span>
             </li>
           ))}
         </ul>
