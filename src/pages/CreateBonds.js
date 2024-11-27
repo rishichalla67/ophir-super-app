@@ -532,7 +532,7 @@ const CreateBonds = () => {
       };
 
       const timestamps = await client.queryContractSmart(
-        daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET,
+        daoConfig.BONDS_CONTRACT_ADDRESS,
         timestampQuery
       );
 
