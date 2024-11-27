@@ -32,12 +32,12 @@ const ADDITIONAL_MINUTES_BUFFER = 5;
 const BOND_PURCHASE_FEE_PERCENTAGE = 3; // 5% fee, easily adjustable
 
 const PRESET_DURATIONS = [
-  { label: 'Testing', minutes: { start: 5, end: 30, maturity: 180 } },
-  { label: '24h Bond', days: 1 },
-  { label: '7d Bond', days: 7 },
-  { label: '30d Bond', days: 30 },
-  { label: '90d Bond', days: 90 },
-  { label: '1y Bond', days: 365 },
+  { label: 'Quick Bond', minutes: { start: 5, end: 30, maturity: 180 } },
+  { label: '24h Bond', minutes: { start: 5, end: 1440, maturity: 180 } },
+  { label: '7d Bond', minutes: { start: 5, end: 10080, maturity: 7*24 } },
+  { label: '30d Bond', minutes: { start: 5, end: 43200, maturity: 30*24 } },
+  { label: '90d Bond', minutes: { start: 5, end: 129600, maturity: 90*24 } },
+  { label: '1y Bond', minutes: { start: 5, end: 525600, maturity: 365*24 } },
 ];
 
 const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
@@ -459,10 +459,10 @@ const CreateBonds = () => {
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
       await window.keplr?.experimentalSuggestChain({
-        chainId: "narwhal-2",
-        chainName: "Migaloo Testnet",
+        chainId: "migaloo-1",
+        chainName: "Migaloo",
         rpc: rpc,
-        rest: "https://migaloo-testnet-api.polkachu.com",
+        rest: "https://migaloo-api.polkachu.com",
         bip44: { coinType: 118 },
         bech32Config: {
           bech32PrefixAccAddr: "migaloo",
@@ -487,8 +487,16 @@ const CreateBonds = () => {
       });
     }
 
-    await window.keplr?.enable("narwhal-2");
-    const offlineSigner = window.keplr?.getOfflineSigner("narwhal-2");
+    // Enable and get signer for migaloo-1
+    await window.keplr?.enable("migaloo-1");
+    const offlineSigner = window.keplr?.getOfflineSigner("migaloo-1");
+    
+    // Verify chain ID matches
+    const accounts = await offlineSigner?.getAccounts();
+    if (!accounts?.length) {
+      throw new Error("No accounts found");
+    }
+    
     return offlineSigner;
   };
 
