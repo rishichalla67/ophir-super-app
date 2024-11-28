@@ -230,7 +230,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
   );
 
   return (
-    <div className="bg-gray-800/50 rounded-lg p-4 md:p-6">
+    <div className="bond-create-text-container rounded-lg p-4 md:p-6">
       {/* Mobile View */}
       <div className="md:hidden space-y-4">
         {dates.map((date, index) => {

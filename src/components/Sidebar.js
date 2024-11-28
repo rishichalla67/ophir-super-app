@@ -163,7 +163,7 @@ const Sidebar = () => {
                           <li key={subItem.name} className="mb-1 sm:mb-2">
                             <button
                               onClick={() => handleItemClick(subItem.path)}
-                              className="button-sidebar pt-2 pb-2 sm:text-xs hover:text-ophir-gold transition-colors duration-200 flex items-center justify-start w-full pl-6"
+                              className="button-sidebar pt-4 sm:text-xs hover:text-ophir-gold transition-colors duration-200 flex items-center justify-start w-full pl-6"
                             >
                               <span className="flex items-center">
                                 {React.cloneElement(subItem.icon, { 
