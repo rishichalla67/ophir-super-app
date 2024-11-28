@@ -931,7 +931,7 @@ const CreateBonds = () => {
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
         <button
           onClick={handleGoBack}
-          className="ml-4 mb-4 flex items-center text-gray-300 hover:text-white transition duration-300"
+          className="back-button ml-4 mb-4 flex items-center text-gray-300 hover:text-white transition duration-300"
         >
           <ArrowLeftIcon className="h-5 w-5 mr-2" />
           Back to Bonds

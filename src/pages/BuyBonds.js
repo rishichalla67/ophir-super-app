@@ -1047,7 +1047,7 @@ const BuyBonds = () => {
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <button
             onClick={handleGoBack}
-            className="flex items-center text-sm md:text-base text-gray-300 hover:text-white transition duration-300"
+            className="back-button flex items-center text-sm md:text-base text-gray-300 hover:text-white transition duration-300"
           >
             <ArrowLeftIcon className="h-4 w-4 mr-1" />
             Back

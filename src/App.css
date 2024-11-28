@@ -4,11 +4,13 @@
   --transparent-gold: rgba(255, 183, 0, 0.1);
   --darker-gold: rgb(163, 117, 0);
   --faded-gold: rgba(148, 141, 104, 1);
+  --faded-gold-lighter: rgba(170, 162, 120, 0.4);
   --transparent-faded-gold: rgba(148, 141, 104, 0.4);
   --light-gold: rgb(250, 213, 90);
   --lighter-gold: rgb(252, 226, 142);
   --h1-text-faint-gold: rgb(255, 242, 205);
   --text-gold: rgba(205, 199, 167, 1);
+  --text-gold-whiter: rgb(230, 223, 188);
   --text-gold-lighter: rgb(212, 185, 116);
   --drop-shadow-gold: rgba(255, 199, 0, 0.25);
   --main-white: whitesmoke;
@@ -611,6 +613,30 @@ table td{
 
 .bond-buy-text-container{
   background-color: var(--bond-buy-text-container-color);
+}
+
+.back-button{
+  background-color: var(--transparent-black);
+  border: 1px solid var(--faded-gold);
+  border-radius: 5px;
+  box-shadow: inset 0px 0px 0px 0px var(--faded-gold-lighter);
+  padding: 0.5rem 1rem;
+  transition: all 0.3s linear;
+}
+
+.back-button:hover{
+  background-color: var(--bond-buy-bg-color);
+  border: 1px solid var(--faded-gold);
+  box-shadow: inset 200px 0px 0px 0px var(--faded-gold-lighter);
+}
+
+.create-bond-button{
+  font-size: 1.1rem;
+  padding: 0.5rem 1rem;
+}
+
+.create-bond-button:hover{
+  color: var(--text-gold-whiter);
 }
 
 .bond-create-text-container{

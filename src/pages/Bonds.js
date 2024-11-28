@@ -1953,7 +1953,7 @@ const Bonds = () => {
           <div className="flex space-x-4 items-center">
             <Link
               to="/bonds/create"
-              className="landing-button px-4 py-1.5 rounded-md hover:bg-yellow-500 transition duration-300 text-sm"
+              className="create-bond-button landing-button rounded-md hover:bg-yellow-500 transition duration-300"
             >
               Create Bond
             </Link>
