@@ -1105,7 +1105,7 @@ const BuyBonds = () => {
             </div>
 
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Price:</p>
+              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond Price:</p>
               <div className="flex items-center justify-center">
                 <p className="text-sm md:text-xl font-bold">{bond ? bond.price : 'N/A'}</p>
                 <div className="flex items-center ml-2">
@@ -1118,6 +1118,25 @@ const BuyBonds = () => {
                 </div>
               </div>
             </div>
+
+            {calculateDiscount(bond) !== null && (
+              <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Markup:</p>
+                <div className="flex items-center justify-center">
+                  <span className={`text-sm md:text-xl font-bold ${
+                    calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}%
+                    <span className="text-xs md:text-sm ml-1">
+                      {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Purchase End:</p>
@@ -1140,24 +1159,6 @@ const BuyBonds = () => {
               </div>
             )}
 
-            {calculateDiscount(bond) !== null && (
-              <div className="col-span-2 p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-                <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Current Price:</p>
-                <div className="flex items-center justify-center">
-                  <span className={`text-sm md:text-xl font-bold ${
-                    calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}%
-                    <span className="text-xs md:text-sm ml-1">
-                      {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
           
           <div className="mt-6 pt-6 border-t border-gray-700">
