@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown, FaTelegram, FaTwitter, FaGithub, FaBook } from 'react-icons/fa'; // Make sure to install react-icons
+import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown, FaTelegram, FaTwitter, FaGithub, FaBook, FaTools } from 'react-icons/fa'; // Make sure to install react-icons
 import { useSidebar } from '../context/SidebarContext';
 import { useWallet } from '../context/WalletContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
@@ -72,7 +72,7 @@ const Sidebar = () => {
     { name: 'REDEEM', path: '/redeem', icon: <FaExchangeAlt className="mr-2" size={16} /> },
     {
       name: 'BONDS',
-      icon: <FaHandHoldingUsd className="mr-2" size={16} />,
+      icon: <FaHandshake className="mr-2" size={16} />,
       subItems: [
         { 
           name: 'Browse', 
@@ -90,6 +90,16 @@ const Sidebar = () => {
       name: 'GOVERN', 
       path: '/govern', 
       icon: <FaUserShield className="mr-2" size={16} /> 
+    },
+    { 
+      name: 'SEEKERS', 
+      path: '/seekers', 
+      icon: <FaHandHoldingUsd className="mr-2" size={16} /> 
+    },
+    { 
+      name: 'DEV TOOLS', 
+      path: '/wasmdev', 
+      icon: <FaTools className="mr-2" size={16} /> 
     },
   ];
 

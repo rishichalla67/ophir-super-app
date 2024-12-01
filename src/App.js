@@ -16,6 +16,8 @@ import { CryptoProvider } from './context/CryptoContext';
 import TreasuryAnalytics from './pages/TreasuryAnalytics-new';
 import Govern from './pages/Govern'; // Add this import
 import Issuers from './pages/Issuers'; // Add this import
+import WasmDev from './pages/WasmDev'; // Add this import
+import Seekers from './pages/Seekers'; // Add this import
 
 function App() {
   return (
@@ -38,6 +40,8 @@ function App() {
                 <Route path="/analytics/new" element={<TreasuryAnalytics />} />
                 <Route path="/govern" element={<Govern />} />
                 <Route path="/bonds/issuer" element={<Issuers />} />
+                <Route path="/wasmdev" element={<WasmDev />} />
+                <Route path="/seekers" element={<Seekers />} />
               </Routes>
             </div>
           </Router>
