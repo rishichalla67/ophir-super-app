@@ -182,70 +182,59 @@ const BuyBonds = () => {
   }, [bondId]);
 
   const getSigner = async () => {
-    if (window.keplr?.experimentalSuggestChain) {
-      await window.keplr?.experimentalSuggestChain({
-        chainId: isTestnet ? "narwhal-2" : "migaloo-1",
-        chainName: isTestnet ? "Migaloo Testnet" : "Migaloo",
-        rpc: rpc,
-        rest: isTestnet 
-          ? "https://migaloo-testnet-api.polkachu.com"
-          : "https://migaloo-api.polkachu.com",
-        bip44: { coinType: 118 },
-        bech32Config: {
-          bech32PrefixAccAddr: "migaloo",
-          bech32PrefixAccPub: "migaloopub",
-          bech32PrefixValAddr: "migaloovaloper",
-          bech32PrefixValPub: "migaloovaloperpub",
-          bech32PrefixConsAddr: "migaloovalcons",
-          bech32PrefixConsPub: "migaloovalconspub",
-        },
-        currencies: [
-          { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
-        ],
-        feeCurrencies: [
-          { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
-        ],
-        stakeCurrency: {
-          coinDenom: "whale",
-          coinMinimalDenom: "uwhale",
-          coinDecimals: 6,
-        },
-        gasPriceStep: { low: 0.2, average: 0.45, high: 0.75 },
-      });
-    }
+    try {
+      console.log('Getting signer...');
+      
+      if (!window.keplr) {
+        throw new Error('Keplr wallet not found');
+      }
 
-    // Enable chain with correct chain ID
-    const chainId = isTestnet ? "narwhal-2" : "migaloo-1";
-    await window.keplr?.enable(chainId);
-    const offlineSigner = window.keplr?.getOfflineSigner(chainId);
-    
-    // Verify chain ID matches
-    const accounts = await offlineSigner?.getAccounts();
-    if (!accounts?.length) {
-      throw new Error("No accounts found");
+      const chainId = isTestnet ? "narwhal-2" : "migaloo-1";
+
+      // First enable chain
+      await window.keplr.enable(chainId);
+      console.log('Keplr enabled for chain:', chainId);
+
+      // Then get the signer
+      const offlineSigner = await window.keplr.getOfflineSigner(chainId);
+      console.log('Got offline signer');
+
+      // Verify we have accounts
+      const accounts = await offlineSigner.getAccounts();
+      console.log('Got accounts:', accounts);
+      
+      if (!accounts?.length) {
+        throw new Error('No accounts found - please connect wallet first');
+      }
+
+      return offlineSigner;
+    } catch (error) {
+      console.error('Error getting signer:', error);
+      // Don't throw error for bond viewing
+      return null;
     }
-    
-    return offlineSigner;
   };
 
   const queryContract = async (message) => {
     try {
       const signer = await getSigner();
-      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
-  
+      // Create client without signer if not available
+      const client = signer 
+        ? await SigningCosmWasmClient.connectWithSigner(rpc, signer)
+        : await SigningCosmWasmClient.connect(rpc);
+
       const queryResponse = await client.queryContractSmart(
         contractAddress,
         message
       );
-  
-      console.log('Query Response:', queryResponse);
+
       return queryResponse;
     } catch (error) {
       console.error("Error querying contract:", error);
       if (!error.message.includes('No bond purchase found') && !error.message.includes('Invalid type')) {
-        showAlert(`Error querying contract: ${error.message}`, "error");
+        throw error;
       }
-      throw error;
+      return null;
     }
   };
 
@@ -263,8 +252,6 @@ const BuyBonds = () => {
       setBond(result.bond_offer);
     } catch (error) {
       console.error("Error fetching bond details:", error);
-      showAlert(`Error fetching bond details: ${error.message}`, "error");
-      navigate('/bonds');
     } finally {
       setIsLoading(false);
     }
