@@ -25,6 +25,7 @@ import TimelineContent from '@mui/lab/TimelineContent';
 import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
+import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -372,8 +373,7 @@ const CreateBonds = () => {
   useEffect(() => {
     const fetchAllowedDenoms = async () => {
       try {
-        const signer = await getSigner();
-        const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+        const client = await CosmWasmClient.connect(rpc);
         
         const query = {
           get_allowed_resale_denoms: {}
@@ -383,6 +383,7 @@ const CreateBonds = () => {
           daoConfig.BONDS_CONTRACT_ADDRESS,
           query
         );
+        
         if (response?.denoms) {
           setAllowedDenoms(response.denoms);
         }
@@ -393,7 +394,7 @@ const CreateBonds = () => {
     };
 
     fetchAllowedDenoms();
-  }, []);
+  }, [rpc]);
 
   // Update the filteredTokenMappings to use the fetched allowedDenoms
   const filteredTokenMappings = Object.entries(tokenMappings).reduce(
