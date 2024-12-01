@@ -91,11 +91,11 @@ const Sidebar = () => {
       path: '/govern', 
       icon: <FaUserShield className="mr-2" size={16} /> 
     },
-    { 
-      name: 'SEEKERS', 
-      path: '/seekers', 
-      icon: <FaHandHoldingUsd className="mr-2" size={16} /> 
-    },
+    // { 
+    //   name: 'SEEKERS', 
+    //   path: '/seekers', 
+    //   icon: <FaHandHoldingUsd className="mr-2" size={16} /> 
+    // },
     { 
       name: 'DEV TOOLS', 
       path: '/wasmdev', 

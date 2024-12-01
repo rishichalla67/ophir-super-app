@@ -18,36 +18,39 @@ import Govern from './pages/Govern'; // Add this import
 import Issuers from './pages/Issuers'; // Add this import
 import WasmDev from './pages/WasmDev'; // Add this import
 import Seekers from './pages/Seekers'; // Add this import
+import { NetworkProvider } from './context/NetworkContext';
 
 function App() {
   return (
-    <CryptoProvider>
-      <SidebarProvider>
-        <WalletProvider>
-          <Router>
-            <div className="App">
-              <Navbar />
-              <Sidebar />
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/redeem" element={<Redeem />} />
-                <Route path="/dashboard/redemptions" element={<RedeemAnalytics />} />
-                <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} />
-                <Route path="/bonds" element={<Bonds />} />
-                <Route path="/bonds/create" element={<CreateBonds />} />
-                <Route path="/bonds/:bondId" element={<BuyBonds />} />
-                <Route path="/bonds/resale" element={<ResaleBonds />} />
-                <Route path="/analytics/new" element={<TreasuryAnalytics />} />
-                <Route path="/govern" element={<Govern />} />
-                <Route path="/bonds/issuer" element={<Issuers />} />
-                <Route path="/wasmdev" element={<WasmDev />} />
-                <Route path="/seekers" element={<Seekers />} />
-              </Routes>
-            </div>
-          </Router>
-        </WalletProvider>
-      </SidebarProvider>
-    </CryptoProvider>
+    <NetworkProvider>
+      <CryptoProvider>
+        <SidebarProvider>
+          <WalletProvider>
+            <Router>
+              <div className="App">
+                <Navbar />
+                <Sidebar />
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/redeem" element={<Redeem />} />
+                  <Route path="/dashboard/redemptions" element={<RedeemAnalytics />} />
+                  <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} />
+                  <Route path="/bonds" element={<Bonds />} />
+                  <Route path="/bonds/create" element={<CreateBonds />} />
+                  <Route path="/bonds/:bondId" element={<BuyBonds />} />
+                  <Route path="/bonds/resale" element={<ResaleBonds />} />
+                  <Route path="/analytics/new" element={<TreasuryAnalytics />} />
+                  <Route path="/govern" element={<Govern />} />
+                  <Route path="/bonds/issuer" element={<Issuers />} />
+                  <Route path="/wasmdev" element={<WasmDev />} />
+                  <Route path="/seekers" element={<Seekers />} />
+                </Routes>
+              </div>
+            </Router>
+          </WalletProvider>
+        </SidebarProvider>
+      </CryptoProvider>
+    </NetworkProvider>
   );
 }
 

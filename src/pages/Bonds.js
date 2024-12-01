@@ -14,6 +14,8 @@ import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { nftInfoCache, CACHE_DURATION } from '../utils/nftCache';
 import { useCrypto } from '../context/CryptoContext';
+import { useNetwork } from '../context/NetworkContext';
+import NetworkSwitcher from '../components/NetworkSwitcher';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -85,9 +87,8 @@ const Bonds = () => {
   const { isSidebarOpen } = useSidebar();
   const { prices } = useCrypto();
   const navigate = useNavigate();
+  const { isTestnet, rpc, contractAddress } = useNetwork();
 
-  const [isTestnet, setIsTestnet] = useState(false);
-  const [rpc, setRPC] = useState(migalooRPC);
   const [alertInfo, setAlertInfo] = useState({
     open: false,
     message: "",
@@ -108,8 +109,6 @@ const Bonds = () => {
   const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
   const [refreshingBonds, setRefreshingBonds] = useState({});
   const [claimingAllStates, setClaimingAllStates] = useState({});
-
-  const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
@@ -409,16 +408,11 @@ const Bonds = () => {
   }, [connectedWalletAddress, bonds]);
 
   useEffect(() => {
-    const rpcEndpoint = isTestnet ? migalooTestnetRPC : migalooRPC;
-    setRPC(rpcEndpoint);
-  }, [isTestnet]);
-
-  useEffect(() => {
     fetchData();
     if (connectedWalletAddress) {
       fetchUserBonds();
     }
-  }, [rpc, connectedWalletAddress]);
+  }, [connectedWalletAddress]);
 
   const getTokenSymbol = (denom) => {
     if (!denom) return '';
@@ -1947,9 +1941,10 @@ const Bonds = () => {
         </Snackbar>
 
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold h1-color">
-            {isTestnet ? "Bonds (Testnet)" : "Bonds"}
-          </h1>
+          <div className="flex items-center space-x-4">
+            <h1 className="text-3xl font-bold h1-color">Bonds</h1>
+            <NetworkSwitcher />
+          </div>
           <div className="flex space-x-4 items-center">
             <Link
               to="/bonds/create"

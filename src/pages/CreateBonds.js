@@ -26,6 +26,7 @@ import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
+import { useNetwork } from '../context/NetworkContext';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -310,8 +311,7 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
 const CreateBonds = () => {
   const { isSidebarOpen } = useSidebar();
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
-  const [isTestnet, setIsTestnet] = useState(false);
-  const [rpc, setRPC] = useState(migalooRPC);
+  const { isTestnet, rpc, contractAddress } = useNetwork();
   const [alertInfo, setAlertInfo] = useState({
     open: false,
     message: "",
@@ -380,7 +380,7 @@ const CreateBonds = () => {
         };
         
         const response = await client.queryContractSmart(
-          daoConfig.BONDS_CONTRACT_ADDRESS,
+          contractAddress,
           query
         );
         
@@ -394,7 +394,7 @@ const CreateBonds = () => {
     };
 
     fetchAllowedDenoms();
-  }, [rpc]);
+  }, [rpc, contractAddress]);
 
   // Update the filteredTokenMappings to use the fetched allowedDenoms
   const filteredTokenMappings = Object.entries(tokenMappings).reduce(
@@ -460,10 +460,12 @@ const CreateBonds = () => {
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
       await window.keplr?.experimentalSuggestChain({
-        chainId: "migaloo-1",
-        chainName: "Migaloo",
+        chainId: isTestnet ? "narwhal-2" : "migaloo-1",
+        chainName: isTestnet ? "Migaloo Testnet" : "Migaloo",
         rpc: rpc,
-        rest: "https://migaloo-api.polkachu.com",
+        rest: isTestnet 
+          ? "https://migaloo-testnet-api.polkachu.com"
+          : "https://migaloo-api.polkachu.com",
         bip44: { coinType: 118 },
         bech32Config: {
           bech32PrefixAccAddr: "migaloo",
@@ -488,9 +490,10 @@ const CreateBonds = () => {
       });
     }
 
-    // Enable and get signer for migaloo-1
-    await window.keplr?.enable("migaloo-1");
-    const offlineSigner = window.keplr?.getOfflineSigner("migaloo-1");
+    // Enable chain with correct chain ID
+    const chainId = isTestnet ? "narwhal-2" : "migaloo-1";
+    await window.keplr?.enable(chainId);
+    const offlineSigner = window.keplr?.getOfflineSigner(chainId);
     
     // Verify chain ID matches
     const accounts = await offlineSigner?.getAccounts();
@@ -541,7 +544,7 @@ const CreateBonds = () => {
       };
 
       const timestamps = await client.queryContractSmart(
-        daoConfig.BONDS_CONTRACT_ADDRESS,
+        contractAddress,
         timestampQuery
       );
 
@@ -617,7 +620,7 @@ const CreateBonds = () => {
 
       const result = await client.execute(
         connectedWalletAddress,
-        daoConfig.BONDS_CONTRACT_ADDRESS,
+        contractAddress,
         message,
         fee,
         `Create Bond: ${fullBondDenomName}`,

@@ -13,29 +13,43 @@ import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 import SnackbarContent from "@mui/material/SnackbarContent";
-
-const CHAIN_ID = "narwhal-2";
+import { useNetwork } from '../context/NetworkContext';
+import TokenDropdown from '../components/TokenDropdown';
 
 function ResaleBonds() {
 
-  const migalooRPC = "https://migaloo-rpc.polkachu.com/";
-  const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
+  const { isTestnet, rpc, chainId } = useNetwork();
   const OPHIR_DECIMAL = BigInt(1000000);
 
+  const convertContractTimeToDate = (contractTime) => {
+    try {
+      const timeString = contractTime?.toString() || '0';
+      
+      // Check if the time is already in milliseconds (less than 13 digits)
+      if (timeString.length <= 13) {
+        return new Date(parseInt(timeString));
+      }
+      
+      // Otherwise, convert from nanoseconds to milliseconds
+      return new Date(parseInt(timeString) / 1_000_000);
+    } catch (error) {
+      console.error('Error converting contract time:', error, contractTime);
+      return new Date();
+    }
+  };
+
+  const [isLoading, setIsLoading] = useState(false);
   const [resaleOffers, setResaleOffers] = useState([]);
-  const [isTestnet, setIsTestnet] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
-  const [rpc, setRPC] = useState(migalooTestnetRPC);
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     bond_id: '',
-    nft_token_id: '',
+    nft_id: '',
     price_per_bond: '',
-    price_denom: 'ujuno',
+    price_denom: 'uwhale',
     start_time: DateTime.now().toFormat("yyyy-MM-dd'T'HH:mm"),
     end_time: DateTime.now().plus({ days: 7 }).toFormat("yyyy-MM-dd'T'HH:mm"),
   });
@@ -49,6 +63,7 @@ function ResaleBonds() {
   const [bondDetails, setBondDetails] = useState({});
   const [uniqueDenoms, setUniqueDenoms] = useState([]);
   const [signingClient, setSigningClient] = useState(null);
+  const [nftInfoCache] = useState(new Map());
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -63,7 +78,36 @@ function ResaleBonds() {
       
       const response = await queryContract(message);
       console.log('📦 Resale offers response:', response);
-      setResaleOffers(response.offers || []);
+
+      // Fetch additional details for each offer
+      const offersWithDetails = await Promise.all(response.offers.map(async (offer) => {
+        try {
+          // Fetch bond details
+          const bondDetailsMessage = {
+            get_bond_offer: { bond_id: parseInt(offer.bond_id) }
+          };
+          const bondData = await queryContract(bondDetailsMessage);
+          const bondOffer = bondData.bond_offer;
+
+          // Fetch NFT info if we have the contract address
+          let nftInfo = null;
+          if (bondOffer?.nft_contract_addr) {
+            nftInfo = await getNFTInfo(bondOffer.nft_contract_addr, offer.nft_id);
+          }
+
+          return {
+            ...offer,
+            bond_name: bondOffer?.bond_name || `Bond #${offer.bond_id}`,
+            nft_info: nftInfo,
+            bond_details: bondOffer
+          };
+        } catch (error) {
+          console.error(`Error fetching details for offer ${offer.bond_id}:`, error);
+          return offer;
+        }
+      }));
+
+      setResaleOffers(offersWithDetails || []);
       
     } catch (error) {
       console.error('❌ Error fetching resale offers:', error);
@@ -118,20 +162,103 @@ function ResaleBonds() {
       
       const response = await queryContract(message);
       
-      if (response && Array.isArray(response.bond_purchases)) {
-        const transformedBonds = response.bond_purchases.map(purchase => ({
-          ...purchase,
-          purchase_time: new Date(Number(purchase.purchase_time) / 1_000_000),
-          amount: purchase.amount,
-          claimed_amount: purchase.claimed_amount,
-          bond_id: purchase.bond_id,
-          nft_token_id: purchase.nft_token_id
+      if (response && Array.isArray(response.pairs)) {
+        // Fetch bond details for each purchase to get names
+        const transformedBonds = await Promise.all(response.pairs.map(async pair => {
+          // Fetch bond details to get the name
+          const bondDetailsMessage = {
+            get_bond_offer: { 
+              bond_id: parseInt(pair.bond_id) 
+            }
+          };
+          
+          try {
+            const bondData = await queryContract(bondDetailsMessage);
+            const bondOffer = bondData.bond_offer;
+            
+            // Try to get NFT info if available
+            let nftInfo = null;
+            if (pair.contract_addr) {
+              // Check cache first
+              const cachedInfo = nftInfoCache.get(pair.contract_addr, pair.nft_id);
+              if (cachedInfo) {
+                nftInfo = cachedInfo;
+              } else {
+                try {
+                  const client = await CosmWasmClient.connect(rpc);
+                  nftInfo = await client.queryContractSmart(
+                    pair.contract_addr,
+                    {
+                      nft_info: {
+                        token_id: pair.nft_id
+                      }
+                    }
+                  );
+                  // Cache the result
+                  nftInfoCache.set(pair.contract_addr, pair.nft_id, nftInfo);
+                } catch (error) {
+                  console.error(`Error fetching NFT info for token ${pair.nft_id}:`, error);
+                }
+              }
+            }
+
+            // Check if the bond can be listed for resale
+            const now = new Date();
+            const purchaseEndDate = convertContractTimeToDate(bondOffer.purchase_end_time);
+            const maturityDate = convertContractTimeToDate(bondOffer.maturity_date);
+            const canListForResale = now > purchaseEndDate && now < maturityDate;
+
+            // Get amount from NFT info or bond offer
+            const amount = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'amount')?.value || 
+                          bondOffer.total_amount;
+
+            // Get purchase time from NFT info or use current time as fallback
+            let purchaseTime;
+            const purchaseTimeAttr = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'purchase_time');
+            if (purchaseTimeAttr?.value) {
+              purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
+            } else {
+              purchaseTime = new Date();
+            }
+
+            return {
+              ...pair,
+              purchase_time: purchaseTime,
+              amount: amount,
+              claimed_amount: nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'claimed_amount')?.value || "0",
+              bond_id: parseInt(pair.bond_id),
+              nft_id: pair.nft_id,
+              contract_address: pair.contract_addr,
+              // Use bond name from bond offer, or NFT name, or fallback
+              name: bondOffer?.bond_name || 
+                    nftInfo?.extension?.name || 
+                    `Bond #${pair.bond_id}`,
+              canListForResale,
+              purchaseEndDate,
+              maturityDate,
+              bondOffer,
+              nftInfo
+            };
+          } catch (error) {
+            console.error(`Error fetching details for bond ${pair.bond_id}:`, error);
+            return {
+              ...pair,
+              purchase_time: new Date(),
+              name: `Bond #${pair.bond_id}`,
+              canListForResale: false,
+              nft_id: pair.nft_id,
+              contract_address: pair.contract_addr,
+              amount: "0"
+            };
+          }
         }));
-        console.log('✨ Transformed bonds:', transformedBonds);
+
+        console.log('✨ Transformed bonds with names:', transformedBonds);
         setUserBonds(transformedBonds);
       }
     } catch (error) {
       console.error('❌ Error fetching user bonds:', error);
+      showAlert(`Error fetching your bonds: ${error.message}`, "error");
     }
   };
 
@@ -190,8 +317,8 @@ function ResaleBonds() {
     const initSigningClient = async () => {
       if (window.keplr && connectedWalletAddress) {
         try {
-          await window.keplr.enable(CHAIN_ID);
-          const offlineSigner = await window.keplr.getOfflineSigner(CHAIN_ID);
+          await window.keplr.enable(chainId);
+          const offlineSigner = await window.keplr.getOfflineSigner(chainId);
           const client = await SigningCosmWasmClient.connectWithSigner(rpc, offlineSigner);
           setSigningClient(client);
         } catch (error) {
@@ -230,7 +357,7 @@ function ResaleBonds() {
   const ResaleCard = ({ offer }) => {
     if (!offer) return null;
     const tokenSymbol = getTokenSymbol(offer.token_denom);
-    const tokenImage = getTokenImage(tokenSymbol);
+    const tokenImage = offer.nft_info?.extension?.image || getTokenImage(tokenSymbol);
 
     return (
       <div 
@@ -248,8 +375,8 @@ function ResaleBonds() {
               </div>
             )}
             <div>
-              <h3 className="text-lg font-semibold">Bond #{offer.bond_id}</h3>
-              <div className="text-sm text-gray-400">Token ID: {offer.nft_token_id}</div>
+              <h3 className="text-lg font-semibold">{offer.bond_name}</h3>
+              <div className="text-sm text-gray-400">Token ID: {offer.nft_id}</div>
             </div>
           </div>
         </div>
@@ -269,7 +396,7 @@ function ResaleBonds() {
     );
   };
 
-  const handleCreateOffer = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!window.keplr) {
@@ -278,64 +405,58 @@ function ResaleBonds() {
     }
 
     try {
-      console.log('🚀 Creating resale offer...');
-      
-      if (window.keplr?.experimentalSuggestChain) {
-        await window.keplr?.experimentalSuggestChain({
-          chainId: CHAIN_ID,
-          chainName: "Migaloo Testnet",
-          rpc: rpc,
-          rest: "https://migaloo-testnet-api.polkachu.com",
-          bip44: { coinType: 118 },
-          bech32Config: {
-            bech32PrefixAccAddr: "migaloo",
-            bech32PrefixAccPub: "migaloopub",
-            bech32PrefixValAddr: "migaloovaloper",
-            bech32PrefixValPub: "migaloovaloperpub",
-            bech32PrefixConsAddr: "migaloovalcons",
-            bech32PrefixConsPub: "migaloovalconspub",
-          },
-          currencies: [
-            { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
-          ],
-          feeCurrencies: [
-            { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
-          ],
-          stakeCurrency: {
-            coinDenom: "whale",
-            coinMinimalDenom: "uwhale",
-            coinDecimals: 6,
-          },
-          gasPriceStep: { low: 0.2, average: 0.45, high: 0.75 },
-        });
+      const [bondId, nftId] = formData.bond_id.split('|');
+
+      // Calculate minute offsets from current time
+      const now = new Date();
+      const startDate = new Date(`${formData.start_time}`);
+      const endDate = new Date(`${formData.end_time}`);
+
+      // Validate dates
+      if (endDate <= startDate) {
+        throw new Error("End date must be after start date");
       }
 
-      await window.keplr?.enable(CHAIN_ID);
-      const offlineSigner = window.keplr?.getOfflineSigner(CHAIN_ID);
-      const signingClient = await SigningCosmWasmClient.connectWithSigner(rpc, offlineSigner);
+      // Calculate offsets in minutes (ceiling)
+      const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+      const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+      
+      // Ensure claim_start_offset is after end_offset
+      const claimStartOffset = endOffset + 30; // 30 minutes after end
+      
+      // Ensure mature_offset is equal to or greater than claim_start_offset
+      const maturityOffset = claimStartOffset + 30; // 30 minutes after claim start
 
+      // Query contract for exact timestamps, including all required offsets
+      const timestampQuery = {
+        get_timestamp_offsets: {
+          start_offset: startOffset,
+          end_offset: endOffset,
+          claim_start_offset: claimStartOffset,  // After end_offset
+          mature_offset: maturityOffset  // After or equal to claim_start_offset
+        }
+      };
+
+      const timestamps = await queryContract(timestampQuery);
+      
       const msg = {
         create_resale_offer: {
-          bond_id: String(parseInt(formData.bond_id)),
-          nft_token_id: String(formData.nft_token_id),
+          bond_id: Number(bondId),
+          nft_token_id: formData.nft_id.toString(),
           price_per_bond: String(
-            Math.round(
+            Math.floor(
               parseFloat(formData.price_per_bond) * 
               10 ** (tokenMappings[formData.price_denom]?.decimals || 6)
             )
           ),
           price_denom: formData.price_denom,
-          start_time: String(Math.floor(
-            DateTime.fromISO(formData.start_time).toSeconds() * 1_000_000
-          )),
-          end_time: String(Math.floor(
-            DateTime.fromISO(formData.end_time).toSeconds() * 1_000_000
-          ))
+          start_time: timestamps.start_time.toString(),
+          end_time: timestamps.end_time.toString()
         }
       };
 
-      console.log('📝 Transaction message:', msg);
-      console.log('📍 Contract address:', contractAddress);
+      // Log the message before sending to verify the structure
+      console.log('Message to be sent:', JSON.stringify(msg, null, 2));
 
       const fee = {
         amount: [{
@@ -358,9 +479,98 @@ function ResaleBonds() {
       fetchResaleOffers();
 
     } catch (error) {
-      console.error('❌ Error creating resale offer:', error);
+      console.error('Error creating resale offer:', error);
       showAlert(`Error creating resale offer: ${error.message}`, "error");
     }
+  };
+
+  const BondSelectionDropdown = () => {
+    const formatDate = (date) => {
+      if (!date) return '';
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: '2-digit'
+      });
+    };
+
+    const formatAmount = (amount) => {
+      if (!amount) return '0';
+      const value = Number(amount) / Number(OPHIR_DECIMAL);
+      return value.toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 6
+      });
+    };
+
+    return (
+      <div className="mb-4">
+        <label className="block text-xs font-medium mb-1 text-gray-300">Select Bond</label>
+        <div className="relative group">
+          <select
+            className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+              focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+              focus:outline-none transition-all text-white text-sm"
+            value={`${formData.bond_id}|${formData.nft_id}`}
+            onChange={async (e) => {
+              const [bondId, nftId] = e.target.value.split('|');
+              if (bondId) {
+                setFormData(prevState => ({
+                  ...prevState,
+                  bond_id: bondId,
+                  nft_id: nftId
+                }));
+
+                const bondDetails = await fetchBondDetails(bondId);
+                if (bondDetails) {
+                  setFormData(prevState => ({
+                    ...prevState,
+                    token_denom: bondDetails.token_denom || prevState.token_denom
+                  }));
+                }
+              }
+            }}
+            required
+            title="Bond Name · Amount · NFT ID · Purchase Date"
+          >
+            <option value="" className="text-gray-400">
+              Bond Name · Amount · NFT ID · Purchase Date
+            </option>
+            {userBonds.map((bond) => {
+              const isEligible = bond.canListForResale;
+              const status = isEligible ? "" : 
+                (bond.maturityDate && new Date() > bond.maturityDate) ? " (Matured)" :
+                (bond.purchaseEndDate && new Date() <= bond.purchaseEndDate) ? " (Purchase Period Active)" :
+                " (Not Eligible)";
+
+              const uniqueKey = `bond_${bond.bond_id}_nft_${bond.nft_id}`;
+              const displayText = `${bond.name} · ${formatAmount(bond.amount)} · ${bond.nft_id} · ${formatDate(bond.purchase_time)}${status}`;
+
+              return (
+                <option 
+                  key={uniqueKey}
+                  value={`${bond.bond_id}|${bond.nft_id}`}
+                  disabled={!isEligible}
+                  className={!isEligible ? "text-gray-500" : ""}
+                >
+                  {displayText}
+                </option>
+              );
+            })}
+          </select>
+          <div className="absolute left-0 -top-8 w-full px-2 py-1 bg-gray-900 text-xs text-gray-300 
+            rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none
+            border border-gray-700 whitespace-nowrap">
+            Format: Bond Name · Amount · NFT ID · Purchase Date
+          </div>
+        </div>
+        {userBonds.length > 0 && !userBonds.some(bond => bond.canListForResale) && (
+          <p className="mt-2 text-sm text-red-400">
+            You don't have any bonds eligible for resale. Bonds can only be listed after the purchase period ends and before maturation.
+          </p>
+        )}
+      </div>
+    );
   };
 
   const UserBondsSection = () => {
@@ -379,7 +589,7 @@ function ResaleBonds() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-lg font-semibold">Bond #{purchase.bond_id}</h3>
-                  <div className="text-sm text-gray-400">NFT ID: {purchase.nft_token_id}</div>
+                  <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm ${
                   purchase.status === 'Unclaimed' 
@@ -416,147 +626,51 @@ function ResaleBonds() {
 
   const fetchBondDetails = async (bondId) => {
     try {
-      console.log('🔍 Fetching bond details for ID:', bondId);
-      
       const message = {
-        get_bond_offer: { bond_id: parseInt(bondId) }
+        get_bond_offer: { 
+          bond_id: parseInt(bondId) 
+        }
       };
       
       const response = await queryContract(message);
-      console.log('📦 Bond details response:', response);
-      
       return response.bond_offer;
     } catch (error) {
-      console.error('❌ Error fetching bond details:', error);
-      showAlert(`Error fetching bond details: ${error.message}`, "error");
+      console.error('Error fetching bond details:', error);
       return null;
     }
   };
 
-  const CreateOfferModal = () => (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-      <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl">
-        <div className="p-4">
-          <h2 className="text-lg font-bold mb-3 text-center text-white">Create Resale Offer</h2>
-          
-          <form onSubmit={handleCreateOffer} className="space-y-3">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">Select Bond</label>
-                <select
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 focus:outline-none transition-all text-white"
-                  value={`${formData.bond_id}|${formData.nft_token_id}`}
-                  onChange={async (e) => {
-                    const [bondId, nftId] = e.target.value.split('|');
-                    if (bondId) {
-                      // Set form data first to maintain selection
-                      setFormData(prevState => ({
-                        ...prevState,
-                        bond_id: bondId,
-                        nft_token_id: nftId
-                      }));
+  const getNFTInfo = async (contractAddr, tokenId, forceRefresh = false) => {
+    // If not forcing refresh, try to get from cache first
+    if (!forceRefresh) {
+      const cachedData = nftInfoCache.get(`${contractAddr}_${tokenId}`);
+      if (cachedData) {
+        console.log('📦 Using cached NFT info for:', `${contractAddr}_${tokenId}`);
+        return cachedData;
+      }
+    }
 
-                      // Then fetch bond details
-                      const bondDetails = await fetchBondDetails(bondId);
-                      console.log('✨ Retrieved bond details:', bondDetails);
-                      
-                      // Update additional details without changing the selection
-                      if (bondDetails) {
-                        setFormData(prevState => ({
-                          ...prevState,
-                          token_denom: bondDetails.token_denom || prevState.token_denom
-                        }));
-                      }
-                    }
-                  }}
-                  required
-                >
-                  <option value="">Select a bond</option>
-                  {userBonds.map((bond) => (
-                    <option 
-                      key={`${bond.bond_id}-${bond.nft_token_id}`} 
-                      value={`${bond.bond_id}|${bond.nft_token_id}`}
-                    >
-                      Bond #{bond.bond_id} - NFT #{bond.nft_token_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <input type="hidden" value={formData.bond_id} />
-              <input type="hidden" value={formData.nft_token_id} />
-
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">Price per Bond</label>
-                <input
-                  type="number"
-                  step="0.000001"
-                  value={formData.price_per_bond}
-                  onChange={(e) => setFormData({...formData, price_per_bond: e.target.value})}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 focus:outline-none transition-all text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">Price Denom</label>
-                <select
-                  value={formData.price_denom}
-                  onChange={(e) => setFormData({...formData, price_denom: e.target.value})}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 focus:outline-none transition-all text-white"
-                >
-                  <option value="">Select denomination</option>
-                  {uniqueDenoms.map((denom) => (
-                    <option key={denom} value={denom}>
-                      {tokenMappings[denom]?.symbol || denom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">Start Time</label>
-                <input
-                  type="datetime-local"
-                  value={formData.start_time}
-                  onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 focus:outline-none transition-all text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1 text-gray-300">End Time</label>
-                <input
-                  type="datetime-local"
-                  value={formData.end_time}
-                  onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                  className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 focus:outline-none transition-all text-white"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition duration-300 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="landing-button px-4 py-2 rounded-md hover:bg-yellow-500 transition duration-300 text-sm"
-              >
-                Create Offer
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
+    try {
+      const nftClient = await CosmWasmClient.connect(rpc);
+      const nftInfo = await nftClient.queryContractSmart(
+        contractAddr,
+        {
+          nft_info: {
+            token_id: tokenId
+          }
+        }
+      );
+      
+      // Cache the result
+      nftInfoCache.set(`${contractAddr}_${tokenId}`, nftInfo);
+      
+      console.log(`📦 Fetched and cached NFT Info for token ${tokenId}:`, nftInfo);
+      return nftInfo;
+    } catch (error) {
+      console.error(`Error fetching NFT info for token ${tokenId}:`, error);
+      throw error;
+    }
+  };
 
   return (
     <div 
@@ -589,7 +703,16 @@ function ResaleBonds() {
       </Snackbar>
       <div className="max-w-7xl mx-auto w-full px-4 mt-10">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold h1-color">Bond Resale Market</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold h1-color">Bond Resale Market</h1>
+            <span className={`px-3 py-1 text-sm rounded-full ${
+              isTestnet 
+                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
+                : 'bg-green-500/20 text-green-400 border border-green-500/30'
+            }`}>
+              {isTestnet ? 'Testnet' : 'Mainnet'}
+            </span>
+          </div>
           {connectedWalletAddress && (
             <div className="flex space-x-4 items-center">
               <button
@@ -644,14 +767,97 @@ function ResaleBonds() {
               </div>
             ) : (
               filteredOffers.map((offer) => (
-                <ResaleCard key={`${offer.bond_id}-${offer.nft_token_id}`} offer={offer} />
+                <ResaleCard key={`${offer.bond_id}-${offer.nft_id}`} offer={offer} />
               ))
             )}
           </div>
         )}
       </div>
 
-      {isModalOpen && <CreateOfferModal />}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+          <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl">
+            <div className="p-4">
+              <h2 className="text-lg font-bold mb-3 text-center text-white">Create Resale Offer</h2>
+              
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="space-y-3">
+                  <BondSelectionDropdown />
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-300">Price per Bond</label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      value={formData.price_per_bond}
+                      onChange={(e) => setFormData({...formData, price_per_bond: e.target.value})}
+                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                        focus:outline-none transition-all text-white"
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <TokenDropdown
+                      name="price_denom"
+                      value={formData.price_denom}
+                      onChange={(e) => setFormData({ ...formData, price_denom: e.target.value })}
+                      label="Price Token"
+                      allowedDenoms={['factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir', 'uwhale']}
+                      isTestnet={isTestnet}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-300">Start Time</label>
+                    <input
+                      type="datetime-local"
+                      value={formData.start_time}
+                      onChange={(e) => setFormData({...formData, start_time: e.target.value})}
+                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                        focus:outline-none transition-all text-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-300">End Time</label>
+                    <input
+                      type="datetime-local"
+                      value={formData.end_time}
+                      onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                        focus:outline-none transition-all text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 
+                      transition duration-300 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="landing-button px-4 py-2 rounded-md hover:bg-yellow-500 
+                      transition duration-300 text-sm"
+                  >
+                    Create Offer
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import TimelineContent from '@mui/lab/TimelineContent';
 import TimelineDot from '@mui/lab/TimelineDot';
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
+import { useNetwork } from '../context/NetworkContext';
 
 const formatAmount = (amount) => {
   if (!amount) return '0';
@@ -159,7 +160,6 @@ const BuyBonds = () => {
   const [bond, setBond] = useState(null);
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [alertInfo, setAlertInfo] = useState({ open: false, message: '', severity: 'info' });
-  const [isTestnet, setIsTestnet] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [userBalance, setUserBalance] = useState(null);
   const [userBonds, setUserBonds] = useState([]);
@@ -171,11 +171,7 @@ const BuyBonds = () => {
   const [isWithdrawLoading, setIsWithdrawLoading] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
   const { prices } = useCrypto();
-
-  const migalooRPC = "https://migaloo-rpc.polkachu.com/";
-  const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
-  const rpc = isTestnet ? migalooTestnetRPC : migalooRPC;
-  const contractAddress = daoConfig.BONDS_CONTRACT_ADDRESS;
+  const { isTestnet, rpc, contractAddress } = useNetwork();
 
   const explorerUrl = isTestnet 
     ? "https://ping.pfc.zone/narwhal-testnet/tx"
@@ -188,10 +184,12 @@ const BuyBonds = () => {
   const getSigner = async () => {
     if (window.keplr?.experimentalSuggestChain) {
       await window.keplr?.experimentalSuggestChain({
-        chainId: "migaloo-1",
-        chainName: "Migaloo",
+        chainId: isTestnet ? "narwhal-2" : "migaloo-1",
+        chainName: isTestnet ? "Migaloo Testnet" : "Migaloo",
         rpc: rpc,
-        rest: "https://migaloo-api.polkachu.com",
+        rest: isTestnet 
+          ? "https://migaloo-testnet-api.polkachu.com"
+          : "https://migaloo-api.polkachu.com",
         bip44: { coinType: 118 },
         bech32Config: {
           bech32PrefixAccAddr: "migaloo",
@@ -201,15 +199,32 @@ const BuyBonds = () => {
           bech32PrefixConsAddr: "migaloovalcons",
           bech32PrefixConsPub: "migaloovalconspub",
         },
-        currencies: [{ coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 }],
-        feeCurrencies: [{ coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 }],
-        stakeCurrency: { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
+        currencies: [
+          { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
+        ],
+        feeCurrencies: [
+          { coinDenom: "whale", coinMinimalDenom: "uwhale", coinDecimals: 6 },
+        ],
+        stakeCurrency: {
+          coinDenom: "whale",
+          coinMinimalDenom: "uwhale",
+          coinDecimals: 6,
+        },
         gasPriceStep: { low: 0.2, average: 0.45, high: 0.75 },
       });
     }
-  
-    await window.keplr?.enable("migaloo-1");
-    const offlineSigner = window.keplr?.getOfflineSigner("migaloo-1");
+
+    // Enable chain with correct chain ID
+    const chainId = isTestnet ? "narwhal-2" : "migaloo-1";
+    await window.keplr?.enable(chainId);
+    const offlineSigner = window.keplr?.getOfflineSigner(chainId);
+    
+    // Verify chain ID matches
+    const accounts = await offlineSigner?.getAccounts();
+    if (!accounts?.length) {
+      throw new Error("No accounts found");
+    }
+    
     return offlineSigner;
   };
 
@@ -1112,6 +1127,32 @@ const BuyBonds = () => {
                 {bond?.claim_end_time ? formatDate(bond.claim_end_time) : 'N/A'}
               </p>
             </div> */}
+
+            {bond?.description && (
+              <div className="col-span-2 p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Description:</p>
+                <p className="text-sm md:text-base">{bond.description}</p>
+              </div>
+            )}
+
+            {calculateDiscount(bond) !== null && (
+              <div className="col-span-2 p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Current Price:</p>
+                <div className="flex items-center justify-center">
+                  <span className={`text-sm md:text-xl font-bold ${
+                    calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}%
+                    <span className="text-xs md:text-sm ml-1">
+                      {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="mt-6 pt-6 border-t border-gray-700">
