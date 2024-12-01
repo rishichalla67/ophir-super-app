@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown } from 'react-icons/fa'; // Make sure to install react-icons
+import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown, FaTelegram, FaTwitter, FaGithub, FaBook } from 'react-icons/fa'; // Make sure to install react-icons
 import { useSidebar } from '../context/SidebarContext';
 import { useWallet } from '../context/WalletContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
@@ -124,6 +124,29 @@ const Sidebar = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const socialLinks = [
+    {
+      name: 'Twitter',
+      icon: <FaTwitter size={16} />,
+      url: 'https://x.com/Ophir_DAO'
+    },
+    {
+      name: 'Telegram',
+      icon: <FaTelegram size={16} />,
+      url: 'https://t.me/+B-hjVJYpD-RjZWJh'
+    },
+    // {
+    //   name: 'GitHub',
+    //   icon: <FaGithub size={16} />,
+    //   url: 'https://github.com/Freytes/OphirBonds'
+    // },
+    {
+      name: 'Docs',
+      icon: <FaBook size={16} />,
+      url: 'https://ophir-dao.gitbook.io/ophirdao/'
+    }
+  ];
+
   return (
     <>
       <button
@@ -195,16 +218,17 @@ const Sidebar = () => {
             ))}
           </ul>
         </nav>
-        <div className="mt-auto mb-20 sm:mb-28 pr-4">
-          <button
-            onClick={() => handleItemClick('/about')}
-            className="button-sidebar pb-2 text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
-          >
-            <span className="flex items-center">
-              <FaInfoCircle className="mr-2" size={16} />
-              ABOUT US
-            </span>
-          </button>
+        <div className="mt-auto mb-28 sm:mb-24 pr-4 flex justify-center space-x-4">
+          {socialLinks.map((link) => (
+              <button
+                key={link.name}
+                onClick={() => window.open(link.url, '_blank')}
+                className="button-sidebar hover:text-ophir-gold"
+                title={link.name}
+              >
+                {link.icon}
+              </button>
+          ))}
         </div>
       </div>
     </>
