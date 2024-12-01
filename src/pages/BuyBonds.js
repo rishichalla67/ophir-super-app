@@ -1038,7 +1038,7 @@ const BuyBonds = () => {
 
 
   return (
-    <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
+    <div className={`global-bg-new pb-1 text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
     }`}>
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
@@ -1078,7 +1078,7 @@ const BuyBonds = () => {
           {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
-        <div className="backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bond-buy border-gray-700">
+        <div className="bond-buy backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond Type:</p>
@@ -1208,7 +1208,7 @@ const BuyBonds = () => {
         )}
 
         {isBondActive && (
-          <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700 w-full">
+          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
               <div className="flex flex-col items-end">

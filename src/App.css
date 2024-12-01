@@ -609,6 +609,7 @@ table td{
 
 .bond-buy{
   background-color: var(--bond-buy-bg-color);
+  margin-top: 1rem;
 }
 
 .bond-buy-text-container{
@@ -720,6 +721,10 @@ table td{
   .bond-creation-div, .claim-div, .nft-metadata-div, .bond-buy{
     width: 60%;
     margin: 0 auto;
+  }
+
+  .bond-buy{
+    margin-top: 1rem;
   }
 
   .flex-center{
