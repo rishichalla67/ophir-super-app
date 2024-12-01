@@ -747,7 +747,7 @@ const Redeem = () => {
 
   return (
     <div 
-      className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`} 
+      className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 mt-12 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`} 
       style={{ paddingTop: "12dvh" }}
     >
       <h1 className={`text-lg sm:text-3xl font-bold h1-color  sm:pt-0 cursor-pointer text-center`} onClick={() => setIsTestnet(!isTestnet)}>
@@ -874,35 +874,40 @@ const Redeem = () => {
                         .sort((a, b) => b.value - a.value)
                         .map(({ asset, amount, value }) => (
                           <tr key={asset}>
-                            {Array.isArray(tokenImages[asset]) ? (
+                            <td className="px-4 py-2">
                               <div className="flex items-center">
-                                {tokenImages[asset].map((imgUrl, index) => {
-                                  const sizeClass = `h-5 w-5 md:h-8 md:w-8`;
-                                  return (
+                                {Array.isArray(tokenImages[asset]) ? (
+                                  <div className="flex items-center">
+                                    {tokenImages[asset].map((imgUrl, index) => (
+                                      <img
+                                        key={index}
+                                        src={imgUrl}
+                                        alt={`${asset}-${index}`}
+                                        className="h-5 w-5 sm:h-7 sm:w-7 md:h-9 md:w-9 mr-1"
+                                      />
+                                    ))}
+                                    <span className={`text-sm sm:text-base ${asset.length > 10 ? 'text-xs sm:text-sm' : ''}`}>
+                                      {asset}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center">
                                     <img
-                                      key={index}
-                                      src={imgUrl}
-                                      alt={`${asset}-${index}`}
-                                      className={`mr-1 ${sizeClass} sm:${sizeClass} md:${sizeClass} lg:${sizeClass}`}
+                                      src={tokenImages[asset]}
+                                      alt={asset}
+                                      className="h-5 w-5 sm:h-7 sm:w-7 md:h-9 md:w-9 mr-2"
                                     />
-                                  );
-                                })}
-                                <span className="text-sm sm:text-base">{asset}</span>
+                                    <span className={`text-sm sm:text-base ${asset.length > 10 ? 'text-xs sm:text-sm' : ''}`}>
+                                      {asset}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            ) : (
-                              <div className="flex items-center py-1 align">
-                                <img
-                                  src={tokenImages[asset]}
-                                  alt={asset}
-                                  className="h-5 w-5 sm:h-7 sm:w-7 md:h-9 md:w-9 mr-2"
-                                />
-                                <span className="text-sm sm:text-base">{asset}</span>
-                              </div>
-                            )}
-                            <td className="px-4 py-2 text-sm sm:text-base">
+                            </td>
+                            <td className="px-4 py-2 text-sm sm:text-base align-middle">
                               {amount.toFixed(asset === "wBTC" ? 8 : 6)}
                             </td>
-                            <td className="px-4 py-2 text-sm sm:text-base">
+                            <td className="px-4 py-2 text-sm sm:text-base align-middle">
                               {value > 0 ? `$${value.toFixed(2)}` : 'N/A'}
                             </td>
                           </tr>
