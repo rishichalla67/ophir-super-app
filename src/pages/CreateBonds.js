@@ -33,6 +33,13 @@ const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const ADDITIONAL_MINUTES_BUFFER = 5;
 const BOND_PURCHASE_FEE_PERCENTAGE = 3; // 5% fee, easily adjustable
 
+// Add new constant for markup range
+const MARKUP_RANGE = {
+  min: -100, // -100% (discount)
+  max: 100,  // +100% (premium)
+  step: 1
+};
+
 const PRESET_DURATIONS = [
   { label: 'Quick Bond', minutes: { start: 5, end: 30, maturity: 180 } },
   { label: '24h Bond', minutes: { start: 5, end: 1440, maturity: 180 } },
@@ -65,17 +72,38 @@ const BOND_TYPES = [
 const calculateDiscount = (listTokenDenom, saleTokenDenom, bondPrice, prices) => {
   if (!prices || !listTokenDenom || !saleTokenDenom || !bondPrice) return null;
 
+  // Debug logging
+  console.log('Prices object:', prices);
+  console.log('List token denom:', listTokenDenom);
+  console.log('Sale token denom:', saleTokenDenom);
+
   // Convert denoms to lowercase and handle special testnet case
-  let listTokenSymbol = tokenMappings[listTokenDenom]?.symbol?.toLowerCase() || listTokenDenom?.toLowerCase();
-  let saleTokenSymbol = tokenMappings[saleTokenDenom]?.symbol?.toLowerCase() || saleTokenDenom?.toLowerCase();
+  let listTokenSymbol = (tokenMappings[listTokenDenom]?.symbol || listTokenDenom).toLowerCase();
+  let saleTokenSymbol = (tokenMappings[saleTokenDenom]?.symbol || saleTokenDenom).toLowerCase();
+  
+  // Debug logging after conversion
+  console.log('Converted list token symbol:', listTokenSymbol);
+  console.log('Converted sale token symbol:', saleTokenSymbol);
   
   // Map daoOphir to ophir for price lookup
   if (listTokenSymbol?.includes('daoophir')) listTokenSymbol = 'ophir';
   if (saleTokenSymbol?.includes('daoophir')) saleTokenSymbol = 'ophir';
   
-  // Get prices from context
+  // Handle wBTC case specifically
+  if (listTokenSymbol?.includes('wbtc')) listTokenSymbol = 'btc';
+  if (saleTokenSymbol?.includes('wbtc')) saleTokenSymbol = 'btc';
+  
+  // Debug logging after special case handling
+  console.log('Final list token symbol:', listTokenSymbol);
+  console.log('Final sale token symbol:', saleTokenSymbol);
+  console.log('Available prices:', Object.keys(prices));
+  
   const listTokenPrice = prices[listTokenSymbol];
   const saleTokenPrice = prices[saleTokenSymbol];
+
+  // Debug logging for prices
+  console.log('List token price:', listTokenPrice);
+  console.log('Sale token price:', saleTokenPrice);
 
   if (!listTokenPrice || !saleTokenPrice) return null;
 
@@ -84,6 +112,50 @@ const calculateDiscount = (listTokenDenom, saleTokenDenom, bondPrice, prices) =>
   const discount = ((bondPriceInUSD - listTokenPrice) / listTokenPrice) * 100;
   
   return discount;
+};
+
+const calculatePriceFromMarkup = (markup, listTokenDenom, saleTokenDenom, prices) => {
+  if (!prices || !listTokenDenom || !saleTokenDenom) return null;
+
+  // Debug logging
+  console.log('Prices object:', prices);
+  console.log('List token denom:', listTokenDenom);
+  console.log('Sale token denom:', saleTokenDenom);
+
+  // Convert denoms to lowercase and handle special testnet case
+  let listTokenSymbol = (tokenMappings[listTokenDenom]?.symbol || listTokenDenom).toLowerCase();
+  let saleTokenSymbol = (tokenMappings[saleTokenDenom]?.symbol || saleTokenDenom).toLowerCase();
+  
+  // Debug logging after conversion
+  console.log('Converted list token symbol:', listTokenSymbol);
+  console.log('Converted sale token symbol:', saleTokenSymbol);
+  
+  // Map daoOphir to ophir for price lookup
+  if (listTokenSymbol?.includes('daoophir')) listTokenSymbol = 'ophir';
+  if (saleTokenSymbol?.includes('daoophir')) saleTokenSymbol = 'ophir';
+  
+  // Handle wBTC case specifically
+  if (listTokenSymbol?.includes('wbtc')) listTokenSymbol = 'btc';
+  if (saleTokenSymbol?.includes('wbtc')) saleTokenSymbol = 'btc';
+  
+  // Debug logging after special case handling
+  console.log('Final list token symbol:', listTokenSymbol);
+  console.log('Final sale token symbol:', saleTokenSymbol);
+  console.log('Available prices:', Object.keys(prices));
+  
+  const listTokenPrice = prices[listTokenSymbol];
+  const saleTokenPrice = prices[saleTokenSymbol];
+
+  // Debug logging for prices
+  console.log('List token price:', listTokenPrice);
+  console.log('Sale token price:', saleTokenPrice);
+
+  if (!listTokenPrice || !saleTokenPrice) return null;
+
+  // Calculate price based on markup percentage
+  const basePrice = listTokenPrice / saleTokenPrice;
+  const markupMultiplier = 1 + (markup / 100);
+  return (basePrice * markupMultiplier).toFixed(6);
 };
 
 const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
@@ -306,6 +378,56 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
       </div>
     </div>
   );
+};
+
+// Add this helper function near other utility functions
+const getTokenPriceInfo = (listTokenDenom, saleTokenDenom, markup, prices) => {
+  if (!prices || !listTokenDenom || !saleTokenDenom) return null;
+
+  // Debug logging
+  console.log('Prices object:', prices);
+  console.log('List token denom:', listTokenDenom);
+  console.log('Sale token denom:', saleTokenDenom);
+
+  // Convert denoms to lowercase and handle special testnet case
+  let listTokenSymbol = (tokenMappings[listTokenDenom]?.symbol || listTokenDenom).toLowerCase();
+  let saleTokenSymbol = (tokenMappings[saleTokenDenom]?.symbol || saleTokenDenom).toLowerCase();
+  
+  // Debug logging after conversion
+  console.log('Converted list token symbol:', listTokenSymbol);
+  console.log('Converted sale token symbol:', saleTokenSymbol);
+  
+  // Map daoOphir to ophir for price lookup
+  if (listTokenSymbol?.includes('daoophir')) listTokenSymbol = 'ophir';
+  if (saleTokenSymbol?.includes('daoophir')) saleTokenSymbol = 'ophir';
+  
+  // Handle wBTC case specifically
+  if (listTokenSymbol?.includes('wbtc')) listTokenSymbol = 'btc';
+  if (saleTokenSymbol?.includes('wbtc')) saleTokenSymbol = 'btc';
+  
+  // Debug logging after special case handling
+  console.log('Final list token symbol:', listTokenSymbol);
+  console.log('Final sale token symbol:', saleTokenSymbol);
+  console.log('Available prices:', Object.keys(prices));
+  
+  const listTokenPrice = prices[listTokenSymbol];
+  const saleTokenPrice = prices[saleTokenSymbol];
+
+  // Debug logging for prices
+  console.log('List token price:', listTokenPrice);
+  console.log('Sale token price:', saleTokenPrice);
+
+  if (!listTokenPrice || !saleTokenPrice) return null;
+
+  const basePrice = listTokenPrice / saleTokenPrice;
+  const adjustedPrice = basePrice * (1 + (markup / 100));
+
+  return {
+    marketPrice: basePrice.toFixed(6),
+    bondPrice: adjustedPrice.toFixed(6),
+    listSymbol: tokenMappings[listTokenDenom]?.symbol || listTokenDenom,
+    saleSymbol: tokenMappings[saleTokenDenom]?.symbol || saleTokenDenom
+  };
 };
 
 const CreateBonds = () => {
@@ -928,6 +1050,29 @@ const CreateBonds = () => {
     maxReturn: false
   });
 
+  const [markupValue, setMarkupValue] = useState(0);
+
+  // Add new effect for markup
+  useEffect(() => {
+    if (formData.token_denom && formData.purchasing_denom) {
+      const newPrice = calculatePriceFromMarkup(
+        markupValue,
+        formData.token_denom,
+        formData.purchasing_denom,
+        prices
+      );
+      if (newPrice) {
+        setFormData(prev => ({
+          ...prev,
+          price: newPrice
+        }));
+      }
+    }
+  }, [markupValue, formData.token_denom, formData.purchasing_denom, prices]);
+
+  // In the CreateBonds component, add this state
+  const [showPriceTooltip, setShowPriceTooltip] = useState(false);
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -1065,6 +1210,105 @@ const CreateBonds = () => {
                 <div className="overflow-x-auto">
                   <BondTimelinePreview formData={formData} setFormData={setFormData} bondType={bondType} />
                 </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex justify-between items-center">
+                <LabelWithTooltip
+                  label="Preset Markup"
+                  tooltip="Quickly set bond price based on current market price. Negative values indicate discount, positive values indicate premium."
+                />
+                <span className={`text-sm font-medium ${
+                  markupValue < 0 ? 'text-green-400' : markupValue > 0 ? 'text-red-400' : 'text-gray-400'
+                }`}>
+                  {markupValue > 0 ? '+' : ''}{markupValue}% {markupValue < 0 ? 'Discount' : markupValue > 0 ? 'Premium' : ''}
+                </span>
+              </div>
+              <div className="flex items-center space-x-4 mt-2">
+                <button 
+                  onClick={() => setMarkupValue(-100)}
+                  className="text-xs text-gray-400 hover:text-white"
+                >
+                  -100%
+                </button>
+                <div className="flex-1 relative">
+                  <div 
+                    className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 
+                      ${showPriceTooltip && getTokenPriceInfo(formData.token_denom, formData.purchasing_denom, markupValue, prices) ? 'block' : 'hidden'} 
+                      bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg border border-gray-700
+                      whitespace-nowrap text-sm z-10`}
+                  >
+                    {(() => {
+                      const priceInfo = getTokenPriceInfo(
+                        formData.token_denom,
+                        formData.purchasing_denom,
+                        markupValue,
+                        prices
+                      );
+                      
+                      if (!priceInfo) return null;
+                      
+                      return (
+                        <div className="space-y-1">
+                          <div>Market Price: {priceInfo.marketPrice} {priceInfo.listSymbol}/{priceInfo.saleSymbol}</div>
+                          <div className={markupValue < 0 ? 'text-green-400' : markupValue > 0 ? 'text-red-400' : 'text-gray-400'}>
+                            Bond Price: {priceInfo.bondPrice} {priceInfo.listSymbol}/{priceInfo.saleSymbol}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <input
+                    type="range"
+                    min={MARKUP_RANGE.min}
+                    max={MARKUP_RANGE.max}
+                    step={MARKUP_RANGE.step}
+                    value={markupValue}
+                    onChange={(e) => setMarkupValue(Number(e.target.value))}
+                    onMouseEnter={() => setShowPriceTooltip(true)}
+                    onMouseLeave={() => setShowPriceTooltip(false)}
+                    onTouchStart={() => setShowPriceTooltip(true)}
+                    onTouchEnd={() => setShowPriceTooltip(false)}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500
+                      [&::-webkit-slider-thumb]:appearance-none
+                      [&::-webkit-slider-thumb]:w-4
+                      [&::-webkit-slider-thumb]:h-4
+                      [&::-webkit-slider-thumb]:rounded-full
+                      [&::-webkit-slider-thumb]:bg-yellow-500
+                      [&::-webkit-slider-thumb]:cursor-pointer
+                      [&::-moz-range-thumb]:w-4
+                      [&::-moz-range-thumb]:h-4
+                      [&::-moz-range-thumb]:rounded-full
+                      [&::-moz-range-thumb]:bg-yellow-500
+                      [&::-moz-range-thumb]:cursor-pointer
+                      [&::-moz-range-thumb]:border-0"
+                  />
+                  <div className="absolute w-full top-6 flex justify-between">
+                    <span className="text-xs text-gray-500">Max Discount</span>
+                    <span className="text-xs text-gray-500">Max Premium</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setMarkupValue(100)}
+                  className="text-xs text-gray-400 hover:text-white"
+                >
+                  +100%
+                </button>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 mt-6">
+                {[-50, -25, -10, 0, 10, 25, 50].map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setMarkupValue(preset)}
+                    className={`px-2 py-1 text-xs rounded-md transition-colors duration-200 min-w-[60px]
+                      ${markupValue === preset 
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500' 
+                        : 'bond-create-text-container hover:bg-[#3c3d4a]'}`}
+                  >
+                    {preset > 0 ? '+' : ''}{preset}%
+                  </button>
+                ))}
               </div>
             </div>
 
