@@ -1047,7 +1047,7 @@ const BuyBonds = () => {
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <button
             onClick={handleGoBack}
-            className="flex items-center text-sm md:text-base text-gray-300 hover:text-white transition duration-300"
+            className="back-button flex items-center text-sm md:text-base text-gray-300 hover:text-white transition duration-300"
           >
             <ArrowLeftIcon className="h-4 w-4 mr-1" />
             Back
@@ -1058,7 +1058,7 @@ const BuyBonds = () => {
           {bond?.bond_name ? `${bond.bond_name} Details` : 'Bond Details'}
         </h1>
 
-        <div className="backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bg-gray-800/80 border-gray-700">
+        <div className="backdrop-blur-sm rounded-lg p-3 md:p-8 mb-4 shadow-xl border bond-buy border-gray-700">
           <div className="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6">
             <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Bond Type:</p>
