@@ -251,6 +251,7 @@ const BuyBonds = () => {
 
   const fetchBondDetails = async () => {
     try {
+      setIsLoading(true);
       const queryMsg = { get_bond_offer: { bond_id: parseInt(bondId) } };
       const result = await queryContract(queryMsg);
       
@@ -263,6 +264,9 @@ const BuyBonds = () => {
     } catch (error) {
       console.error("Error fetching bond details:", error);
       showAlert(`Error fetching bond details: ${error.message}`, "error");
+      navigate('/bonds');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -997,13 +1001,27 @@ const BuyBonds = () => {
     return discount;
   }, [prices]); // Add prices as a dependency
 
-  if (!bond) {
-    return (<>
+  if (isLoading) {
+    return (
       <div className="global-bg-new flex flex-col justify-center items-center h-screen">
-          <div className="text-white mb-4">Fetching Bond Data...</div>
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
+        <div className="text-white mb-4">Fetching Bond Data...</div>
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
       </div>
-    </>);
+    );
+  }
+
+  if (!bond && !isLoading) {
+    return (
+      <div className="global-bg-new flex flex-col justify-center items-center h-screen">
+        <div className="text-white mb-4">Bond not found</div>
+        <button
+          onClick={() => navigate('/bonds')}
+          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"
+        >
+          Return to Bonds
+        </button>
+      </div>
+    );
   }
 
   const bondSymbol = bond.token_denom ? formatBondDenom(getTokenSymbol(bond.token_denom)) : '';
