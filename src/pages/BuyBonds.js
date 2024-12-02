@@ -172,6 +172,7 @@ const BuyBonds = () => {
   const [withdrawAmount, setWithdrawAmount] = useState(0);
   const { prices } = useCrypto();
   const { isTestnet, rpc, contractAddress } = useNetwork();
+  const [isPurchaseLoading, setIsPurchaseLoading] = useState(false);
 
   const explorerUrl = isTestnet 
     ? "https://ping.pfc.zone/narwhal-testnet/tx"
@@ -488,13 +489,13 @@ const BuyBonds = () => {
     }
 
     setShowConfirmModal(false);
-    setIsLoading(true);
+    setIsPurchaseLoading(true);
 
     try {
       const result = await executePurchase();
       
       // Reset loading state and purchase amount after successful transaction
-      setIsLoading(false);
+      setIsPurchaseLoading(false);
       setPurchaseAmount('');
       
       // Show success message with correct explorer URL
@@ -519,13 +520,13 @@ const BuyBonds = () => {
     } catch (error) {
       console.error("Purchase error:", error);
       showAlert(error.message || "Failed to purchase bond", "error");
-      setIsLoading(false);
+      setIsPurchaseLoading(false);
     }
   };
 
   const executePurchase = async () => {
     setShowConfirmModal(false);
-    setIsLoading(true);
+    
     try {
       const purchaseAmountNum = parseFloat(purchaseAmount);
       const maxPurchaseAmount = calculateMaxPurchaseAmount(bond);
@@ -602,8 +603,7 @@ const BuyBonds = () => {
     } catch (error) {
       console.error("Error purchasing bond:", error);
       showAlert(`Error purchasing bond: ${error.message}`, "error");
-    } finally {
-      setIsLoading(false);
+      throw error; // Propagate error to handlePurchase
     }
   };
 
@@ -1337,13 +1337,13 @@ const BuyBonds = () => {
 
               <button
                 onClick={handlePurchase}
-                disabled={!connectedWalletAddress || isLoading || !purchaseAmount}
+                disabled={!connectedWalletAddress || isPurchaseLoading || !purchaseAmount}
                 className="w-full py-4 mt-4 bg-yellow-300 hover:bg-yellow-400 
                   disabled:bg-gray-600 disabled:cursor-not-allowed text-black 
                   font-bold rounded-lg transition-all duration-300 flex items-center 
                   justify-center space-x-2"
               >
-                {isLoading ? (
+                {isPurchaseLoading ? (
                   <>
                     <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

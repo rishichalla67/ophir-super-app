@@ -23,7 +23,6 @@ const chainId = "migaloo-1";
 
 const SeekerRound = () => {
   const [usdcAmount, setUsdcAmount] = useState("");
-  const [connectedWalletAddress, setConnectedWalletAddress] = useState("");
   const [usdcBalance, setUsdcBalance] = useState(0); // Add a state for the balance
   const [vestingData, setVestingData] = useState(null);
   const [isLoading, setIsLoading] = useState(false); // Add this line to manage loading state
@@ -41,30 +40,18 @@ const SeekerRound = () => {
   const { connectedWalletAddress: contextConnectedWalletAddress, isLedgerConnected: contextIsLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
 
-  const handleConnectedWalletAddress = (address) => {
-    setConnectedWalletAddress(address); // Update the state with data received from WalletConnect
-  };
-  const handleLedgerConnection = (bool) => {
-    setIsLedgerConnected(bool); // Update the state with data received from WalletConnect
-  };
-
   useEffect(() => {
-    if (connectedWalletAddress === "") {
-      setUsdcBalance(0);
+    if (contextConnectedWalletAddress) {
+      checkBalance(contextConnectedWalletAddress).then((balance) => {
+        setUsdcBalance(balance);
+      });
+      checkVesting(contextConnectedWalletAddress);
     }
-  }, [connectedWalletAddress]);
+  }, [contextConnectedWalletAddress]);
+
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
   };
-
-  useEffect(() => {
-    if (connectedWalletAddress) {
-      checkBalance(connectedWalletAddress).then((balance) => {
-        setUsdcBalance(balance); // Update the balance state when the promise resolves
-      });
-      checkVesting(connectedWalletAddress);
-    }
-  }, [connectedWalletAddress]); // Re-run this effect when connectedWalletAddress changes
 
   const fetchSeekerRoundDetails = async () => {
     try {
@@ -183,7 +170,7 @@ const SeekerRound = () => {
       const msgSend = {
         typeUrl: "/cosmos.bank.v1beta1.MsgSend",
         value: {
-          fromAddress: connectedWalletAddress,
+          fromAddress: contextConnectedWalletAddress,
           toAddress: OPHIR_DAO_VAULT_ADDRESS,
           amount: [amount],
         },
@@ -192,7 +179,7 @@ const SeekerRound = () => {
       const memo = `Twitter: ${twitterHandle}`;
       
       const txHash = await client.signAndBroadcast(
-        connectedWalletAddress,
+        contextConnectedWalletAddress,
         [msgSend],
         fee,
         memo
@@ -204,7 +191,7 @@ const SeekerRound = () => {
         `Successfully sent USDC to OPHIR DAO Vault. Transaction: <a href="https://inbloc.org/migaloo/transactions/${txHash.transactionHash}" target="_blank" rel="noopener noreferrer" style="color: black;">https://inbloc.org/migaloo/transactions/${txHash.transactionHash}</a>`
       );
 
-      checkBalance(connectedWalletAddress).then((balance) => {
+      checkBalance(contextConnectedWalletAddress).then((balance) => {
         setUsdcBalance(balance);
       });
 
@@ -249,7 +236,7 @@ const SeekerRound = () => {
         "migaloo10uky7dtyfagu4kuxvsm26cvpglq25qwlaap2nzxutma594h6rx9qxtk9eq"; // The address of the contract
       const executeMsg = {
         claim: {
-          recipient: connectedWalletAddress, // The recipient address
+          recipient: contextConnectedWalletAddress, // The recipient address
           amount: (vestingData.amountVesting * 1000000).toString(), // The amount to claim, converted to string
         },
       };
@@ -308,7 +295,6 @@ const SeekerRound = () => {
   };
 
   const resetWalletState = () => {
-    setConnectedWalletAddress("");
     setUsdcAmount("");
     setUsdcBalance("");
     setTwitterHandle("");
@@ -332,13 +318,13 @@ const SeekerRound = () => {
       style={{ paddingTop: "20dvh" }}
     >
       {/* Snackbar for alerts */}
-      <h1
+      {/* <h1
         className={`text-3xl ${
           vestingData ? "mt-14" : ""
         } mb-3 font-bold h1-color`}
       >
-        Seeker Round
-      </h1>
+        See
+      </h1> */}
       <Snackbar
         open={alertInfo.open}
         autoHideDuration={6000}
@@ -369,8 +355,16 @@ const SeekerRound = () => {
         )}
       </Snackbar>
       <>
-        <div className="seeker-box mx-auto p-4 rounded-lg">
-          <div
+        <div className="mx-auto p-4 rounded-lg">
+        {!contextConnectedWalletAddress && (
+            <div className="mt-4 text-center">
+              <p className="text-lg text-white">
+                Connect your wallet to see if you have any claims available...
+              </p>
+              {/* <WalletConnect onConnect={handleConnectedWalletAddress} /> */}
+            </div>
+          )}
+          {/* <div
             className="mb-3 mt-2 text-xs sm:text-base text-center text-white-600 hover:text-yellow-400 visited:text-purple-600 underline cursor-pointer"
             onClick={() =>
               window.open(
@@ -380,204 +374,46 @@ const SeekerRound = () => {
             }
           >
             Introduction and details of the seeker round →
-          </div>
-          {seekerRoundDetails && (
+          </div> */}
+          {/* {seekerRoundDetails && (
             <div className="text-xs mt-2 text-center">
               OPHIR remaining:{" "}
               {seekerRoundDetails?.ophirLeftInSeekersRound.toLocaleString()}
             </div>
-          )}
-          {/* <div className="text-xl mt-10 md:text-3xl font-bold mb-4 hover:cursor-pointer" onClick={() => setUsdcAmount(usdcBalance)}>Balance: {usdcBalance}{usdcBalance !== '' ? ' USDC' : ''}</div> */}
-          <div className="mb-6 pt-4 flex items-center justify-center">
-            <input
-              id="twitterHandle"
-              type="text"
-              pattern="^@([A-Za-z0-9_]){1,15}$"
-              title="Twitter handle must start with @ followed by up to 15 letters, numbers, or underscores."
-              className="text-lg input-div text-white border p-2 text-left w-full"
-              placeholder="Twitter handle (optional)"
-              value={twitterHandle}
-              onChange={(e) => setTwitterHandle(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center justify-center">
-            <div className="relative flex items-center text-lg input-div text-white border w-full">
-              <input
-                id="usdcAmount"
-                type="number"
-                className="input-div input-usdc text-white p-2 text-left flex-grow outline-none"
-                placeholder="Enter amount"
-                value={usdcAmount}
-                onChange={(e) => setUsdcAmount(e.target.value)}
+          )} */}
+          {/* Prompt to connect wallet */}
+          
+          <div className="text-xs mt-4 text-center">
+            {/* <a
+              href="https://daodao.zone/dao/migaloo14gu2xfk4m3x64nfkv9cvvjgmv2ymwhps7fwemk29x32k2qhdrmdsp9y2wu/treasury"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Destination Address:{" "}
+              {`${OPHIR_DAO_VAULT_ADDRESS.substring(
+                0,
+                10
+              )}...${OPHIR_DAO_VAULT_ADDRESS.substring(
+                OPHIR_DAO_VAULT_ADDRESS.length - 4
+              )}`}
+            </a> */}
+            {/* <button
+              onClick={() =>
+                navigator.clipboard.writeText(OPHIR_DAO_VAULT_ADDRESS)
+              }
+              className="ml-2 bg-transparent text-yellow-400 hover:text-yellow-500 font-bold rounded"
+            >
+              <img
+                src="https://png.pngtree.com/png-vector/20190223/ourlarge/pngtree-vector-copy-icon-png-image_695355.jpg"
+                alt="Copy"
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  verticalAlign: "middle",
+                }}
+                className=""
               />
-              <span className="px-3 usdc-bg-border">USDC</span>
-            </div>
-          </div>
-          <div className="mb-3 flex items-center justify-center">
-            <div className="relative mt-1 pb-3 py-2 flex items-center text-lg balance-div text-white w-full ">
-              <div class="flex justify-between w-full">
-                <span
-                  className="text-sm pt-1 ml-3 cursor-pointer flex-grow balance-color"
-                  onClick={() => setUsdcAmount(usdcBalance)}
-                >
-                  Balance: {parseFloat(usdcBalance).toFixed(2)}
-                </span>
-                <div>
-                  <button
-                    className="text-sm px-3 py-1 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:ring-opacity-50 min-button"
-                    onClick={() => setUsdcAmount(1000)}
-                  >
-                    Min
-                  </button>
-                  <button
-                    className="text-sm px-3 py-1 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:ring-opacity-50 add-button"
-                    onClick={() => {
-                      if (parseInt(usdcAmount) < 100000) {
-                        setUsdcAmount(
-                          usdcAmount
-                            ? Math.min(parseInt(usdcAmount) + 500, 100000)
-                            : usdcBalance >= 500
-                            ? 500
-                            : usdcBalance
-                        );
-                      }
-                    }}
-                  >
-                    +500
-                  </button>
-                  <button
-                    className="text-sm px-3 py-1 mr-1 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:ring-opacity-50 max-button"
-                    onClick={() => setUsdcAmount(100000)}
-                  >
-                    Max
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          {usdcAmount && (
-            <div className="mt-3 text-white text-xs md:text-sm text-center">
-              {Number(usdcAmount / 0.0025).toLocaleString()} OPHIR ready to
-              claim at{" "}
-              {new Date(
-                new Date().setMonth(new Date().getMonth() + 6)
-              ).toLocaleString("en-US", {
-                month: "2-digit",
-                day: "2-digit",
-                year: "numeric",
-              })}
-            </div>
-          )}
-          <div className="flex pt-4 flex-col items-center justify-center">
-            <button
-              className={`py-2 px-4 ${
-                isLoading ? "bg-gray-400" : "hover:send-button-loading"
-              } send-button font-medium`}
-              onClick={sendSeekerFunds}
-              disabled={isLoading} // Disable the button when isLoading is true
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="flex justify-center items-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400"></div>
-                  </div>
-                </div>
-              ) : (
-                "Send USDC to OPHIR DAO"
-              )}
-            </button>
-            <div
-              className="py-2 px-4 font-medium text-center send-button mt-4 cursor-pointer rounded text-white flex justify-center items-center"
-              onClick={() => setShowIframe(!showIframe)}
-            >
-              {showIframe ? "Close" : "Add more USDC via"}
-              <svg
-                width="25"
-                height="25"
-                viewBox="0 0 32 32"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="ml-2"
-              >
-                <path
-                  opacity="0.75"
-                  d="M26.3557 20.2044C27.2146 17.9076 27.4957 15.435 27.1745 13.004C26.5921 8.83417 24.363 5.63033 20.2119 3.35663C14.8984 0.446334 7.7202 1.47183 3.43434 5.75385C1.05482 8.13124 -0.387742 12.0739 1.52394 14.8419C2.9106 16.8472 5.58516 17.5742 7.15978 19.4347C9.12863 21.7611 8.97823 25.3517 10.9332 27.6896C12.6661 29.7617 15.7863 30.3262 18.3506 29.4765C20.4933 28.7655 24.3681 25.6312 26.3557 20.2044Z"
-                  fill="#5493F7"
-                />
-                <path
-                  opacity="0.8"
-                  d="M18.3514 29.4759C20.4939 28.7659 24.3686 25.6314 26.3563 20.2049C27.1987 17.9054 27.6576 15.6918 27.175 13.0044C25.5791 4.1285 14.7102 15.5431 12.8358 16.7019C9.13707 18.9878 8.11563 24.0011 10.7512 27.4595C10.812 27.5393 10.873 27.6157 10.934 27.6888C12.6667 29.7609 15.7869 30.3252 18.3514 29.4759Z"
-                  fill="#2043B5"
-                />
-                <path
-                  opacity="0.7"
-                  d="M21.7304 4.73239C19.4337 3.87355 16.961 3.59238 14.53 3.91362C10.3602 4.49602 7.15615 6.72514 4.88245 10.8762C1.97215 16.1897 2.99786 23.3679 7.27967 27.6538C9.65685 30.0333 13.5995 31.4759 16.3677 29.5642C18.373 28.1775 19.0998 25.5029 20.9605 23.9283C23.2869 21.9595 26.8775 22.1101 29.2155 20.1549C31.2876 18.422 31.8518 15.3018 31.0023 12.7375C30.2915 10.595 27.1572 6.72023 21.7304 4.73239Z"
-                  fill="#3573EC"
-                />
-                <path
-                  d="M16.4746 20.7192H18.721L15.8784 15.2973L20.801 10.8877H18.1664L13.5626 15.0338L14.4362 10.8877H12.5226L10.4426 20.7192H12.3562L12.9386 17.932L14.3669 16.6424L16.4746 20.7192Z"
-                  fill="white"
-                />
-              </svg>
-            </div>
-            {showIframe && (
-              <div className="iframe-container mt-4">
-                <iframe
-                  src={`https://app.kado.money/?apiKey=${
-                    process.env.KADO_API_KEY
-                  }&product=BUY&network=noble&onPayCurrency=USD&onRevCurrency=USDC&offPayCurrency=USDC&offRevCurrency=USD&onPayAmount=${
-                    usdcAmount
-                      ? usdcAmount === "1000"
-                        ? "1030"
-                        : usdcAmount
-                      : "1030"
-                  }&onToAddress=${connectedWalletAddress.replace(
-                    /^migaloo/,
-                    "noble"
-                  )}`}
-                  width="400"
-                  height="600"
-                  theme="dark"
-                  style={{ border: "0px" }}
-                  title="Kado Money Iframe"
-                ></iframe>
-              </div>
-            )}
-            <div className="text-xs mt-4 text-center">
-              <a
-                href="https://daodao.zone/dao/migaloo14gu2xfk4m3x64nfkv9cvvjgmv2ymwhps7fwemk29x32k2qhdrmdsp9y2wu/treasury"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Destination Address:{" "}
-                {`${OPHIR_DAO_VAULT_ADDRESS.substring(
-                  0,
-                  10
-                )}...${OPHIR_DAO_VAULT_ADDRESS.substring(
-                  OPHIR_DAO_VAULT_ADDRESS.length - 4
-                )}`}
-              </a>
-              <button
-                onClick={() =>
-                  navigator.clipboard.writeText(OPHIR_DAO_VAULT_ADDRESS)
-                }
-                className="ml-2 bg-transparent text-yellow-400 hover:text-yellow-500 font-bold rounded"
-              >
-                <img
-                  src="https://png.pngtree.com/png-vector/20190223/ourlarge/pngtree-vector-copy-icon-png-image_695355.jpg"
-                  alt="Copy"
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    verticalAlign: "middle",
-                  }}
-                  className=""
-                />
-              </button>
-            </div>
-            <p className="text-xs mt-2 text-center">
-              Please be cautious as this is a live contract.
-            </p>
+            </button> */}
           </div>
         </div>
       </>
@@ -641,8 +477,8 @@ const SeekerRound = () => {
           </>
         )}
       </div>
-      {connectedWalletAddress &&
-        walletAddresses.includes(connectedWalletAddress) &&
+      {contextConnectedWalletAddress &&
+        walletAddresses.includes(contextConnectedWalletAddress) &&
         seekerRoundDetails?.transactions && (
           <div className="mt-4 p-4" style={{ maxWidth: "95dvw" }}>
             <div className="text-2xl mb-2">

@@ -11,6 +11,10 @@ export const daoConfig = {
     "migaloo1kv72vwfhq523yvh0gwyxd4nc7cl5pq32v9jt5w2tn57qtn57g53sghgkuh",
   DAO_STAKING_CONTRACT_ADDRESS_TESTNET:
     "migaloo1d6kqpt8p8c49zegvyn4v3jeqgwskdsp03m7hkcqf54eavexz8k3qjrp98r",
+  DAO_OPHIR_STAKING_REWARDS_CONTRACT_ADDRESS:
+    "migaloo1234uqhtq3mr723a446ph5fel4l7qwmgj08fe00nnu3gd2mfh60tqnc0xq7",
+  DAO_WBTC_STAKING_REWARDS_CONTRACT_ADDRESS:
+    "migaloo1waqzv34jg7nq4uqdef4yvhddc85n9daurrvf2m4cx797x7sdxlmq73sz39",
   DAO_VAULT_ADDRESS:
     "migaloo14gu2xfk4m3x64nfkv9cvvjgmv2ymwhps7fwemk29x32k2qhdrmdsp9y2wu",
   DAO_VAULT_ADDRESS_TESTNET:

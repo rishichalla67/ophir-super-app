@@ -18,6 +18,9 @@ export function CryptoProvider({ children }) {
   const [balances, setBalances] = useState({});
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balancesError, setBalancesError] = useState(null);
+  const [stats, setStats] = useState({});
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
 
   // Move your fetchCoinPrices function here
   const fetchCoinPrices = async () => {
@@ -106,6 +109,42 @@ export function CryptoProvider({ children }) {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      setStatsLoading(true);
+      
+      // Check cache first
+      const cachedData = localStorage.getItem('cryptoStats');
+      const cachedTimestamp = localStorage.getItem('cryptoStatsTimestamp');
+      
+      if (cachedData && cachedTimestamp) {
+        const now = Date.now();
+        const cacheAge = now - parseInt(cachedTimestamp);
+        
+        if (cacheAge < 5 * 60 * 1000) { // 5 minutes cache
+          setStats(JSON.parse(cachedData));
+          setStatsLoading(false);
+          setStatsError(null);
+          return;
+        }
+      }
+
+      const response = await axios.get('https://parallax-analytics.onrender.com/ophir/stats');
+      const statsData = response.data;
+      // Cache the results
+      localStorage.setItem('cryptoStats', JSON.stringify(statsData));
+      localStorage.setItem('cryptoStatsTimestamp', Date.now().toString());
+      
+      setStats(statsData);
+      setStatsError(null);
+    } catch (error) {
+      setStatsError(error.message);
+      console.error('Error fetching stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   // Function to get chain configuration
   const getChainConfig = (chainId) => {
     return chainInfo[chainId] || null;
@@ -117,7 +156,8 @@ export function CryptoProvider({ children }) {
       // Start both fetches immediately and concurrently
       Promise.all([
         fetchCoinPrices(),
-        fetchBalances()
+        fetchBalances(),
+        fetchStats()
       ]).catch(error => {
         console.error('Initial data fetch failed:', error);
       });
@@ -125,10 +165,12 @@ export function CryptoProvider({ children }) {
       // Set up intervals after initial fetch
       const priceInterval = setInterval(fetchCoinPrices, 60000);
       const balanceInterval = setInterval(fetchBalances, 300000);
+      const statsInterval = setInterval(fetchStats, 300000); // 5 minutes
 
       return () => {
         clearInterval(priceInterval);
         clearInterval(balanceInterval);
+        clearInterval(statsInterval);
       };
     })();
   }, []); // Single useEffect for both fetches
@@ -144,6 +186,10 @@ export function CryptoProvider({ children }) {
     balancesLoading,
     balancesError,
     refreshBalances: fetchBalances,
+    stats,
+    statsLoading,
+    statsError,
+    refreshStats: fetchStats,
   };
 
   return (
