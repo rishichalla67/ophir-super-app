@@ -599,6 +599,16 @@ table th:not(:last-child)::after {
   background-color: #333; /* same as border color */
 }
 
+.dropdown-container {
+  position: relative;
+  z-index: 10; /* Ensure the dropdown is above other elements */
+}
+
+.dropdown-menu {
+  position: absolute;
+  z-index: 20; /* Ensure the dropdown menu is above other elements */
+}
+
 table td{
   border-bottom: 1px solid var(--bond-table-header-border-color);
 }

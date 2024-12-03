@@ -15,6 +15,7 @@ import Snackbar from "@mui/material/Snackbar";
 import SnackbarContent from "@mui/material/SnackbarContent";
 import { useNetwork } from '../context/NetworkContext';
 import TokenDropdown from '../components/TokenDropdown';
+import NetworkSwitcher from '../components/NetworkSwitcher';
 
 function ResaleBonds() {
 
@@ -64,6 +65,7 @@ function ResaleBonds() {
   const [uniqueDenoms, setUniqueDenoms] = useState([]);
   const [signingClient, setSigningClient] = useState(null);
   const [nftInfoCache] = useState(new Map());
+  const [allowedDenoms, setAllowedDenoms] = useState([]);
 
   const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
@@ -331,6 +333,36 @@ function ResaleBonds() {
     initSigningClient();
   }, [connectedWalletAddress, rpc]);
 
+  useEffect(() => {
+    const fetchAllowedDenoms = async () => {
+      try {
+        console.log('🔍 Fetching allowed denominations...');
+        const client = await CosmWasmClient.connect(rpc);
+        
+        const query = {
+          get_allowed_resale_denoms: {}
+        };
+        
+        const response = await client.queryContractSmart(
+          contractAddress,
+          query
+        );
+        
+        if (response?.denoms) {
+          console.log('📦 Allowed denoms response:', response.denoms);
+          setAllowedDenoms(response.denoms);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching allowed denominations:', error);
+        showAlert("Error fetching allowed tokens", "error");
+      }
+    };
+
+    if (rpc && contractAddress) {
+      fetchAllowedDenoms();
+    }
+  }, [rpc, contractAddress]);
+
   const handleOfferClick = (bondId) => {
     if (!bondId) return;
     navigate(`/bonds/resale/${bondId}`);
@@ -574,47 +606,189 @@ function ResaleBonds() {
   };
 
   const UserBondsSection = () => {
+    const [quickResalePrices, setQuickResalePrices] = useState(
+      Object.fromEntries((userBonds || []).map(bond => [`${bond.bond_id}_${bond.nft_id}`, '']))
+    );
+    const [quickResaleDenoms, setQuickResaleDenoms] = useState(
+      Object.fromEntries((userBonds || []).map(bond => [`${bond.bond_id}_${bond.nft_id}`, 'uwhale']))
+    );
+
     if (!connectedWalletAddress || userBonds.length === 0) return null;
+
+    const handleQuickResale = async (bond, price, priceDenom) => {
+      if (!window.keplr) {
+        showAlert("Please install Keplr extension", "error");
+        return;
+      }
+
+      try {
+        // Calculate default timestamps
+        const now = new Date();
+        const startDate = new Date(now.getTime() + 1 * 60 * 1000); // 1-minute offset
+        const maturityDate = new Date(bond.maturityDate); // Ensure this is a Date object
+
+        // Set end time to 1 minute before maturity
+        const endDate = new Date(maturityDate.getTime() - 1 * 60 * 1000);
+
+        // Validate that the end date is after the start date
+        if (endDate <= startDate) {
+          throw new Error("End date must be after the start date");
+        }
+
+        // Calculate offsets in minutes
+        const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+        const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+
+        const timestampQuery = {
+          get_timestamp_offsets: {
+            start_offset: startOffset,
+            end_offset: endOffset,
+            claim_start_offset: endOffset + 30,
+            mature_offset: endOffset + 30
+          }
+        };
+
+        const timestamps = await queryContract(timestampQuery);
+
+        const msg = {
+          create_resale_offer: {
+            bond_id: Number(bond.bond_id),
+            nft_token_id: bond.nft_id.toString(),
+            price_per_bond: String(
+              Math.floor(
+                parseFloat(price) * 
+                10 ** (tokenMappings[priceDenom]?.decimals || 6)
+              )
+            ),
+            price_denom: priceDenom,
+            start_time: timestamps.start_time.toString(),
+            end_time: timestamps.end_time.toString()
+          }
+        };
+
+        const fee = {
+          amount: [{ denom: "uwhale", amount: "1000000" }],
+          gas: "1000000"
+        };
+
+        const response = await signingClient.execute(
+          connectedWalletAddress,
+          contractAddress,
+          msg,
+          fee
+        );
+
+        showAlert("Resale offer created successfully!", "success");
+        fetchResaleOffers();
+
+        // Refresh the page
+        window.location.reload();
+
+      } catch (error) {
+        console.error('Error creating quick resale:', error);
+        showAlert(`Error creating resale: ${error.message}`, "error");
+      }
+    };
+
+    const getBondStatus = (bond) => {
+      const now = new Date();
+      if (now < bond.purchaseEndDate) return 'Purchase Period Active';
+      if (now > bond.maturityDate) return 'Matured';
+      return 'Available for Resale';
+    };
 
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {userBonds.map((purchase) => (
-            <div 
-              key={purchase.bond_id}
-              className="backdrop-blur-sm rounded-xl p-6 
-                border border-gray-700/50 bg-gray-800/80"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">Bond #{purchase.bond_id}</h3>
-                  <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  purchase.status === 'Unclaimed' 
-                    ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-gray-500/20 text-gray-400'
-                }`}>
-                  {purchase.status}
-                </span>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Amount</span>
-                  <span className="font-medium">{formatTokenAmount(purchase.amount)}</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Purchase Date</span>
-                  <span className="font-medium">
-                    {purchase.purchase_time.toLocaleDateString()}
+          {userBonds.map((purchase) => {
+            const bondKey = `${purchase.bond_id}_${purchase.nft_id}`;
+            const status = getBondStatus(purchase);
+
+            return (
+              <div 
+                key={purchase.bond_id}
+                className="backdrop-blur-sm rounded-xl p-4 sm:p-6 
+                  border border-gray-700/50 bg-gray-800/80"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">{purchase.name}</h3>
+                    <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    status === 'Available for Resale' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : status === 'Matured'
+                      ? 'bg-gray-500/20 text-gray-400'
+                      : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {status}
                   </span>
                 </div>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Amount</span>
+                    <span className="font-medium">{formatTokenAmount(purchase.amount)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Purchase Date</span>
+                    <span className="font-medium">
+                      {purchase.purchase_time.toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {purchase.canListForResale && (
+                    <div className="pt-3 border-t border-gray-700 mt-3">
+                      <div className="grid grid-cols-12 gap-1.5 items-center">
+                        <input
+                          type="number"
+                          placeholder="Price"
+                          value={quickResalePrices[bondKey]}
+                          onChange={(e) => setQuickResalePrices(prev => ({
+                            ...prev,
+                            [bondKey]: e.target.value
+                          }))}
+                          className="col-span-full p-1.5 text-sm rounded bg-gray-700/50 border border-gray-600 
+                            focus:border-yellow-500 focus:outline-none w-full"
+                        />
+                        <div className="col-span-full">
+                          <TokenDropdown
+                            name={`resale_denom_${bondKey}`}
+                            value={quickResaleDenoms[bondKey]}
+                            onChange={(e) => setQuickResaleDenoms(prev => ({
+                              ...prev,
+                              [bondKey]: e.target.value
+                            }))}
+                            allowedDenoms={allowedDenoms}
+                            isTestnet={isTestnet}
+                            className="w-full"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleQuickResale(
+                            purchase,
+                            quickResalePrices[bondKey],
+                            quickResaleDenoms[bondKey]
+                          )}
+                          disabled={!quickResalePrices[bondKey]}
+                          className={`col-span-full px-2 py-1.5 rounded text-sm ${
+                            quickResalePrices[bondKey]
+                              ? 'landing-button hover:bg-yellow-500' 
+                              : 'bg-gray-700 cursor-not-allowed'
+                          } transition duration-300 w-full`}
+                        >
+                          List
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -677,42 +851,46 @@ function ResaleBonds() {
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
       style={{ paddingTop: "12dvh" }}
     >
-      <Snackbar
-        open={alertInfo.open}
-        autoHideDuration={6000}
-        onClose={() => setAlertInfo({ ...alertInfo, open: false })}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-      >
-        {alertInfo.htmlContent ? (
-          <SnackbarContent
-            style={{
-              color: "black",
-              backgroundColor: alertInfo.severity === "error" ? "#ffcccc" : "#ccffcc",
-            }}
-            message={<span dangerouslySetInnerHTML={{ __html: alertInfo.htmlContent }} />}
-          />
-        ) : (
-          <Alert
-            onClose={() => setAlertInfo({ ...alertInfo, open: false })}
-            severity={alertInfo.severity}
-            sx={{ width: "100%" }}
-          >
-            {alertInfo.message}
-          </Alert>
-        )}
-      </Snackbar>
-      <div className="max-w-7xl mx-auto w-full px-4 mt-10">
-        <div className="flex justify-between items-center mb-8">
+      <div className="w-[90vw] max-w-7xl mx-auto px-4">
+        <Snackbar
+          open={alertInfo.open}
+          autoHideDuration={6000}
+          onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          {alertInfo.htmlContent ? (
+            <SnackbarContent
+              style={{
+                color: "black",
+                backgroundColor: alertInfo.severity === "error" ? "#ffcccc" : "#ccffcc",
+              }}
+              message={<span dangerouslySetInnerHTML={{ __html: alertInfo.htmlContent }} />}
+            />
+          ) : (
+            <Alert
+              onClose={() => setAlertInfo({ ...alertInfo, open: false })}
+              severity={alertInfo.severity}
+              sx={{ width: "100%" }}
+            >
+              {alertInfo.message}
+            </Alert>
+          )}
+        </Snackbar>
+        <div className="flex justify-between items-center w-full max-w-7xl mx-auto px-4 mt-10">
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold h1-color">Bond Resale Market</h1>
-            <span className={`px-3 py-1 text-sm rounded-full ${
-              isTestnet 
+            <h1 className="text-3xl mb-4 font-bold h1-color">Bond Resale Market</h1>
+            <div className="mb-4">
+              <NetworkSwitcher />
+            </div>
+              {/* <span className={`px-3 py-1 text-sm rounded-full ${
+                isTestnet 
                 ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
                 : 'bg-green-500/20 text-green-400 border border-green-500/30'
             }`}>
               {isTestnet ? 'Testnet' : 'Mainnet'}
-            </span>
+            </span> */}
           </div>
+          
           {connectedWalletAddress && (
             <div className="flex space-x-4 items-center">
               <button
@@ -772,92 +950,92 @@ function ResaleBonds() {
             )}
           </div>
         )}
-      </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl">
-            <div className="p-4">
-              <h2 className="text-lg font-bold mb-3 text-center text-white">Create Resale Offer</h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div className="space-y-3">
-                  <BondSelectionDropdown />
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+            <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl">
+              <div className="p-4">
+                <h2 className="text-lg font-bold mb-3 text-center text-white">Create Resale Offer</h2>
+                
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="space-y-3">
+                    <BondSelectionDropdown />
 
-                  <div>
-                    <label className="block text-xs font-medium mb-1 text-gray-300">Price per Bond</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      value={formData.price_per_bond}
-                      onChange={(e) => setFormData({...formData, price_per_bond: e.target.value})}
-                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
-                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
-                        focus:outline-none transition-all text-white"
-                      required
-                    />
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-gray-300">Price per Bond</label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={formData.price_per_bond}
+                        onChange={(e) => setFormData({...formData, price_per_bond: e.target.value})}
+                        className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                          focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                          focus:outline-none transition-all text-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="mb-4">
+                      <TokenDropdown
+                        name="price_denom"
+                        value={formData.price_denom}
+                        onChange={(e) => setFormData({ ...formData, price_denom: e.target.value })}
+                        label="Price Token"
+                        allowedDenoms={['factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir', 'uwhale']}
+                        isTestnet={isTestnet}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-gray-300">Start Time</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.start_time}
+                        onChange={(e) => setFormData({...formData, start_time: e.target.value})}
+                        className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                          focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                          focus:outline-none transition-all text-white"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-gray-300">End Time</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.end_time}
+                        onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                        className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
+                          focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
+                          focus:outline-none transition-all text-white"
+                        required
+                      />
+                    </div>
                   </div>
 
-                  <div className="mb-4">
-                    <TokenDropdown
-                      name="price_denom"
-                      value={formData.price_denom}
-                      onChange={(e) => setFormData({ ...formData, price_denom: e.target.value })}
-                      label="Price Token"
-                      allowedDenoms={['factory/migaloo17c5ped2d24ewx9964ul6z2jlhzqtz5gvvg80z6x9dpe086v9026qfznq2e/daoophir', 'uwhale']}
-                      isTestnet={isTestnet}
-                    />
+                  <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 
+                        transition duration-300 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="landing-button px-4 py-2 rounded-md hover:bg-yellow-500 
+                        transition duration-300 text-sm"
+                    >
+                      Create Offer
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-medium mb-1 text-gray-300">Start Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formData.start_time}
-                      onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
-                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
-                        focus:outline-none transition-all text-white"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium mb-1 text-gray-300">End Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formData.end_time}
-                      onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                      className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
-                        focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
-                        focus:outline-none transition-all text-white"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 
-                      transition duration-300 text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="landing-button px-4 py-2 rounded-md hover:bg-yellow-500 
-                      transition duration-300 text-sm"
-                  >
-                    Create Offer
-                  </button>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

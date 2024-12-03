@@ -5,13 +5,14 @@ import { useSidebar } from '../context/SidebarContext';
 import { useWallet } from '../context/WalletContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { daoConfig } from "../utils/daoConfig";
+import { useIssuer } from '../context/IssuerContext';
 
 const Sidebar = () => {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
   const [openDropdowns, setOpenDropdowns] = useState({});
   const navigate = useNavigate();
   const { connectedWalletAddress } = useWallet();
-  const [isIssuer, setIsIssuer] = useState(false);
+  const { isIssuer, setIsIssuer } = useIssuer();
 
   const checkIfIssuer = async () => {
     if (!connectedWalletAddress) return;

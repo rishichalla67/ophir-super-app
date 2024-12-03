@@ -1209,19 +1209,19 @@ const BuyBonds = () => {
         )}
 
         {isBondActive && (
-          <div className="bond-buy backdrop-blur-sm rounded-lg p-6 md:p-8 shadow-xl border border-gray-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-yellow-400">Purchase Bond</h2>
-              <div className="flex flex-col items-end">
+          <div className="bond-buy backdrop-blur-sm rounded-lg p-4 md:p-8 shadow-xl border border-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-2xl font-bold text-yellow-400 mb-2 sm:mb-0">Purchase Bond</h2>
+              <div className="flex flex-col items-start sm:items-end">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-400">Price:</span>
-                  <span className="text-lg font-bold">{bond?.price || 'N/A'}</span>
+                  <span className="text-base sm:text-lg font-bold">{bond?.price || 'N/A'}</span>
                   <div className="flex items-center">
-                    <span className="text-lg">{purchasingSymbol}</span>
+                    <span className="text-base sm:text-lg">{purchasingSymbol}</span>
                     <img 
                       src={getTokenImage(purchasingSymbol)} 
                       alt={purchasingSymbol}
-                      className="w-5 h-5 ml-2 rounded-full"
+                      className="w-4 h-4 sm:w-5 sm:h-5 ml-2 rounded-full"
                     />
                   </div>
                 </div>
@@ -1238,9 +1238,9 @@ const BuyBonds = () => {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
                   Amount ({purchasingSymbol})
                 </label>
                 <div className="relative">
@@ -1248,12 +1248,12 @@ const BuyBonds = () => {
                     type="text"
                     value={purchaseAmount}
                     onChange={handlePurchaseAmountChange}
-                    className="w-full px-4 py-3 text-lg rounded-lg bg-gray-900/50 border border-gray-700 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all duration-200"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg rounded-lg bg-gray-900/50 border border-gray-700 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all duration-200"
                     placeholder="0.0"
                   />
                   {bond?.purchase_denom && walletBalances[bond.purchase_denom] && (
                     <button 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 text-sm bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-md transition-colors"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 px-2 sm:px-3 py-1 text-xs sm:text-sm bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 rounded-md transition-colors"
                       onClick={() => {
                         const maxPurchaseAmount = calculateMaxPurchaseAmount(bond);
                         const userBalance = walletBalances[bond.purchase_denom];
@@ -1265,19 +1265,19 @@ const BuyBonds = () => {
                   )}
                 </div>
                 {purchaseAmount && !validatePurchaseAmount(purchaseAmount) && (
-                  <p className="text-red-500 text-sm mt-2 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <p className="text-red-500 text-xs sm:text-sm mt-1 sm:mt-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
-                    Amount exceeds maximum purchase amount of {calculateMaxPurchaseAmount(bond).toFixed(6)} {purchasingSymbol}
+                    Amount exceeds maximum of {calculateMaxPurchaseAmount(bond).toFixed(6)} {purchasingSymbol}
                   </p>
                 )}
               </div>
 
-              <div className="bg-gray-900/30 rounded-lg p-4 space-y-3">
+              <div className="bg-gray-900/30 rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3 text-sm sm:text-base">
                 {bond?.purchase_denom && walletBalances[bond.purchase_denom] && (
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Available Balance:</span>
+                    <span className="text-gray-400">Available:</span>
                     <span className="text-yellow-300 font-medium">
                       {walletBalances[bond.purchase_denom]?.toLocaleString(undefined, {
                         minimumFractionDigits: 6,
@@ -1287,45 +1287,26 @@ const BuyBonds = () => {
                   </div>
                 )}
                 
-                {purchaseAmount && bond && (
+                {purchaseAmount && bond && calculateDiscount(bond) !== null && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-400">Discount:</span>
-                    {calculateDiscount(bond) !== null && (
-                      <div className="flex items-center">
-                        <span className={`font-medium ${
-                          calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}%
-                          <span className="text-xs ml-1">
-                            {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
-                          </span>
-                        </span>
-                        <div className="relative group ml-2">
-                          {/* <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg> */}
-                          {/* <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
-                            bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
-                            transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
-                            <div className="mb-2">
-                              <span className="text-red-400">Red (Premium)</span>: {bondSymbol} is selling at a premium
-                            </div>
-                            <div>
-                              <span className="text-green-400">Green (Discount)</span>: {bondSymbol} is selling at a discount
-                            </div>
-                          </div> */}
-                        </div>
-                      </div>
-                    )}
+                    <span className={`font-medium ${
+                      calculateDiscount(bond) < 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {Math.abs(calculateDiscount(bond)).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}%
+                      <span className="text-xs ml-1">
+                        {calculateDiscount(bond) < 0 ? 'Discount' : 'Premium'}
+                      </span>
+                    </span>
                   </div>
                 )}
                 
                 {purchaseAmount && (
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400">You Will Receive:</span>
+                    <span className="text-gray-400">You Receive:</span>
                     <span className="text-white font-medium">
                       {validatePurchaseAmount(purchaseAmount) 
                         ? `${calculateBondAmount(purchaseAmount)} ${bondSymbol}`
@@ -1338,10 +1319,10 @@ const BuyBonds = () => {
               <button
                 onClick={handlePurchase}
                 disabled={!connectedWalletAddress || isPurchaseLoading || !purchaseAmount}
-                className="w-full py-4 mt-4 bg-yellow-300 hover:bg-yellow-400 
+                className="w-full py-3 sm:py-4 mt-3 sm:mt-4 bg-yellow-300 hover:bg-yellow-400 
                   disabled:bg-gray-600 disabled:cursor-not-allowed text-black 
-                  font-bold rounded-lg transition-all duration-300 flex items-center 
-                  justify-center space-x-2"
+                  text-sm sm:text-base font-bold rounded-lg transition-all duration-300 
+                  flex items-center justify-center space-x-2"
               >
                 {isPurchaseLoading ? (
                   <>

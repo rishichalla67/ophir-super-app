@@ -27,6 +27,7 @@ import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent';
 import { useCrypto } from '../context/CryptoContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { useNetwork } from '../context/NetworkContext';
+import { useIssuer } from '../context/IssuerContext';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
@@ -626,6 +627,8 @@ const CreateBonds = () => {
     return offlineSigner;
   };
 
+  const { setIsIssuer } = useIssuer();
+
   const executeCreateBond = async () => {
     setIsLoading(true);
     try {
@@ -751,6 +754,9 @@ const CreateBonds = () => {
 
       console.log(result);
       if (result.transactionHash) {
+        // Set issuer status to true after successful bond creation
+        setIsIssuer(true);
+        
         const baseTxnUrl = isTestnet
           ? "https://ping.pfc.zone/narwhal-testnet/tx"
           : "https://inbloc.org/migaloo/transactions";
