@@ -494,11 +494,10 @@ const BuyBonds = () => {
     try {
       const result = await executePurchase();
       
-      // Reset loading state and purchase amount after successful transaction
+      // Reset states
       setIsPurchaseLoading(false);
       setPurchaseAmount('');
       
-      // Show success message with correct explorer URL
       if (result?.transactionHash) {
         const txnUrl = `${explorerUrl}/${result.transactionHash}`;
         showAlert(
@@ -506,15 +505,17 @@ const BuyBonds = () => {
           "success",
           `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
         );
-      } 
-      // else {
-      //   showAlert('Purchase transaction cancelled', "error");
-      // }
 
-      // Refresh bond data
-      fetchBondDetails();
-      if (connectedWalletAddress) {
-        fetchUserBondPurchase(connectedWalletAddress);
+        // Add a small delay before refreshing data
+        setTimeout(async () => {
+          await Promise.all([
+            fetchBondDetails(),
+            connectedWalletAddress ? fetchUserBondPurchase(connectedWalletAddress) : null,
+            connectedWalletAddress && bond?.purchasing_denom ? 
+              fetchUserBalance(connectedWalletAddress, bond.purchasing_denom) : null,
+            checkBalances()
+          ].filter(Boolean));
+        }, 1000); // 1 second delay
       }
 
     } catch (error) {
@@ -525,8 +526,6 @@ const BuyBonds = () => {
   };
 
   const executePurchase = async () => {
-    setShowConfirmModal(false);
-    
     try {
       const purchaseAmountNum = parseFloat(purchaseAmount);
       const maxPurchaseAmount = calculateMaxPurchaseAmount(bond);
@@ -559,12 +558,6 @@ const BuyBonds = () => {
         gas: "500000",
       };
 
-      console.log('Executing purchase with:', {
-        purchaseMsg,
-        funds,
-        fee
-      });
-
       const result = await client.execute(
         connectedWalletAddress,
         contractAddress,
@@ -574,36 +567,10 @@ const BuyBonds = () => {
         funds
       );
 
-      console.log('Purchase result:', result);
-      if (result.transactionHash) {
-        const baseTxnUrl = isTestnet
-          ? "https://ping.pfc.zone/narwhal-testnet/tx"
-          : "https://inbloc.org/migaloo/transactions";
-        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
-        showAlert(
-          `Bond purchased successfully! Transaction Hash: ${result.transactionHash}`,
-          "success",
-          `<a href="${txnUrl}" target="_blank">View Transaction</a>`
-        );
-        
-        await Promise.all([
-          fetchBondDetails(),
-          fetchUserBalance(connectedWalletAddress, bond.purchasing_denom),
-          fetchUserBondPurchase(connectedWalletAddress),
-          checkBalances()
-        ]);
-      } else {
-        showAlert("Bond purchased successfully!", "success");
-      }
-      setPurchaseAmount('');
-      
-      if (connectedWalletAddress && bond?.purchasing_denom) {
-        await fetchUserBalance(connectedWalletAddress, bond.purchasing_denom);
-      }
+      return result;
     } catch (error) {
       console.error("Error purchasing bond:", error);
-      showAlert(`Error purchasing bond: ${error.message}`, "error");
-      throw error; // Propagate error to handlePurchase
+      throw error;
     }
   };
 
