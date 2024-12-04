@@ -1354,7 +1354,21 @@ const Bonds = () => {
       }
     }, [userBonds, activeBondId]);
 
-    if (!connectedWalletAddress || userBonds.length === 0) return null;
+    if (!connectedWalletAddress) return null;
+
+    if (isLoadingUserBonds) {
+      return (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
+          <div className="bg-gray-900/30 rounded-lg border border-gray-800 p-6 flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400 mb-3"></div>
+            <span className="text-gray-400">Loading your bonds...</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (userBonds.length === 0) return null;
 
     // Group bonds and check for claimable purchases
     const groupedBonds = userBonds.reduce((acc, purchase) => {
@@ -1496,9 +1510,9 @@ const Bonds = () => {
                       <div>
                         <span className="font-medium">{bondName}</span>
                         <div className="flex items-center space-x-2 mt-1 sm:mt-0">
-                          {/* <span className="text-gray-400 text-sm">
-                            ({purchases.length} / {totalNFTsInCollection} NFTs)
-                          </span> */}
+                          <span className="text-gray-400 text-sm">
+                            ({totalNFTsInCollection} Bonds)
+                          </span>
                           {!allClaimed && hasClaimable && (
                             <div className="flex items-center space-x-1">
                               <div className="w-2 h-2 rounded-full bg-green-500 
