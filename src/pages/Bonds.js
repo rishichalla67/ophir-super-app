@@ -12,7 +12,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
-import { nftInfoCache, CACHE_DURATION } from '../utils/nftCache';
+import { nftInfoCache, CACHE_DURATION, batchGetNFTInfo } from '../utils/nftCache';
 import { useCrypto } from '../context/CryptoContext';
 import { useNetwork } from '../context/NetworkContext';
 import NetworkSwitcher from '../components/NetworkSwitcher';
@@ -111,6 +111,12 @@ const Bonds = () => {
   const [claimingAllStates, setClaimingAllStates] = useState({});
   const [nftCollections, setNftCollections] = useState([]);
 
+  // Add new state for progressive loading
+  const [page, setPage] = useState(1);
+  const [hasMoreBonds, setHasMoreBonds] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const BONDS_PER_PAGE = 20;
+
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
   };
@@ -178,72 +184,79 @@ const Bonds = () => {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (pageToFetch = 1, shouldAppend = false) => {
     try {
-      setIsLoading(true);
-      let allBonds = [];
-      let startAfter = null;
-      const limit = 10;
-      let hasMore = true;
-
-      while (hasMore) {
-        const message = {
-          get_all_bond_offers: {
-            limit: limit,
-            ...(startAfter && { start_after: startAfter.toString() })
-          }
-        };
-
-        const data = await queryContract(message);
-        
-        if (!data?.bond_offers || data.bond_offers.length === 0) {
-          break;
-        }
-
-        const transformedBonds = data.bond_offers.map(offer => {
-          // Add debug logging for date conversions
-          console.log('Raw date values:', {
-            start: offer.bond_offer.purchase_start_time,
-            end: offer.bond_offer.purchase_end_time,
-            maturity: offer.bond_offer.maturity_date
-          });
-
-          return {
-            ...offer.bond_offer,
-            contract_addr: offer.contract_addr, // Add this line to include contract_addr
-            start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
-            end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
-            maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
-          };
-        });
-
-        allBonds = [...allBonds, ...transformedBonds];
-
-        if (data.bond_offers.length < limit) {
-          hasMore = false;
-        } else {
-          startAfter = data.bond_offers[data.bond_offers.length - 1].bond_offer.bond_id.toString();
-        }
+      if (pageToFetch === 1) {
+        setIsLoading(true);
+      } else {
+        setIsFetchingMore(true);
       }
 
-      console.log(`📦 Fetched total of ${allBonds.length} bonds with dates:`, 
-        allBonds.map(b => ({
-          id: b.bond_id,
-          contract: b.contract_addr, // Add this to debug logging
-          start: b.start_time,
-          end: b.end_time,
-          maturity: b.maturity_date
-        }))
-      );
-      setBonds(allBonds);
+      const message = {
+        get_all_bond_offers: {
+          limit: BONDS_PER_PAGE,
+          start_after: pageToFetch > 1 ? ((pageToFetch - 1) * BONDS_PER_PAGE).toString() : undefined
+        }
+      };
+
+      const data = await queryContract(message);
+      
+      if (!data?.bond_offers || data.bond_offers.length === 0) {
+        setHasMoreBonds(false);
+        return;
+      }
+
+      const transformedBonds = data.bond_offers.map(offer => ({
+        ...offer.bond_offer,
+        contract_addr: offer.contract_addr,
+        start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
+        end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
+        maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
+      }));
+
+      console.log(`📦 Fetched ${transformedBonds.length} bonds for page ${pageToFetch}`);
+
+      if (shouldAppend) {
+        setBonds(prevBonds => [...prevBonds, ...transformedBonds]);
+      } else {
+        setBonds(transformedBonds);
+      }
+
+      setHasMoreBonds(transformedBonds.length === BONDS_PER_PAGE);
+      setPage(pageToFetch);
 
     } catch (error) {
       console.error("Error fetching bonds:", error);
       showAlert("Failed to fetch bonds. Please try again later.", "error");
     } finally {
       setIsLoading(false);
+      setIsFetchingMore(false);
     }
   };
+
+  // Add intersection observer for infinite scrolling
+  const observerTarget = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMoreBonds && !isFetchingMore && !isLoading) {
+          fetchData(page + 1, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [hasMoreBonds, isFetchingMore, isLoading, page]);
 
   const invalidateNFTCache = (contractAddr, tokenId) => {
     const cacheKey = `${contractAddr}_${tokenId}`;
@@ -292,15 +305,16 @@ const Bonds = () => {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
-      // Create a map of all NFTs the user owns by contract address
-      const userNFTsByContract = nftCollections.reduce((acc, collection) => {
-        acc[collection.collectionAddress.toLowerCase()] = new Set(collection.tokens);
-        return acc;
-      }, {});
+      const userNFTsByContract = nftCollections.length > 0 
+        ? nftCollections.reduce((acc, collection) => {
+            acc[collection.collectionAddress.toLowerCase()] = new Set(collection.tokens);
+            return acc;
+          }, {})
+        : null;
 
       let allUserBonds = new Map();
       let startAfter = null;
-      const limit = 10;
+      const limit = 20;
       let hasMore = true;
       
       while (hasMore) {
@@ -319,109 +333,60 @@ const Bonds = () => {
             break;
           }
 
-          // Process each pair individually
-          for (const pair of response.pairs) {
-            const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
-            if (matchingBond) {
-              // Check if user still owns this NFT
-              const contractNFTs = userNFTsByContract[pair.contract_addr.toLowerCase()];
-              if (!contractNFTs?.has(pair.nft_id.toString())) {
-                console.log(`Skipping bond ${pair.bond_id} NFT ${pair.nft_id} - no longer owned`);
-                continue;
-              }
-
-              try {
-                const nftInfo = await getNFTInfo(pair.contract_addr, pair.nft_id);
-                const attributes = nftInfo.extension?.attributes || [];
-                
-                // Find all relevant attributes
-                const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
-                const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
-                const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
-                const statusAttr = attributes.find(attr => attr.trait_type === 'status');
-                
-                let purchaseTime;
-                if (purchaseTimeAttr?.value) {
-                  purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
-                  console.log(`Converted purchase time for token ${pair.nft_id}:`, purchaseTime);
-                }
-
-                if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
-                  console.warn(`Invalid purchase time for token ${pair.nft_id}, using current time`);
-                  purchaseTime = new Date();
-                }
-
-                const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
-                allUserBonds.set(uniqueKey, {
-                  bond_id: pair.bond_id,
-                  nft_token_id: pair.nft_id,
-                  contract_address: pair.contract_addr,
-                  purchase_time: purchaseTime,
-                  amount: amountAttr?.value || matchingBond.total_amount,
-                  claimed_amount: claimedAmountAttr?.value || "0",
-                  status: statusAttr?.value || "Unclaimed",
-                  name: nftInfo.extension?.name || `Bond #${pair.bond_id}`
-                });
-                
-              } catch (nftError) {
-                console.error(`Error fetching NFT info for token ${pair.nft_id}:`, nftError);
-                continue;
-              }
+          const pairsByContract = response.pairs.reduce((acc, pair) => {
+            const contractAddr = pair.contract_addr.toLowerCase();
+            if (!acc[contractAddr]) {
+              acc[contractAddr] = [];
             }
-          }
+            acc[contractAddr].push(pair);
+            return acc;
+          }, {});
 
-          // Add bonds from NFTs that weren't purchased but are owned
-          for (const collection of nftCollections) {
-            const contractAddr = collection.collectionAddress.toLowerCase();
-            const matchingBond = bonds.find(b => 
-              b.nft_contract_addr?.toLowerCase() === contractAddr
-            );
+          await Promise.all(Object.entries(pairsByContract).map(async ([contractAddr, pairs]) => {
+            const validPairs = userNFTsByContract 
+              ? pairs.filter(pair => userNFTsByContract[contractAddr]?.has(pair.nft_id.toString()))
+              : pairs;
 
-            if (matchingBond) {
-              for (const tokenId of collection.tokens) {
-                const uniqueKey = `${matchingBond.bond_id}_${tokenId}`;
-                
-                // Skip if we already processed this NFT
-                if (allUserBonds.has(uniqueKey)) continue;
+            if (validPairs.length === 0) return;
 
-                try {
-                  const nftInfo = await getNFTInfo(contractAddr, tokenId);
-                  const attributes = nftInfo.extension?.attributes || [];
-                  
-                  const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
-                  const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
-                  const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
-                  const statusAttr = attributes.find(attr => attr.trait_type === 'status');
-                  
-                  let purchaseTime;
-                  if (purchaseTimeAttr?.value) {
-                    purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
-                    console.log(`Converted purchase time for token ${tokenId}:`, purchaseTime);
-                  }
+            const tokenIds = validPairs.map(pair => pair.nft_id);
+            const nftInfos = await batchGetNFTInfo(contractAddr, tokenIds, rpc);
 
-                  if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
-                    console.warn(`Invalid purchase time for token ${tokenId}, using current time`);
-                    purchaseTime = new Date();
-                  }
+            validPairs.forEach(pair => {
+              const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
+              if (!matchingBond) return;
 
-                  allUserBonds.set(uniqueKey, {
-                    bond_id: matchingBond.bond_id,
-                    nft_token_id: tokenId,
-                    contract_address: contractAddr,
-                    purchase_time: purchaseTime,
-                    amount: amountAttr?.value || matchingBond.total_amount,
-                    claimed_amount: claimedAmountAttr?.value || "0",
-                    status: statusAttr?.value || "Unclaimed",
-                    name: nftInfo.extension?.name || `Bond #${matchingBond.bond_id}`
-                  });
-                  
-                } catch (nftError) {
-                  console.error(`Error fetching NFT info for token ${tokenId}:`, nftError);
-                  continue;
-                }
+              const nftInfo = nftInfos[pair.nft_id];
+              if (!nftInfo) return;
+
+              const attributes = nftInfo.extension?.attributes || [];
+              const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
+              const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
+              const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
+              const statusAttr = attributes.find(attr => attr.trait_type === 'status');
+
+              let purchaseTime;
+              if (purchaseTimeAttr?.value) {
+                purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
               }
-            }
-          }
+
+              if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
+                purchaseTime = new Date();
+              }
+
+              const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
+              allUserBonds.set(uniqueKey, {
+                bond_id: pair.bond_id,
+                nft_token_id: pair.nft_id,
+                contract_address: pair.contract_addr,
+                purchase_time: purchaseTime,
+                amount: amountAttr?.value || matchingBond.total_amount,
+                claimed_amount: claimedAmountAttr?.value || "0",
+                status: statusAttr?.value || "Unclaimed",
+                name: nftInfo.extension?.name || `Bond #${pair.bond_id}`
+              });
+            });
+          }));
 
           if (response.pairs.length === limit) {
             startAfter = response.pairs[response.pairs.length - 1].nft_id;
@@ -857,179 +822,192 @@ const Bonds = () => {
     }
 
     return (
-      <table className="w-full mb-5">
-        <thead>
-          <tr className="bond-table-header">
-            <th className="bond-table-left-border-radius text-left pl-4 py-2 w-1/4 cursor-pointer" onClick={() => requestSort('bond_denom_name')}>
-              <span className="flex items-center">
-                Bond Name {renderSortIcon('bond_denom_name')}
-              </span>
-            </th>
-            <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('status')}>
-              <span className="flex items-center justify-center">
-                Status {renderSortIcon('status')}
-              </span>
-            </th>
-            <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('total_amount')}>
-              <span className="flex items-center justify-center">
-                Total Supply {renderSortIcon('total_amount')}
-              </span>
-            </th>
-            <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('price')}>
-              <span className="flex items-center justify-center">
-                Bond Price {renderSortIcon('price')}
-              </span>
-            </th>
-            <th className="text-center py-2 w-1/4 cursor-pointer" onClick={() => requestSort('maturity_date')}>
-              <span className="flex items-center justify-center">
-                {sortConfig.key === 'start_time' ? 'Start Date' : 'Maturity Date'} {renderSortIcon('maturity_date')}
-              </span>
-            </th>
-            <th className="text-center py-2 w-1/6 relative group">
-              <span className="flex items-center justify-center">
-                Markup
-                <DiscountTooltip />
-              </span>
-            </th>
-            <th className="bond-table-right-border-radius w-12"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredBonds.map((bond) => {
-            if (!bond) return null;
-            
-            const bondSymbol = getTokenSymbol(bond.token_denom);
-            const purchasingSymbol = getTokenSymbol(bond.purchase_denom);
-            const bondImage = getTokenImage(bondSymbol);
-            const purchasingImage = getTokenImage(purchasingSymbol);
-            const status = getBondStatus(bond);
-            const isMatured = status === 'Matured';
-            const discount = calculateDiscount(bond);
+      <>
+        <table className="w-full mb-5">
+          <thead>
+            <tr className="bond-table-header">
+              <th className="bond-table-left-border-radius text-left pl-4 py-2 w-1/4 cursor-pointer" onClick={() => requestSort('bond_denom_name')}>
+                <span className="flex items-center">
+                  Bond Name {renderSortIcon('bond_denom_name')}
+                </span>
+              </th>
+              <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('status')}>
+                <span className="flex items-center justify-center">
+                  Status {renderSortIcon('status')}
+                </span>
+              </th>
+              <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('total_amount')}>
+                <span className="flex items-center justify-center">
+                  Total Supply {renderSortIcon('total_amount')}
+                </span>
+              </th>
+              <th className="text-center py-2 w-1/6 cursor-pointer" onClick={() => requestSort('price')}>
+                <span className="flex items-center justify-center">
+                  Bond Price {renderSortIcon('price')}
+                </span>
+              </th>
+              <th className="text-center py-2 w-1/4 cursor-pointer" onClick={() => requestSort('maturity_date')}>
+                <span className="flex items-center justify-center">
+                  {sortConfig.key === 'start_time' ? 'Start Date' : 'Maturity Date'} {renderSortIcon('maturity_date')}
+                </span>
+              </th>
+              <th className="text-center py-2 w-1/6 relative group">
+                <span className="flex items-center justify-center">
+                  Markup
+                  <DiscountTooltip />
+                </span>
+              </th>
+              <th className="bond-table-right-border-radius w-12"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredBonds.map((bond) => {
+              if (!bond) return null;
+              
+              const bondSymbol = getTokenSymbol(bond.token_denom);
+              const purchasingSymbol = getTokenSymbol(bond.purchase_denom);
+              const bondImage = getTokenImage(bondSymbol);
+              const purchasingImage = getTokenImage(purchasingSymbol);
+              const status = getBondStatus(bond);
+              const isMatured = status === 'Matured';
+              const discount = calculateDiscount(bond);
 
-            // Get the correct date based on status
-            const displayDate = bond?.maturity_date ;
+              // Get the correct date based on status
+              const displayDate = bond?.maturity_date ;
 
-            return (
-              <tr 
-                key={bond.bond_id}
-                className={`border-b border-gray-800 cursor-pointer transition duration-300
-                  ${isMatured 
-                    ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
-                    : 'hover:bg-gray-700'
-                  }`}
-                onClick={() => handleBondClick(bond.bond_id)}
-              >
-                <td className="py-4 pl-4">
-                  <div className="flex items-center">
-                    {bondImage && (
-                      <div className="w-8 h-8 rounded-full mr-2 overflow-hidden">
-                        <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
+              return (
+                <tr 
+                  key={bond.bond_id}
+                  className={`border-b border-gray-800 cursor-pointer transition duration-300
+                    ${isMatured 
+                      ? 'bg-red-900/10 hover:bg-red-800/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.3)]' 
+                      : 'hover:bg-gray-700'
+                    }`}
+                  onClick={() => handleBondClick(bond.bond_id)}
+                >
+                  <td className="py-4 pl-4">
+                    <div className="flex items-center">
+                      {bondImage && (
+                        <div className="w-8 h-8 rounded-full mr-2 overflow-hidden">
+                          <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div>
+                        {bond.bond_name || 'Unknown Bond'}
+                        {bond.immediate_claim && <span className="ml-2 text-green-400 text-sm">(Immediate)</span>}
                       </div>
-                    )}
-                    <div>
-                      {bond.bond_name || 'Unknown Bond'}
-                      {bond.immediate_claim && <span className="ml-2 text-green-400 text-sm">(Immediate)</span>}
                     </div>
-                  </div>
-                </td>
-                <td className="py-4 text-center">
-                  <div className="flex flex-col items-center">
-                    <span className={`px-3 py-1 rounded-full text-sm ${
-                      status === 'Active' ? 'bg-green-500/20 text-green-400' :
-                      status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
-                      status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {status}
-                    </span>
-                    {(status === 'Upcoming' || status === 'Active') && (
-                      <CountdownTimer 
-                        targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time}
-                        label={status === 'Active' ? 'Ends in:' : undefined}
-                        onEnd={() => refreshBond(bond.bond_id)}
-                        bondId={bond.bond_id}
-                      />
-                    )}
-                  </div>
-                </td>
-                <td className="py-4 text-center">
-                  <div className="flex items-center justify-center">
-                    <span className="mr-2">{formatAmount(bond.total_amount)}</span>
-                    {bondImage && (
-                      <div className="w-5 h-5 rounded-full overflow-hidden">
-                        <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    {isSoldOut(bond.remaining_supply) ? (
-                      <span className="text-red-500">Sold Out</span>
-                    ) : (
-                      `Remaining: ${formatAmount(bond.remaining_supply)}`
-                    )}
-                  </div>
-                </td>
-                <td className="py-4">
-                  <div className="flex items-center justify-center">
-                    <span className="mr-2">{formatAmount(bond.price, true)} {purchasingSymbol}</span>
-                    {purchasingImage && (
-                      <div className="w-5 h-5 rounded-full overflow-hidden">
-                        <img src={purchasingImage} alt={purchasingSymbol} className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                </td>
-                <td className="py-4 text-center">
-                  {formatDate(displayDate)}
-                </td>
-                <td className="py-4 text-center">
-                  {discount !== null ? (
-                    <span className={`${
-                      discount < 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {Math.abs(discount).toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })}%
-                      <span className="text-xs ml-1">
-                        {discount < 0 ? 'Discount' : 'Premium'}
+                  </td>
+                  <td className="py-4 text-center">
+                    <div className="flex flex-col items-center">
+                      <span className={`px-3 py-1 rounded-full text-sm ${
+                        status === 'Active' ? 'bg-green-500/20 text-green-400' :
+                        status === 'Sold Out' ? 'bg-red-500/20 text-red-400' :
+                        status === 'Upcoming' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {status}
                       </span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">N/A</span>
-                  )}
-                </td>
-                <td className="py-4 text-center pr-2 pl-2">
-                  <div className="flex items-center justify-end space-x-2">
-                    {canWithdraw(bond) && (
-                      <button
+                      {(status === 'Upcoming' || status === 'Active') && (
+                        <CountdownTimer 
+                          targetDate={status === 'Upcoming' ? bond.start_time : bond.end_time}
+                          label={status === 'Active' ? 'Ends in:' : undefined}
+                          onEnd={() => refreshBond(bond.bond_id)}
+                          bondId={bond.bond_id}
+                        />
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 text-center">
+                    <div className="flex items-center justify-center">
+                      <span className="mr-2">{formatAmount(bond.total_amount)}</span>
+                      {bondImage && (
+                        <div className="w-5 h-5 rounded-full overflow-hidden">
+                          <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {isSoldOut(bond.remaining_supply) ? (
+                        <span className="text-red-500">Sold Out</span>
+                      ) : (
+                        `Remaining: ${formatAmount(bond.remaining_supply)}`
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4">
+                    <div className="flex items-center justify-center">
+                      <span className="mr-2">{formatAmount(bond.price, true)} {purchasingSymbol}</span>
+                      {purchasingImage && (
+                        <div className="w-5 h-5 rounded-full overflow-hidden">
+                          <img src={purchasingImage} alt={purchasingSymbol} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 text-center">
+                    {formatDate(displayDate)}
+                  </td>
+                  <td className="py-4 text-center">
+                    {discount !== null ? (
+                      <span className={`${
+                        discount < 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {Math.abs(discount).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}%
+                        <span className="text-xs ml-1">
+                          {discount < 0 ? 'Discount' : 'Premium'}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">N/A</span>
+                    )}
+                  </td>
+                  <td className="py-4 text-center pr-2 pl-2">
+                    <div className="flex items-center justify-end space-x-2">
+                      {canWithdraw(bond) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleWithdraw(bond.bond_id);
+                          }}
+                          className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 
+                            hover:bg-green-500/30 rounded-md transition-colors"
+                          title="Withdraw matured bonds"
+                        >
+                          Withdraw
+                        </button>
+                      )}
+                      <button 
+                        className="text-gray-400 hover:text-white transition duration-300"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleWithdraw(bond.bond_id);
+                          handleBondClick(bond.bond_id);
                         }}
-                        className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 
-                          hover:bg-green-500/30 rounded-md transition-colors"
-                        title="Withdraw matured bonds"
                       >
-                        Withdraw
+                        →
                       </button>
-                    )}
-                    <button 
-                      className="text-gray-400 hover:text-white transition duration-300"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBondClick(bond.bond_id);
-                      }}
-                    >
-                      →
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        
+        {hasMoreBonds && (
+          <div 
+            ref={observerTarget}
+            className="w-full py-4 flex justify-center"
+          >
+            {isFetchingMore && (
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400"></div>
+            )}
+          </div>
+        )}
+      </>
     );
   };
 
@@ -2016,14 +1994,17 @@ const Bonds = () => {
       );
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.warn('NFT collections fetch failed, defaulting to purchased bonds only:', response.status);
+        setNftCollections([]);
+        return;
       }
       
       const collections = await response.json();
       console.log('🎉 Fetched NFT collections:', collections);
       setNftCollections(collections);
     } catch (error) {
-      console.error('Failed to fetch NFT collections:', error);
+      console.warn('Failed to fetch NFT collections, defaulting to purchased bonds:', error);
+      setNftCollections([]);
     }
   };
 
@@ -2105,6 +2086,16 @@ const Bonds = () => {
               {filteredBonds.map((bond) => (
                 <BondCard key={bond.bond_id} bond={bond} />
               ))}
+              {hasMoreBonds && (
+                <div 
+                  ref={observerTarget}
+                  className="w-full py-4 flex justify-center"
+                >
+                  {isFetchingMore && (
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400"></div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

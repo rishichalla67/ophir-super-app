@@ -20,7 +20,7 @@ const saveCache = (cache) => {
   }
 };
 
-export const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
+export const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours
 
 export const invalidateNFTCache = (contractAddr, tokenId) => {
   const cacheKey = `${contractAddr}_${tokenId}`;
@@ -75,6 +75,67 @@ export const getNFTInfo = async (contractAddr, tokenId, rpc) => {
     console.error(`Error fetching NFT info for token ${tokenId}:`, error);
     throw error;
   }
+};
+
+// Add batch caching functionality
+export const batchGetNFTInfo = async (contractAddr, tokenIds, rpc) => {
+  const now = Date.now();
+  const cache = initializeCache();
+  const uncachedTokenIds = [];
+  const results = {};
+
+  // Check cache first for all tokens
+  for (const tokenId of tokenIds) {
+    const cacheKey = `${contractAddr}_${tokenId}`;
+    if (cache[cacheKey]) {
+      const cachedData = cache[cacheKey];
+      if (now - cachedData.timestamp < CACHE_DURATION) {
+        results[tokenId] = cachedData.data;
+        continue;
+      }
+      delete cache[cacheKey];
+    }
+    uncachedTokenIds.push(tokenId);
+  }
+
+  // If there are uncached tokens, fetch them in batches
+  if (uncachedTokenIds.length > 0) {
+    try {
+      const { CosmWasmClient } = await import("@cosmjs/cosmwasm-stargate");
+      const nftClient = await CosmWasmClient.connect(rpc);
+      
+      // Process in batches of 10
+      const batchSize = 10;
+      for (let i = 0; i < uncachedTokenIds.length; i += batchSize) {
+        const batch = uncachedTokenIds.slice(i, i + batchSize);
+        const promises = batch.map(tokenId => 
+          nftClient.queryContractSmart(contractAddr, {
+            nft_info: { token_id: tokenId }
+          })
+        );
+        
+        const batchResults = await Promise.all(promises);
+        
+        // Cache the results
+        batch.forEach((tokenId, index) => {
+          const nftInfo = batchResults[index];
+          const cacheKey = `${contractAddr}_${tokenId}`;
+          cache[cacheKey] = {
+            data: nftInfo,
+            timestamp: now
+          };
+          results[tokenId] = nftInfo;
+        });
+      }
+      
+      saveCache(cache);
+    } catch (error) {
+      console.error('Error in batch NFT info fetch:', error);
+      throw error;
+    }
+  }
+
+  return results;
 };
 
 // Export the cache functions
