@@ -305,6 +305,7 @@ const Bonds = () => {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
+      // First, get bonds owned by the user
       const userNFTsByContract = nftCollections.length > 0 
         ? nftCollections.reduce((acc, collection) => {
             acc[collection.collectionAddress.toLowerCase()] = new Set(collection.tokens);
@@ -342,17 +343,27 @@ const Bonds = () => {
             return acc;
           }, {});
 
+          // Process each contract's pairs
           await Promise.all(Object.entries(pairsByContract).map(async ([contractAddr, pairs]) => {
+            // Include all NFTs that the user owns, regardless of purchase history
             const validPairs = userNFTsByContract 
               ? pairs.filter(pair => userNFTsByContract[contractAddr]?.has(pair.nft_id.toString()))
               : pairs;
 
-            if (validPairs.length === 0) return;
+            // Also include pairs where the user is the original buyer, even if they don't own the NFT anymore
+            const transferredPairs = pairs.filter(pair => 
+              !userNFTsByContract?.[contractAddr]?.has(pair.nft_id.toString()) &&
+              pair.buyer === connectedWalletAddress
+            );
 
-            const tokenIds = validPairs.map(pair => pair.nft_id);
+            const allValidPairs = [...validPairs, ...transferredPairs];
+
+            if (allValidPairs.length === 0) return;
+
+            const tokenIds = allValidPairs.map(pair => pair.nft_id);
             const nftInfos = await batchGetNFTInfo(contractAddr, tokenIds, rpc);
 
-            validPairs.forEach(pair => {
+            allValidPairs.forEach(pair => {
               const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
               if (!matchingBond) return;
 
@@ -364,6 +375,7 @@ const Bonds = () => {
               const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
               const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
               const statusAttr = attributes.find(attr => attr.trait_type === 'status');
+              const originalOwnerAttr = attributes.find(attr => attr.trait_type === 'original_owner');
 
               let purchaseTime;
               if (purchaseTimeAttr?.value) {
@@ -383,7 +395,9 @@ const Bonds = () => {
                 amount: amountAttr?.value || matchingBond.total_amount,
                 claimed_amount: claimedAmountAttr?.value || "0",
                 status: statusAttr?.value || "Unclaimed",
-                name: nftInfo.extension?.name || `Bond #${pair.bond_id}`
+                name: nftInfo.extension?.name || `Bond #${pair.bond_id}`,
+                original_owner: originalOwnerAttr?.value || pair.buyer,
+                is_transferred: originalOwnerAttr?.value !== connectedWalletAddress
               });
             });
           }));
@@ -1121,13 +1135,13 @@ const Bonds = () => {
     
     // Check if claimed_amount exists and is less than amount
     const hasUnclaimedAmount = (totalAmount - claimedAmount) > 0;
-    console.log('Claim check:', {
-      bondId: userBond.bond_id,
-      totalAmount,
-      claimedAmount,
-      hasUnclaimedAmount,
-      status: userBond.status
-    });
+    // console.log('Claim check:', {
+    //   bondId: userBond.bond_id,
+    //   totalAmount,
+    //   claimedAmount,
+    //   hasUnclaimedAmount,
+    //   status: userBond.status
+    // });
 
     // Check if bond is claimable based on time
     const now = new Date();
@@ -1489,7 +1503,7 @@ const Bonds = () => {
                         <span className="font-medium">{bondName}</span>
                         <div className="flex items-center space-x-2 mt-1 sm:mt-0">
                           <span className="text-gray-400 text-sm">
-                            ({totalNFTsInCollection} Bonds)
+                            ({totalNFTsInCollection === 0 ? totalPurchases : totalNFTsInCollection} Bonds)
                           </span>
                           {!allClaimed && hasClaimable && (
                             <div className="flex items-center space-x-1">
