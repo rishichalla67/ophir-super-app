@@ -109,6 +109,7 @@ const Bonds = () => {
   const [hasSetInitialFilter, setHasSetInitialFilter] = useState(false);
   const [refreshingBonds, setRefreshingBonds] = useState({});
   const [claimingAllStates, setClaimingAllStates] = useState({});
+  const [nftCollections, setNftCollections] = useState([]);
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
@@ -209,6 +210,7 @@ const Bonds = () => {
 
           return {
             ...offer.bond_offer,
+            contract_addr: offer.contract_addr, // Add this line to include contract_addr
             start_time: convertContractTimeToDate(offer.bond_offer.purchase_start_time),
             end_time: convertContractTimeToDate(offer.bond_offer.purchase_end_time),
             maturity_date: convertContractTimeToDate(offer.bond_offer.maturity_date)
@@ -227,6 +229,7 @@ const Bonds = () => {
       console.log(`📦 Fetched total of ${allBonds.length} bonds with dates:`, 
         allBonds.map(b => ({
           id: b.bond_id,
+          contract: b.contract_addr, // Add this to debug logging
           start: b.start_time,
           end: b.end_time,
           maturity: b.maturity_date
@@ -289,6 +292,12 @@ const Bonds = () => {
       setIsLoadingUserBonds(true);
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
+      // Create a map of all NFTs the user owns by contract address
+      const userNFTsByContract = nftCollections.reduce((acc, collection) => {
+        acc[collection.collectionAddress.toLowerCase()] = new Set(collection.tokens);
+        return acc;
+      }, {});
+
       let allUserBonds = new Map();
       let startAfter = null;
       const limit = 10;
@@ -314,6 +323,13 @@ const Bonds = () => {
           for (const pair of response.pairs) {
             const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
             if (matchingBond) {
+              // Check if user still owns this NFT
+              const contractNFTs = userNFTsByContract[pair.contract_addr.toLowerCase()];
+              if (!contractNFTs?.has(pair.nft_id.toString())) {
+                console.log(`Skipping bond ${pair.bond_id} NFT ${pair.nft_id} - no longer owned`);
+                continue;
+              }
+
               try {
                 const nftInfo = await getNFTInfo(pair.contract_addr, pair.nft_id);
                 const attributes = nftInfo.extension?.attributes || [];
@@ -350,6 +366,59 @@ const Bonds = () => {
               } catch (nftError) {
                 console.error(`Error fetching NFT info for token ${pair.nft_id}:`, nftError);
                 continue;
+              }
+            }
+          }
+
+          // Add bonds from NFTs that weren't purchased but are owned
+          for (const collection of nftCollections) {
+            const contractAddr = collection.collectionAddress.toLowerCase();
+            const matchingBond = bonds.find(b => 
+              b.nft_contract_addr?.toLowerCase() === contractAddr
+            );
+
+            if (matchingBond) {
+              for (const tokenId of collection.tokens) {
+                const uniqueKey = `${matchingBond.bond_id}_${tokenId}`;
+                
+                // Skip if we already processed this NFT
+                if (allUserBonds.has(uniqueKey)) continue;
+
+                try {
+                  const nftInfo = await getNFTInfo(contractAddr, tokenId);
+                  const attributes = nftInfo.extension?.attributes || [];
+                  
+                  const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
+                  const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
+                  const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
+                  const statusAttr = attributes.find(attr => attr.trait_type === 'status');
+                  
+                  let purchaseTime;
+                  if (purchaseTimeAttr?.value) {
+                    purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
+                    console.log(`Converted purchase time for token ${tokenId}:`, purchaseTime);
+                  }
+
+                  if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
+                    console.warn(`Invalid purchase time for token ${tokenId}, using current time`);
+                    purchaseTime = new Date();
+                  }
+
+                  allUserBonds.set(uniqueKey, {
+                    bond_id: matchingBond.bond_id,
+                    nft_token_id: tokenId,
+                    contract_address: contractAddr,
+                    purchase_time: purchaseTime,
+                    amount: amountAttr?.value || matchingBond.total_amount,
+                    claimed_amount: claimedAmountAttr?.value || "0",
+                    status: statusAttr?.value || "Unclaimed",
+                    name: nftInfo.extension?.name || `Bond #${matchingBond.bond_id}`
+                  });
+                  
+                } catch (nftError) {
+                  console.error(`Error fetching NFT info for token ${tokenId}:`, nftError);
+                  continue;
+                }
               }
             }
           }
@@ -1264,6 +1333,17 @@ const Bonds = () => {
     }
   };
 
+  // Add function to check if a bond has matching NFTs in user's collection
+  const getBondNFTsInCollection = useCallback((contractAddr) => {
+    if (!nftCollections || !contractAddr) return [];
+    
+    const matchingCollection = nftCollections.find(
+      collection => collection.collectionAddress.toLowerCase() === contractAddr.toLowerCase()
+    );
+    
+    return matchingCollection?.tokens || [];
+  }, [nftCollections]);
+
   const UserBondsSection = () => {
     const [activeBondId, setActiveBondId] = useState(null);
     const prevUserBondsRef = useRef(userBonds);
@@ -1282,7 +1362,9 @@ const Bonds = () => {
       const bondName = bond?.bond_name || `Bond #${purchase.bond_id}`;
       
       if (!acc[purchase.bond_id]) {
-        // Initialize with token image as default
+        // Get all NFTs in this collection
+        const nftsInCollection = getBondNFTsInCollection(purchase.contract_address);
+        
         acc[purchase.bond_id] = {
           bondName,
           bondImage: bond?.backing_denom ? getTokenImage(bond.backing_denom) : null,
@@ -1292,7 +1374,10 @@ const Bonds = () => {
           totalPurchases: 0,
           claimedCount: 0,
           contract_address: purchase.contract_address,
-          first_token_id: purchase.nft_token_id
+          first_token_id: purchase.nft_token_id,
+          // Add total NFTs in collection
+          totalNFTsInCollection: nftsInCollection.length,
+          nftIds: nftsInCollection
         };
 
         // Try to get NFT image asynchronously
@@ -1300,7 +1385,6 @@ const Bonds = () => {
           .then(nftInfo => {
             if (nftInfo?.extension?.image) {
               acc[purchase.bond_id].bondImage = nftInfo.extension.image;
-              // Force a re-render
               setBonds(prev => [...prev]);
             }
           })
@@ -1369,7 +1453,9 @@ const Bonds = () => {
               hasClaimable, 
               claimableCount,
               totalPurchases,
-              claimedCount 
+              claimedCount,
+              totalNFTsInCollection,
+              nftIds
             }]) => {
               const allClaimed = claimedCount === totalPurchases;
               
@@ -1410,7 +1496,9 @@ const Bonds = () => {
                       <div>
                         <span className="font-medium">{bondName}</span>
                         <div className="flex items-center space-x-2 mt-1 sm:mt-0">
-                          <span className="text-gray-400 text-sm">({purchases.length})</span>
+                          {/* <span className="text-gray-400 text-sm">
+                            ({purchases.length} / {totalNFTsInCollection} NFTs)
+                          </span> */}
                           {!allClaimed && hasClaimable && (
                             <div className="flex items-center space-x-1">
                               <div className="w-2 h-2 rounded-full bg-green-500 
@@ -1902,6 +1990,35 @@ const Bonds = () => {
       console.error("Error refreshing bond:", error);
     }
   };
+
+  // Add function to fetch NFT collections
+  const fetchNFTCollections = async () => {
+    if (!connectedWalletAddress) return;
+    
+    try {
+      const chainId = isTestnet ? "narwhal-2" : "migaloo-1";
+      const response = await fetch(
+        `https://indexer.daodao.zone/${chainId}/account/${connectedWalletAddress}/nft/collections`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const collections = await response.json();
+      console.log('🎉 Fetched NFT collections:', collections);
+      setNftCollections(collections);
+    } catch (error) {
+      console.error('Failed to fetch NFT collections:', error);
+    }
+  };
+
+  // Add effect to fetch collections when wallet connects
+  useEffect(() => {
+    if (connectedWalletAddress) {
+      fetchNFTCollections();
+    }
+  }, [connectedWalletAddress, isTestnet]);
 
   return (
     <div 
