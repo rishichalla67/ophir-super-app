@@ -1618,23 +1618,39 @@ const Bonds = () => {
                                   ${isClaimed ? 'opacity-75' : ''}
                                   ${isClaimable ? 'shadow-[0_0_15px_-3px_rgba(34,197,94,0.3)]' : ''}`}
                               >
+                                {/* Add ownership indicator */}
+                                <div className="absolute top-4 right-4 flex items-center space-x-1">
+                                  {purchase.original_owner && purchase.original_owner !== connectedWalletAddress && (
+                                    <div className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs border border-purple-500/50">
+                                      Transferred
+                                    </div>
+                                  )}
+                                </div>
+
                                 {isClaimable && (
                                   <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 
                                     animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
                                   />
                                 )}
-                                <div className="flex justify-between items-start mb-3">
-                                  <div className="flex items-center space-x-2">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div className="flex items-center">
                                     <span className="text-sm font-medium">NFT #{purchase.nft_token_id}</span>
                                   </div>
-                                  <div className={`px-3 py-1 rounded-full text-xs ${
-                                    isClaimed ? 'bg-gray-500/20 text-gray-400' : 
-                                    isClaimable ? 'bg-green-500/20 text-green-400' :
-                                    'bg-yellow-500/20 text-yellow-400'
-                                  }`}>
-                                    {isClaimed ? 'Claimed' : 
-                                     isClaimable ? 'Ready to Claim' : 
-                                     'Pending'}
+                                  <div className="flex items-center space-x-2">
+                                    {purchase.original_owner && purchase.original_owner !== connectedWalletAddress && (
+                                      <div className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs border border-purple-500/50">
+                                        Transferred
+                                      </div>
+                                    )}
+                                    <div className={`px-3 py-1 rounded-full text-xs ${
+                                      isClaimed ? 'bg-gray-500/20 text-gray-400' : 
+                                      isClaimable ? 'bg-green-500/20 text-green-400' :
+                                      'bg-yellow-500/20 text-yellow-400'
+                                    }`}>
+                                      {isClaimed ? 'Claimed' : 
+                                       isClaimable ? 'Ready to Claim' : 
+                                       'Pending'}
+                                    </div>
                                   </div>
                                 </div>
                                 
