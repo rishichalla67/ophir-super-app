@@ -1583,7 +1583,7 @@ const Bonds = () => {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                     d="M5 13l4 4L19 7" />
                                 </svg>
-                                <span>Claim All Available Rewards ({claimableCount})</span>
+                                <span>Claim Available Rewards for {bondName} ({claimableCount})</span>
                               </>
                             )}
                           </button>
