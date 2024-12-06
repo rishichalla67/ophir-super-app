@@ -67,7 +67,7 @@ function ResaleBonds() {
   const [nftInfoCache] = useState(new Map());
   const [allowedDenoms, setAllowedDenoms] = useState([]);
 
-  const contractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
+  const bondContractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
 
   const fetchResaleOffers = async () => {
     try {
@@ -124,7 +124,7 @@ function ResaleBonds() {
 
   const queryContract = async (message) => {
     console.log('🚀 Initiating contract query with message:', message);
-    console.log('📍 Contract address:', contractAddress);
+    console.log('📍 Contract address:', bondContractAddress);
     console.log('🔗 RPC endpoint:', rpc);
     
     try {
@@ -132,7 +132,7 @@ function ResaleBonds() {
       console.log('✅ CosmWasm client connected successfully');
       
       const queryResponse = await client.queryContractSmart(
-        contractAddress,
+        bondContractAddress,
         message
       );
       console.log('📦 Query response:', queryResponse);
@@ -142,7 +142,7 @@ function ResaleBonds() {
       console.error('❌ Contract query failed:', {
         error,
         message,
-        contractAddress,
+        contractAddress: bondContractAddress,
         rpc
       });
       showAlert(`Error querying contract: ${error.message}`, "error");
@@ -344,7 +344,7 @@ function ResaleBonds() {
         };
         
         const response = await client.queryContractSmart(
-          contractAddress,
+          bondContractAddress,
           query
         );
         
@@ -358,10 +358,10 @@ function ResaleBonds() {
       }
     };
 
-    if (rpc && contractAddress) {
+    if (rpc && bondContractAddress) {
       fetchAllowedDenoms();
     }
-  }, [rpc, contractAddress]);
+  }, [rpc, bondContractAddress]);
 
   const handleOfferClick = (bondId) => {
     if (!bondId) return;
@@ -428,6 +428,99 @@ function ResaleBonds() {
     );
   };
 
+  const handleQuickResale = async (bond, price, priceDenom) => {
+    if (!window.keplr) {
+      showAlert("Please install Keplr extension", "error");
+      return;
+    }
+
+    try {
+      // Query the bond's NFT contract address first
+      const bondQuery = { 
+        get_bond_offer: { 
+          bond_id: parseInt(bond.bond_id) 
+        } 
+      };
+      const bondData = await queryContract(bondQuery);
+      const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
+
+      // Use the contract address from the bond as fallback
+      const contractAddr = nftContractAddr || bond.contract_address;
+
+      if (!contractAddr) {
+        throw new Error("Could not find NFT contract address for this bond");
+      }
+
+      // Calculate timestamps as before...
+      const now = new Date();
+      const startDate = new Date(now.getTime() + 1 * 60 * 1000);
+      const maturityDate = new Date(bond.maturityDate);
+      const endDate = new Date(maturityDate.getTime() - 1 * 60 * 1000);
+
+      // ... timestamp validation and query ...
+      const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+      const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+
+      const timestampQuery = {
+        get_timestamp_offsets: {
+          start_offset: startOffset,
+          end_offset: endOffset,
+          claim_start_offset: endOffset + 30,
+          mature_offset: endOffset + 30
+        }
+      };
+
+      const timestamps = await queryContract(timestampQuery);
+
+      // Create the resale message
+      const resaleMsg = {
+        create_resale_offer: {
+          bond_id: Number(bond.bond_id),
+          nft_token_id: bond.nft_id.toString(),
+          price_per_bond: String(
+            Math.floor(
+              parseFloat(price) * 
+              10 ** (tokenMappings[priceDenom]?.decimals || 6)
+            )
+          ),
+          price_denom: priceDenom,
+          start_time: timestamps.start_time.toString(),
+          end_time: timestamps.end_time.toString()
+        }
+      };
+
+      // Create the send_nft message with the correct structure
+      const msg = {
+        send_nft: {
+          contract: isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS,
+          token_id: bond.nft_id.toString(),
+          msg: btoa(JSON.stringify(resaleMsg))
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "1000000" }],
+        gas: "1000000"
+      };
+
+      // Execute on the correct NFT contract
+      const response = await signingClient.execute(
+        connectedWalletAddress,
+        contractAddr,
+        msg,
+        fee
+      );
+
+      showAlert("Resale offer created successfully!", "success");
+      fetchResaleOffers();
+      window.location.reload();
+
+    } catch (error) {
+      console.error('Error creating quick resale:', error);
+      showAlert(`Error creating resale: ${error.message}`, "error");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -437,44 +530,70 @@ function ResaleBonds() {
     }
 
     try {
-      const [bondId, nftId] = formData.bond_id.split('|');
+      if (!formData.bond_id) {
+        throw new Error("Please select a bond");
+      }
 
-      // Calculate minute offsets from current time
+      const [bondId, nftId] = formData.bond_id.split('|');
+      
+      // Find the selected bond from userBonds
+      const selectedBond = userBonds.find(bond => 
+        bond.bond_id.toString() === bondId && 
+        bond.nft_id.toString() === nftId
+      );
+
+      if (!selectedBond) {
+        console.error('Available bonds:', userBonds);
+        console.error('Looking for bondId:', bondId, 'nftId:', nftId);
+        throw new Error("Selected bond not found in your bonds");
+      }
+
+      // Query the bond's NFT contract address first
+      const bondQuery = { 
+        get_bond_offer: { 
+          bond_id: parseInt(bondId) 
+        } 
+      };
+      const bondData = await queryContract(bondQuery);
+      const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
+
+      // Use the contract address from the bond as fallback
+      const contractAddr = nftContractAddr || selectedBond.contract_address;
+
+      if (!contractAddr) {
+        throw new Error("Could not find NFT contract address for this bond");
+      }
+      
+      // ... timestamp calculations remain the same ...
       const now = new Date();
       const startDate = new Date(`${formData.start_time}`);
       const endDate = new Date(`${formData.end_time}`);
 
-      // Validate dates
       if (endDate <= startDate) {
         throw new Error("End date must be after start date");
       }
 
-      // Calculate offsets in minutes (ceiling)
       const startOffset = Math.ceil((startDate - now) / (1000 * 60));
       const endOffset = Math.ceil((endDate - now) / (1000 * 60));
-      
-      // Ensure claim_start_offset is after end_offset
-      const claimStartOffset = endOffset + 30; // 30 minutes after end
-      
-      // Ensure mature_offset is equal to or greater than claim_start_offset
-      const maturityOffset = claimStartOffset + 30; // 30 minutes after claim start
+      const claimStartOffset = endOffset + 30;
+      const maturityOffset = claimStartOffset + 30;
 
-      // Query contract for exact timestamps, including all required offsets
       const timestampQuery = {
         get_timestamp_offsets: {
           start_offset: startOffset,
           end_offset: endOffset,
-          claim_start_offset: claimStartOffset,  // After end_offset
-          mature_offset: maturityOffset  // After or equal to claim_start_offset
+          claim_start_offset: claimStartOffset,
+          mature_offset: maturityOffset
         }
       };
 
       const timestamps = await queryContract(timestampQuery);
-      
-      const msg = {
+
+      // Create the resale message
+      const resaleMsg = {
         create_resale_offer: {
           bond_id: Number(bondId),
-          nft_token_id: formData.nft_id.toString(),
+          nft_token_id: nftId.toString(),
           price_per_bond: String(
             Math.floor(
               parseFloat(formData.price_per_bond) * 
@@ -487,25 +606,28 @@ function ResaleBonds() {
         }
       };
 
-      // Log the message before sending to verify the structure
-      console.log('Message to be sent:', JSON.stringify(msg, null, 2));
+      // Create the send_nft message
+      const msg = {
+        send_nft: {
+          contract: isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS,
+          token_id: nftId.toString(),
+          msg: btoa(JSON.stringify(resaleMsg))
+        }
+      };
 
       const fee = {
-        amount: [{
-          denom: "uwhale",
-          amount: "1000000"
-        }],
+        amount: [{ denom: "uwhale", amount: "1000000" }],
         gas: "1000000"
       };
 
+      // Execute on the correct NFT contract
       const response = await signingClient.execute(
         connectedWalletAddress,
-        contractAddress,
+        contractAddr,
         msg,
         fee
       );
 
-      console.log('✅ Transaction response:', response);
       showAlert("Resale offer created successfully!", "success");
       setIsModalOpen(false);
       fetchResaleOffers();
@@ -543,16 +665,16 @@ function ResaleBonds() {
             className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
               focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
               focus:outline-none transition-all text-white text-sm"
-            value={`${formData.bond_id}|${formData.nft_id}`}
+            value={formData.bond_id}
             onChange={async (e) => {
               const [bondId, nftId] = e.target.value.split('|');
-              if (bondId) {
-                setFormData(prevState => ({
-                  ...prevState,
-                  bond_id: bondId,
-                  nft_id: nftId
-                }));
+              setFormData(prevState => ({
+                ...prevState,
+                bond_id: e.target.value,  // Store the full value including nftId
+                nft_id: nftId  // Store nftId separately
+              }));
 
+              if (bondId) {
                 const bondDetails = await fetchBondDetails(bondId);
                 if (bondDetails) {
                   setFormData(prevState => ({
@@ -563,11 +685,8 @@ function ResaleBonds() {
               }
             }}
             required
-            title="Bond Name · Amount · NFT ID · Purchase Date"
           >
-            <option value="" className="text-gray-400">
-              Bond Name · Amount · NFT ID · Purchase Date
-            </option>
+            <option value="">Select a Bond</option>
             {userBonds.map((bond) => {
               const isEligible = bond.canListForResale;
               const status = isEligible ? "" : 
@@ -575,13 +694,13 @@ function ResaleBonds() {
                 (bond.purchaseEndDate && new Date() <= bond.purchaseEndDate) ? " (Purchase Period Active)" :
                 " (Not Eligible)";
 
-              const uniqueKey = `bond_${bond.bond_id}_nft_${bond.nft_id}`;
+              const uniqueKey = `${bond.bond_id}|${bond.nft_id}`;
               const displayText = `${bond.name} · ${formatAmount(bond.amount)} · ${bond.nft_id} · ${formatDate(bond.purchase_time)}${status}`;
 
               return (
                 <option 
                   key={uniqueKey}
-                  value={`${bond.bond_id}|${bond.nft_id}`}
+                  value={uniqueKey}
                   disabled={!isEligible}
                   className={!isEligible ? "text-gray-500" : ""}
                 >
@@ -590,17 +709,7 @@ function ResaleBonds() {
               );
             })}
           </select>
-          <div className="absolute left-0 -top-8 w-full px-2 py-1 bg-gray-900 text-xs text-gray-300 
-            rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none
-            border border-gray-700 whitespace-nowrap">
-            Format: Bond Name · Amount · NFT ID · Purchase Date
-          </div>
         </div>
-        {userBonds.length > 0 && !userBonds.some(bond => bond.canListForResale) && (
-          <p className="mt-2 text-sm text-red-400">
-            You don't have any bonds eligible for resale. Bonds can only be listed after the purchase period ends and before maturation.
-          </p>
-        )}
       </div>
     );
   };
@@ -622,20 +731,29 @@ function ResaleBonds() {
       }
 
       try {
-        // Calculate default timestamps
-        const now = new Date();
-        const startDate = new Date(now.getTime() + 1 * 60 * 1000); // 1-minute offset
-        const maturityDate = new Date(bond.maturityDate); // Ensure this is a Date object
+        // Query the bond's NFT contract address first
+        const bondQuery = { 
+          get_bond_offer: { 
+            bond_id: parseInt(bond.bond_id) 
+          } 
+        };
+        const bondData = await queryContract(bondQuery);
+        const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
 
-        // Set end time to 1 minute before maturity
-        const endDate = new Date(maturityDate.getTime() - 1 * 60 * 1000);
+        // Use the contract address from the bond as fallback
+        const contractAddr = nftContractAddr || bond.contract_address;
 
-        // Validate that the end date is after the start date
-        if (endDate <= startDate) {
-          throw new Error("End date must be after the start date");
+        if (!contractAddr) {
+          throw new Error("Could not find NFT contract address for this bond");
         }
 
-        // Calculate offsets in minutes
+        // Calculate timestamps as before...
+        const now = new Date();
+        const startDate = new Date(now.getTime() + 1 * 60 * 1000);
+        const maturityDate = new Date(bond.maturityDate);
+        const endDate = new Date(maturityDate.getTime() - 1 * 60 * 1000);
+
+        // ... timestamp validation and query ...
         const startOffset = Math.ceil((startDate - now) / (1000 * 60));
         const endOffset = Math.ceil((endDate - now) / (1000 * 60));
 
@@ -650,7 +768,8 @@ function ResaleBonds() {
 
         const timestamps = await queryContract(timestampQuery);
 
-        const msg = {
+        // Create the resale message
+        const resaleMsg = {
           create_resale_offer: {
             bond_id: Number(bond.bond_id),
             nft_token_id: bond.nft_id.toString(),
@@ -666,22 +785,30 @@ function ResaleBonds() {
           }
         };
 
+        // Create the send_nft message with the correct structure
+        const msg = {
+          send_nft: {
+            contract: isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS,
+            token_id: bond.nft_id.toString(),
+            msg: btoa(JSON.stringify(resaleMsg))
+          }
+        };
+
         const fee = {
           amount: [{ denom: "uwhale", amount: "1000000" }],
           gas: "1000000"
         };
 
+        // Execute on the correct NFT contract
         const response = await signingClient.execute(
           connectedWalletAddress,
-          contractAddress,
+          contractAddr,
           msg,
           fee
         );
 
         showAlert("Resale offer created successfully!", "success");
         fetchResaleOffers();
-
-        // Refresh the page
         window.location.reload();
 
       } catch (error) {
@@ -744,13 +871,18 @@ function ResaleBonds() {
                     <div className="pt-3 border-t border-gray-700 mt-3">
                       <div className="grid grid-cols-12 gap-1.5 items-center">
                         <input
-                          type="number"
+                          type="text"
                           placeholder="Price"
                           value={quickResalePrices[bondKey]}
-                          onChange={(e) => setQuickResalePrices(prev => ({
-                            ...prev,
-                            [bondKey]: e.target.value
-                          }))}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            if (newValue === '' || validateNumberInput(newValue)) {
+                              setQuickResalePrices(prev => ({
+                                ...prev,
+                                [bondKey]: newValue
+                              }));
+                            }
+                          }}
                           className="col-span-full p-1.5 text-sm rounded bg-gray-700/50 border border-gray-600 
                             focus:border-yellow-500 focus:outline-none w-full"
                         />
@@ -844,6 +976,13 @@ function ResaleBonds() {
       console.error(`Error fetching NFT info for token ${tokenId}:`, error);
       throw error;
     }
+  };
+
+  // Add this validation function near the top of the component
+  const validateNumberInput = (value) => {
+    // Allows numbers with up to 6 decimal places, no leading zeros unless decimal
+    const regex = /^\d*\.?\d{0,6}$/;
+    return regex.test(value) && value !== '.';
   };
 
   return (
@@ -964,10 +1103,15 @@ function ResaleBonds() {
                     <div>
                       <label className="block text-xs font-medium mb-1 text-gray-300">Price per Bond</label>
                       <input
-                        type="number"
-                        step="0.000001"
+                        type="text"
                         value={formData.price_per_bond}
-                        onChange={(e) => setFormData({...formData, price_per_bond: e.target.value})}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          if (newValue === '' || validateNumberInput(newValue)) {
+                            setFormData({...formData, price_per_bond: newValue});
+                          }
+                        }}
+                        placeholder="0.000000"
                         className="w-full p-2 rounded-lg bg-gray-800/50 border border-gray-700 
                           focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 
                           focus:outline-none transition-all text-white"
