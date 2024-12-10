@@ -475,17 +475,13 @@ function ResaleBonds() {
       // Create the resale message
       const resaleMsg = {
         create_resale_offer: {
+          seller: connectedWalletAddress,
           bond_id: Number(bond.bond_id),
           nft_token_id: bond.nft_id.toString(),
-          price_per_bond: String(
-            Math.floor(
-              parseFloat(price) * 
-              10 ** (tokenMappings[priceDenom]?.decimals || 6)
-            )
-          ),
+          price_per_bond: price,
           price_denom: priceDenom,
-          start_time: timestamps.start_time.toString(),
-          end_time: timestamps.end_time.toString()
+          start_time: timestamps.start_time,
+          end_time: timestamps.end_time
         }
       };
 
@@ -592,17 +588,13 @@ function ResaleBonds() {
       // Create the resale message
       const resaleMsg = {
         create_resale_offer: {
+          seller: connectedWalletAddress,
           bond_id: Number(bondId),
           nft_token_id: nftId.toString(),
-          price_per_bond: String(
-            Math.floor(
-              parseFloat(formData.price_per_bond) * 
-              10 ** (tokenMappings[formData.price_denom]?.decimals || 6)
-            )
-          ),
+          price_per_bond: formData.price_per_bond,
           price_denom: formData.price_denom,
-          start_time: timestamps.start_time.toString(),
-          end_time: timestamps.end_time.toString()
+          start_time: timestamps.start_time,
+          end_time: timestamps.end_time
         }
       };
 
@@ -771,17 +763,13 @@ function ResaleBonds() {
         // Create the resale message
         const resaleMsg = {
           create_resale_offer: {
+            seller: connectedWalletAddress,
             bond_id: Number(bond.bond_id),
             nft_token_id: bond.nft_id.toString(),
-            price_per_bond: String(
-              Math.floor(
-                parseFloat(price) * 
-                10 ** (tokenMappings[priceDenom]?.decimals || 6)
-              )
-            ),
+            price_per_bond: price,
             price_denom: priceDenom,
-            start_time: timestamps.start_time.toString(),
-            end_time: timestamps.end_time.toString()
+            start_time: timestamps.start_time,
+            end_time: timestamps.end_time
           }
         };
 
