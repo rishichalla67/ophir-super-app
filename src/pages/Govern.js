@@ -749,7 +749,7 @@ Note: Assumes rewards are restaked every 2 weeks
     >
       <div className="max-w-7xl mx-auto w-full px-4 mt-10">
         <div className="govern-container bg-[#111111] p-4 rounded-3xl shadow-lg overflow-hidden max-w-md mx-auto">
-          <div className="flex justify-center items-center gap-2 mb-6">
+          <div className="flex justify-center items-center gap-2 mt-2 mb-8">
             <a 
               href="https://daodao.zone/dao/migaloo10gj7p9tz9ncjk7fm7tmlax7q6pyljfrawjxjfs09a7e7g933sj0q7yeadc/home"
               target="_blank"
@@ -761,7 +761,7 @@ Note: Assumes rewards are restaked every 2 weeks
                 className="h-6 w-6"
               />
             </a>
-            <h1 className="text-2xl font-bold text-yellow-400">
+            <h1 className="text-2xl font-bold h1-color">
               OPHIR Governance
             </h1>
           </div>
@@ -774,8 +774,8 @@ Note: Assumes rewards are restaked every 2 weeks
                   py-2 px-3 rounded-full text-base font-bold
                   transition duration-300 ease-in-out
                   ${activeTab === tab 
-                    ? "bg-yellow-400 text-black" 
-                    : "bg-transparent text-white border border-yellow-400"}
+                    ? "button-stake-tab-active text-black" 
+                    : "bg-transparent text-white border button-stake-tab-not-active"}
                 `}
                 onClick={() => setActiveTab(tab)}
               >
@@ -786,19 +786,24 @@ Note: Assumes rewards are restaked every 2 weeks
 
           {activeTab === "stake" && (
             <div className="px-2">
-              <p className="text-white text-base mb-1 text-center">
-                Staked OPHIR: {stakedOphirBalance.toLocaleString()}
-              </p>
-              <p className="text-white text-base mb-1text-center">
-                OPHIR Balance:{" "}
-                <span
-                  className="text-yellow-400 cursor-pointer"
-                  onClick={() => setOphirAmount(ophirBalance)}
-                >
-                  {ophirBalance.toFixed(6).toLocaleString()}
-                </span>
-              </p>
-              
+              <div className="staked-container"> 
+                <p className="staked-text text-base mb-1 text-center">
+                  Staked OPHIR: {" "}
+                  <span
+                    className="text-white text-base mb-1 text-center">
+                    {stakedOphirBalance.toLocaleString()}
+                  </span>
+                </p>
+                <p className="available-text text-base mb-1text-center">
+                  OPHIR Balance:{" "}
+                  <span
+                    className="text-yellow-400 cursor-pointer"
+                    onClick={() => setOphirAmount(ophirBalance)}
+                  >
+                    {ophirBalance.toFixed(6).toLocaleString()}
+                  </span>
+                </p>
+              </div>
               <div className="w-full mb-4">
                 <input
                   id="ophirAmount"
@@ -863,7 +868,7 @@ Note: Assumes rewards are restaked every 2 weeks
               </div>
               
               <button
-                className="w-full py-3 bg-yellow-400 text-black text-lg font-bold rounded-xl hover:bg-yellow-500 transition duration-300 ease-in-out disabled:opacity-50"
+                className="py-3 stake-button text-black text-lg font-bold rounded-xl disabled:opacity-50"
                 onClick={executeStakeContractMessage}
                 disabled={isLoading}
               >
@@ -880,19 +885,24 @@ Note: Assumes rewards are restaked every 2 weeks
 
           {activeTab === "unstake" && (
             <div className="px-2">
-              <p className="text-white text-base mb-1 text-center">
+            <div className="staked-container">
+              <p className="staked-text text-base mb-1 text-center">
                 Staked OPHIR:{" "}
                 <span
-                  className="text-yellow-400 cursor-pointer"
+                  className="text-yellow-400 mb-1 cursor-pointer"
                   onClick={() => setOphirAmount(stakedOphirBalance)}
                 >
                   {stakedOphirBalance.toLocaleString()}
                 </span>
               </p>
-              <p className="text-white text-base mb-4 text-center">
-                OPHIR Balance: {ophirBalance.toFixed(6).toLocaleString()}
+              <p className="available-text text-base text-center">
+                OPHIR Balance: {" "}
+                <span
+                className="text-white text-base mb-1 text-center">
+                  {ophirBalance.toFixed(6).toLocaleString()}
+                </span>
               </p>
-              
+             </div> 
               <div className="w-full mb-4">
                 <input
                   id="ophirAmount"
@@ -910,7 +920,7 @@ Note: Assumes rewards are restaked every 2 weeks
               </div>
 
               <button
-                className="w-full py-3 bg-yellow-400 text-black text-lg font-bold rounded-xl hover:bg-yellow-500 transition duration-300 ease-in-out disabled:opacity-50"
+                className="py-3 stake-button text-black text-lg font-bold rounded-xl disabled:opacity-50"
                 onClick={executeUnstakeContractMessage}
                 disabled={isLoading}
               >
@@ -966,7 +976,7 @@ Note: Assumes rewards are restaked every 2 weeks
                 </div>
 
                 <button
-                  className="w-full py-3 bg-yellow-400 text-black text-lg font-bold rounded-xl hover:bg-yellow-500 transition duration-300 ease-in-out disabled:opacity-50"
+                  className="py-3 stake-button text-black text-lg font-bold rounded-xl disabled:opacity-50"
                   onClick={claimRewards}
                   disabled={isLoading || (pendingOphirRewards === 0 && pendingBtcRewards === 0)}
                 >
