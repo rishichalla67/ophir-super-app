@@ -16,6 +16,7 @@ import SnackbarContent from "@mui/material/SnackbarContent";
 import { useNetwork } from '../context/NetworkContext';
 import TokenDropdown from '../components/TokenDropdown';
 import NetworkSwitcher from '../components/NetworkSwitcher';
+import { getNFTInfo, nftInfoCache, batchGetNFTInfo } from '../utils/nftCache';
 
 function ResaleBonds() {
 
@@ -66,8 +67,161 @@ function ResaleBonds() {
   const [signingClient, setSigningClient] = useState(null);
   const [nftInfoCache] = useState(new Map());
   const [allowedDenoms, setAllowedDenoms] = useState([]);
+  const [bondOffersCache, setBondOffersCache] = useState(new Map());
+  const BOND_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for bond offers
 
   const bondContractAddress = isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS;
+
+  const getBondOfferFromCache = (bondId) => {
+    const cached = bondOffersCache.get(bondId);
+    if (cached && Date.now() - cached.timestamp < BOND_CACHE_DURATION) {
+      return cached.data;
+    }
+    return null;
+  };
+
+  const setBondOfferInCache = (bondId, data) => {
+    setBondOffersCache(prev => {
+      const newCache = new Map(prev);
+      newCache.set(bondId, {
+        data,
+        timestamp: Date.now()
+      });
+      return newCache;
+    });
+  };
+
+  const invalidateBondCache = (bondId) => {
+    setBondOffersCache(prev => {
+      const newCache = new Map(prev);
+      newCache.delete(bondId);
+      return newCache;
+    });
+  };
+
+  const fetchBondOffer = async (bondId) => {
+    // Check cache first
+    const cachedOffer = getBondOfferFromCache(bondId);
+    if (cachedOffer) {
+      console.log('📦 Using cached bond offer for:', bondId);
+      return cachedOffer;
+    }
+
+    try {
+      const message = {
+        get_bond_offer: { bond_id: parseInt(bondId) }
+      };
+      const response = await queryContract(message);
+      const bondOffer = response.bond_offer;
+      
+      // Cache the result
+      setBondOfferInCache(bondId, bondOffer);
+      return bondOffer;
+    } catch (error) {
+      console.error(`Error fetching bond offer ${bondId}:`, error);
+      throw error;
+    }
+  };
+
+  // Add retry logic with exponential backoff
+  const retryWithBackoff = async (fn, maxRetries = 3, initialDelay = 1000) => {
+    let retries = 0;
+    while (retries < maxRetries) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (error?.message?.includes('429') && retries < maxRetries - 1) {
+          retries++;
+          const delay = initialDelay * Math.pow(2, retries - 1);
+          console.log(`Retrying after ${delay}ms (attempt ${retries}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw error;
+        }
+      }
+    }
+  };
+
+  // Optimize queryContract with connection reuse and retries
+  const [cosmWasmClient, setCosmWasmClient] = useState(null);
+
+  useEffect(() => {
+    const initClient = async () => {
+      try {
+        const client = await CosmWasmClient.connect(rpc);
+        setCosmWasmClient(client);
+      } catch (error) {
+        console.error('Failed to initialize CosmWasm client:', error);
+      }
+    };
+    initClient();
+  }, [rpc]);
+
+  const queryContract = async (message) => {
+    console.log('🚀 Initiating contract query with message:', message);
+    
+    if (!cosmWasmClient) {
+      throw new Error('CosmWasm client not initialized');
+    }
+
+    try {
+      const queryResponse = await retryWithBackoff(async () => {
+        return await cosmWasmClient.queryContractSmart(
+          bondContractAddress,
+          message
+        );
+      });
+      
+      console.log('📦 Query response:', queryResponse);
+      return queryResponse;
+      
+    } catch (error) {
+      console.error('❌ Contract query failed:', {
+        error,
+        message,
+        contractAddress: bondContractAddress,
+        rpc
+      });
+      throw error;
+    }
+  };
+
+  // Batch fetch bond offers
+  const batchFetchBondOffers = async (bondIds) => {
+    const results = new Map();
+    const uncachedBondIds = [];
+
+    // Check cache first
+    for (const bondId of bondIds) {
+      const cached = getBondOfferFromCache(bondId);
+      if (cached) {
+        results.set(bondId, cached);
+      } else {
+        uncachedBondIds.push(bondId);
+      }
+    }
+
+    // Fetch uncached bonds in smaller batches
+    const batchSize = 3;
+    for (let i = 0; i < uncachedBondIds.length; i += batchSize) {
+      const batch = uncachedBondIds.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (bondId) => {
+        try {
+          const bondOffer = await fetchBondOffer(bondId);
+          results.set(bondId, bondOffer);
+        } catch (error) {
+          console.error(`Error fetching bond offer ${bondId}:`, error);
+        }
+      }));
+      
+      // Add small delay between batches to avoid rate limiting
+      if (i + batchSize < uncachedBondIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    return results;
+  };
 
   const fetchResaleOffers = async () => {
     try {
@@ -79,74 +233,56 @@ function ResaleBonds() {
       };
       
       const response = await queryContract(message);
-      console.log('📦 Resale offers response:', response);
+      console.log('📦 Raw resale offers response:', response);
 
-      // Fetch additional details for each offer
+      // Process offers with cached data
       const offersWithDetails = await Promise.all(response.offers.map(async (offer) => {
         try {
-          // Fetch bond details
-          const bondDetailsMessage = {
-            get_bond_offer: { bond_id: parseInt(offer.bond_id) }
-          };
-          const bondData = await queryContract(bondDetailsMessage);
-          const bondOffer = bondData.bond_offer;
-
-          // Fetch NFT info if we have the contract address
+          const bondOffer = await fetchBondOffer(offer.bond_id);
           let nftInfo = null;
+          
           if (bondOffer?.nft_contract_addr) {
-            nftInfo = await getNFTInfo(bondOffer.nft_contract_addr, offer.nft_id);
+            const contractResults = await getNFTInfo(
+              bondOffer.nft_contract_addr,
+              offer.nft_id,
+              rpc
+            );
+            nftInfo = contractResults;
           }
+
+          const amount = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'amount')?.value || 
+                        bondOffer?.total_amount || "0";
 
           return {
             ...offer,
+            bond_id: parseInt(offer.bond_id),
+            nft_id: offer.nft_id,
             bond_name: bondOffer?.bond_name || `Bond #${offer.bond_id}`,
             nft_info: nftInfo,
-            bond_details: bondOffer
+            bond_details: bondOffer,
+            amount: amount,
+            token_denom: bondOffer?.token_denom || 'uwhale',
+            start_time: offer.start_time,
+            end_time: offer.end_time,
+            price_denom: offer.price_denom,
+            price: offer.price_per_bond
           };
         } catch (error) {
-          console.error(`Error fetching details for offer ${offer.bond_id}:`, error);
-          return offer;
+          console.error(`Error processing offer ${offer.bond_id}:`, error);
+          return null;
         }
       }));
 
-      setResaleOffers(offersWithDetails || []);
+      // Filter out any null results from errors
+      const validOffers = offersWithDetails.filter(offer => offer !== null);
+      console.log('📦 Processed offers:', validOffers);
+      setResaleOffers(validOffers);
       
     } catch (error) {
       console.error('❌ Error fetching resale offers:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      });
+      showAlert("Error fetching resale offers", "error");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const queryContract = async (message) => {
-    console.log('🚀 Initiating contract query with message:', message);
-    console.log('📍 Contract address:', bondContractAddress);
-    console.log('🔗 RPC endpoint:', rpc);
-    
-    try {
-      const client = await CosmWasmClient.connect(rpc);
-      console.log('✅ CosmWasm client connected successfully');
-      
-      const queryResponse = await client.queryContractSmart(
-        bondContractAddress,
-        message
-      );
-      console.log('📦 Query response:', queryResponse);
-      return queryResponse;
-      
-    } catch (error) {
-      console.error('❌ Contract query failed:', {
-        error,
-        message,
-        contractAddress: bondContractAddress,
-        rpc
-      });
-      showAlert(`Error querying contract: ${error.message}`, "error");
-      throw error;
     }
   };
 
@@ -363,9 +499,9 @@ function ResaleBonds() {
     }
   }, [rpc, bondContractAddress]);
 
-  const handleOfferClick = (bondId) => {
-    if (!bondId) return;
-    navigate(`/bonds/resale/${bondId}`);
+  const handleOfferClick = (bondId, nftId) => {
+    if (!bondId || !nftId) return;
+    navigate(`/bonds/resale/${bondId}_${nftId}`);
   };
 
   const getTokenSymbol = (denom) => {
@@ -390,14 +526,28 @@ function ResaleBonds() {
     if (!offer) return null;
     const tokenSymbol = getTokenSymbol(offer.token_denom);
     const tokenImage = offer.nft_info?.extension?.image || getTokenImage(tokenSymbol);
+    const priceTokenSymbol = getTokenSymbol(offer.price_denom);
+
+    // Add debug logging to check the offer structure
+    console.log('Offer data:', offer);
+
+    // Ensure we have both bond_id and nft_id before allowing navigation
+    const handleCardClick = () => {
+      if (!offer.bond_id || !offer.nft_token_id) {
+        console.error('Missing bond_id or nft_token_id:', offer);
+        return;
+      }
+      navigate(`/bonds/resale/${offer.bond_id}_${offer.nft_token_id}`);
+    };
 
     return (
       <div 
+        key={`${offer.bond_id}_${offer.nft_token_id}`}
         className="backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
           transition duration-300 shadow-lg hover:shadow-xl 
           border border-gray-700/50 hover:border-gray-600/50
           bg-gray-800/80 hover:bg-gray-700/80"
-        onClick={() => handleOfferClick(offer.bond_id)}
+        onClick={handleCardClick}
       >
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center">
@@ -408,7 +558,7 @@ function ResaleBonds() {
             )}
             <div>
               <h3 className="text-lg font-semibold">{offer.bond_name}</h3>
-              <div className="text-sm text-gray-400">Token ID: {offer.nft_id}</div>
+              <div className="text-sm text-gray-400">NFT ID: {offer.nft_token_id || 'Loading...'}</div>
             </div>
           </div>
         </div>
@@ -421,7 +571,17 @@ function ResaleBonds() {
 
           <div className="flex justify-between items-center">
             <span className="text-gray-400">Asking Price</span>
-            <span className="font-medium">{formatTokenAmount(offer.price)} {getTokenSymbol(offer.price_denom)}</span>
+            <span className="font-medium">{(offer.price)} {priceTokenSymbol}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Start Time</span>
+            <span className="font-medium">{convertContractTimeToDate(offer.start_time).toLocaleDateString()}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">End Time</span>
+            <span className="font-medium">{convertContractTimeToDate(offer.end_time).toLocaleDateString()}</span>
           </div>
         </div>
       </div>
@@ -973,6 +1133,26 @@ function ResaleBonds() {
     return regex.test(value) && value !== '.';
   };
 
+  // Function to invalidate both NFT and bond cache for a specific bond
+  const invalidateCache = (bondId, nftId, contractAddr) => {
+    if (contractAddr && nftId) {
+      nftInfoCache.delete(contractAddr, nftId);
+    }
+    invalidateBondCache(bondId);
+  };
+
+  // Fix the duplicate key warning in ResaleCard
+  const getUniqueCardKey = (offer) => {
+    return `${offer.bond_id}-${offer.nft_id}-${offer.start_time}`;
+  };
+
+  // Update the grid rendering to use the unique key
+  const renderResaleCards = () => {
+    return filteredOffers.map((offer) => (
+      <ResaleCard key={getUniqueCardKey(offer)} offer={offer} />
+    ));
+  };
+
   return (
     <div 
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -1059,24 +1239,20 @@ function ResaleBonds() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="flex flex-col justify-center items-center h-[calc(100vh-200px)]">
-            <div className="text-white mb-4">Loading Resale Offers...</div>
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400"></div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredOffers.length === 0 ? (
-              <div className="col-span-full text-center text-gray-400 mt-8">
-                No bonds are currently listed for resale
-              </div>
-            ) : (
-              filteredOffers.map((offer) => (
-                <ResaleCard key={`${offer.bond_id}-${offer.nft_id}`} offer={offer} />
-              ))
-            )}
-          </div>
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {isLoading ? (
+            <div className="col-span-full text-center text-gray-400 mt-8">
+              <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400 mx-auto mb-4"></div>
+              Loading Resale Offers...
+            </div>
+          ) : filteredOffers.length === 0 ? (
+            <div className="col-span-full text-center text-gray-400 mt-8">
+              No bonds are currently listed for resale
+            </div>
+          ) : (
+            renderResaleCards()
+          )}
+        </div>
 
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
