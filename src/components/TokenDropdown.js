@@ -6,7 +6,7 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Filter tokens based on isTestnet flag
+  // Filter tokens based on isTestnet flag and sort alphabetically by symbol
   const tokens = allowedDenoms
     .filter(denom => {
       const token = tokenMappings[denom];
@@ -21,7 +21,8 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
       denom,
       symbol: tokenMappings[denom]?.symbol || denom,
       image: tokenImages[tokenMappings[denom]?.symbol] || '',
-    }));
+    }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol)); // Sort alphabetically by symbol
 
   // Find the selected token based on the current value
   const selectedToken = tokens.find((token) => token.denom === value);

@@ -271,4 +271,9 @@ export const tokenMappings = {
     decimals: 6,
     chain: "migaloo"
   },
+  'ibc/4725376E0682CFA116C4B67494AFA010B5204F1B6DAF3606516F18A0AD67B4B3': {
+    symbol: 'drugs',
+    decimals: 6,
+    chain: 'injective'
+  }
 };
