@@ -223,10 +223,13 @@ function ResaleBonds() {
     return results;
   };
 
+  const [isUserBondsLoading, setIsUserBondsLoading] = useState(false);
+  const [isResaleOffersLoading, setIsResaleOffersLoading] = useState(false);
+
   const fetchResaleOffers = async () => {
     try {
       console.log('🔍 Fetching resale offers...');
-      setIsLoading(true);
+      setIsResaleOffersLoading(true);
       
       const message = {
         list_resale_offers: {}
@@ -282,7 +285,7 @@ function ResaleBonds() {
       console.error('❌ Error fetching resale offers:', error);
       showAlert("Error fetching resale offers", "error");
     } finally {
-      setIsLoading(false);
+      setIsResaleOffersLoading(false);
     }
   };
 
@@ -290,6 +293,7 @@ function ResaleBonds() {
     if (!connectedWalletAddress) return;
 
     try {
+      setIsUserBondsLoading(true);
       console.log('🔍 Fetching bonds for address:', connectedWalletAddress);
       
       const message = { 
@@ -432,6 +436,8 @@ function ResaleBonds() {
     } catch (error) {
       console.error('❌ Error fetching user bonds:', error);
       showAlert(`Error fetching your bonds: ${error.message}`, "error");
+    } finally {
+      setIsUserBondsLoading(false);
     }
   };
 
@@ -557,16 +563,50 @@ function ResaleBonds() {
     );
   });
 
+  // Add this utility function with other utility functions
+  const getBondResaleStatus = (startTime, endTime) => {
+    const now = new Date();
+    const start = convertContractTimeToDate(startTime);
+    const end = convertContractTimeToDate(endTime);
+
+    if (now < start) {
+      return {
+        status: 'upcoming',
+        timeLeft: start.getTime() - now.getTime()
+      };
+    } else if (now > end) {
+      return {
+        status: 'ended',
+        timeLeft: 0
+      };
+    }
+    return {
+      status: 'active',
+      timeLeft: end.getTime() - now.getTime()
+    };
+  };
+
+  // Update the ResaleCard component
   const ResaleCard = ({ offer }) => {
     if (!offer) return null;
     const tokenSymbol = getTokenSymbol(offer.token_denom);
     const tokenImage = offer.nft_info?.extension?.image || getTokenImage(tokenSymbol);
     const priceTokenSymbol = getTokenSymbol(offer.price_denom);
 
-    // Add debug logging to check the offer structure
-    console.log('Offer data:', offer);
+    const resaleStatus = getBondResaleStatus(offer.start_time, offer.end_time);
+    
+    // Add this to format the time remaining
+    const formatTimeLeft = (ms) => {
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
 
-    // Ensure we have both bond_id and nft_id before allowing navigation
+      if (days > 0) return `${days}d ${hours % 24}h`;
+      if (hours > 0) return `${hours}h ${minutes % 60}m`;
+      return `${minutes}m`;
+    };
+
     const handleCardClick = () => {
       if (!offer.bond_id || !offer.nft_token_id) {
         console.error('Missing bond_id or nft_token_id:', offer);
@@ -575,15 +615,37 @@ function ResaleBonds() {
       navigate(`/bonds/resale/${offer.bond_id}_${offer.nft_token_id}`);
     };
 
+    // Add this helper function inside ResaleCard
+    const formatDateTime = (timestamp) => {
+      const date = convertContractTimeToDate(timestamp);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+
     return (
       <div 
         key={`${offer.bond_id}_${offer.nft_token_id}`}
-        className="backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
+        className={`backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
           transition duration-300 shadow-lg hover:shadow-xl 
           border border-gray-700/50 hover:border-gray-600/50
-          bg-gray-800/80 hover:bg-gray-700/80"
+          bg-gray-800/80 hover:bg-gray-700/80
+          ${resaleStatus.status === 'upcoming' ? 'opacity-75' : ''}`}
         onClick={handleCardClick}
       >
+        {resaleStatus.status === 'upcoming' && (
+          <div className="absolute top-3 right-3">
+            <div className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-sm">
+              Starts in {formatTimeLeft(resaleStatus.timeLeft)}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center">
             {tokenImage && (
@@ -611,12 +673,16 @@ function ResaleBonds() {
 
           <div className="flex justify-between items-center">
             <span className="text-gray-400">Start Time</span>
-            <span className="font-medium">{convertContractTimeToDate(offer.start_time).toLocaleDateString()}</span>
+            <span className={`font-medium text-right ${resaleStatus.status === 'upcoming' ? 'text-yellow-400' : ''}`}>
+              {formatDateTime(offer.start_time)}
+            </span>
           </div>
 
           <div className="flex justify-between items-center">
             <span className="text-gray-400">End Time</span>
-            <span className="font-medium">{convertContractTimeToDate(offer.end_time).toLocaleDateString()}</span>
+            <span className="font-medium text-right">
+              {formatDateTime(offer.end_time)}
+            </span>
           </div>
         </div>
       </div>
@@ -703,8 +769,18 @@ function ResaleBonds() {
       );
 
       showAlert("Resale offer created successfully!", "success");
-      fetchResaleOffers();
-      window.location.reload();
+      
+      // Refresh data without page reload
+      await Promise.all([
+        fetchResaleOffers(),
+        fetchUserBonds()
+      ]);
+
+      // Clear the price input for this bond
+      setQuickResalePrices(prev => ({
+        ...prev,
+        [`${bond.bond_id}_${bond.nft_id}`]: ''
+      }));
 
     } catch (error) {
       console.error('Error creating quick resale:', error);
@@ -817,7 +893,18 @@ function ResaleBonds() {
 
       showAlert("Resale offer created successfully!", "success");
       setIsModalOpen(false);
-      fetchResaleOffers();
+      
+      // Refresh data without page reload
+      await Promise.all([
+        fetchResaleOffers(),
+        fetchUserBonds()
+      ]);
+
+      // Clear the price input for this bond
+      setQuickResalePrices(prev => ({
+        ...prev,
+        [`${bondId}_${nftId}`]: ''
+      }));
 
     } catch (error) {
       console.error('Error creating resale offer:', error);
@@ -901,210 +988,123 @@ function ResaleBonds() {
     );
   };
 
+  const [quickResalePrices, setQuickResalePrices] = useState({});
+  const [quickResaleDenoms, setQuickResaleDenoms] = useState({});
+
   const UserBondsSection = () => {
-    const [quickResalePrices, setQuickResalePrices] = useState(
-      Object.fromEntries((userBonds || []).map(bond => [`${bond.bond_id}_${bond.nft_id}`, '']))
-    );
-    const [quickResaleDenoms, setQuickResaleDenoms] = useState(
-      Object.fromEntries((userBonds || []).map(bond => [`${bond.bond_id}_${bond.nft_id}`, 'uwhale']))
-    );
+    if (!connectedWalletAddress || (!isUserBondsLoading && userBonds.length === 0)) return null;
 
-    if (!connectedWalletAddress || userBonds.length === 0) return null;
-
-    const handleQuickResale = async (bond, price, priceDenom) => {
-      if (!window.keplr) {
-        showAlert("Please install Keplr extension", "error");
-        return;
-      }
+    const handleBondClick = async (purchase) => {
+      if (!purchase.canListForResale) return;
 
       try {
-        // Query the bond's NFT contract address first
-        const bondQuery = { 
-          get_bond_offer: { 
-            bond_id: parseInt(bond.bond_id) 
-          } 
-        };
-        const bondData = await queryContract(bondQuery);
-        const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
-
-        // Use the contract address from the bond as fallback
-        const contractAddr = nftContractAddr || bond.contract_address;
-
-        if (!contractAddr) {
-          throw new Error("Could not find NFT contract address for this bond");
-        }
-
-        // Calculate timestamps as before...
+        // Calculate default dates
         const now = new Date();
-        const startDate = new Date(now.getTime() + 1 * 60 * 1000);
-        const maturityDate = new Date(bond.maturityDate);
-        const endDate = new Date(maturityDate.getTime() - 1 * 60 * 1000);
+        const startDate = new Date(now.getTime() + 1 * 60 * 1000); // 1 minute from now
+        const endDate = new Date(purchase.maturityDate.getTime() - 1 * 60 * 1000); // 1 minute before maturity
 
-        // ... timestamp validation and query ...
-        const startOffset = Math.ceil((startDate - now) / (1000 * 60));
-        const endOffset = Math.ceil((endDate - now) / (1000 * 60));
-
+        // Get timestamp offsets
+        const offsets = getTimestampOffsets(startDate, endDate);
+        
+        // Query contract for actual timestamps
         const timestampQuery = {
-          get_timestamp_offsets: {
-            start_offset: startOffset,
-            end_offset: endOffset,
-            claim_start_offset: endOffset + 30,
-            mature_offset: endOffset + 30
-          }
+          get_timestamp_offsets: offsets
         };
-
+        
         const timestamps = await queryContract(timestampQuery);
+        
+        // Convert contract timestamps to local dates
+        const contractStartTime = convertContractTimeToDate(timestamps.start_time);
+        const contractEndTime = convertContractTimeToDate(timestamps.end_time);
 
-        // Create the resale message
-        const resaleMsg = {
-          create_resale_offer: {
-            seller: connectedWalletAddress,
-            bond_id: Number(bond.bond_id),
-            nft_token_id: bond.nft_id.toString(),
-            price_per_bond: price,
-            price_denom: priceDenom,
-            start_time: timestamps.start_time,
-            end_time: timestamps.end_time
-          }
+        // Format dates for the form
+        const formatToLocalISOString = (date) => {
+          return date.toLocaleString('sv').slice(0, 16); // 'sv' locale gives YYYY-MM-DD HH:mm format
         };
 
-        // Create the send_nft message with the correct structure
-        const msg = {
-          send_nft: {
-            contract: isTestnet ? daoConfig.BONDS_CONTRACT_ADDRESS_TESTNET : daoConfig.BONDS_CONTRACT_ADDRESS,
-            token_id: bond.nft_id.toString(),
-            msg: btoa(JSON.stringify(resaleMsg))
-          }
-        };
+        // Pre-populate form data with contract timestamps
+        setFormData({
+          bond_id: `${purchase.bond_id}|${purchase.nft_id}`,
+          nft_id: purchase.nft_id,
+          price_per_bond: '',
+          price_denom: 'uwhale',
+          start_time: formatToLocalISOString(contractStartTime),
+          end_time: formatToLocalISOString(contractEndTime),
+        });
 
-        const fee = {
-          amount: [{ denom: "uwhale", amount: "1000000" }],
-          gas: "1000000"
-        };
-
-        // Execute on the correct NFT contract
-        const response = await signingClient.execute(
-          connectedWalletAddress,
-          contractAddr,
-          msg,
-          fee
-        );
-
-        showAlert("Resale offer created successfully!", "success");
-        fetchResaleOffers();
-        window.location.reload();
-
+        // Open the modal
+        setIsModalOpen(true);
       } catch (error) {
-        console.error('Error creating quick resale:', error);
-        showAlert(`Error creating resale: ${error.message}`, "error");
+        console.error('Error preparing resale form:', error);
+        showAlert('Error preparing resale form', 'error');
       }
-    };
-
-    const getBondStatus = (bond) => {
-      const now = new Date();
-      if (now < bond.purchaseEndDate) return 'Purchase Period Active';
-      if (now > bond.maturityDate) return 'Matured';
-      return 'Available for Resale';
     };
 
     return (
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {userBonds.map((purchase) => {
-            const bondKey = `${purchase.bond_id}_${purchase.nft_id}`;
-            const status = getBondStatus(purchase);
+        {isUserBondsLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userBonds.map((purchase) => {
+              const status = getBondStatus(purchase);
 
-            return (
-              <div 
-                key={purchase.bond_id}
-                className="backdrop-blur-sm rounded-xl p-4 sm:p-6 
-                  border border-gray-700/50 bg-gray-800/80"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">{purchase.name}</h3>
-                    <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm ${
-                    status === 'Available for Resale' 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : status === 'Matured'
-                      ? 'bg-gray-500/20 text-gray-400'
-                      : 'bg-yellow-500/20 text-yellow-400'
-                  }`}>
-                    {status}
-                  </span>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Amount</span>
-                    <span className="font-medium">{formatTokenAmount(purchase.amount)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Purchase Date</span>
-                    <span className="font-medium">
-                      {purchase.purchase_time.toLocaleDateString()}
+              return (
+                <div 
+                  key={purchase.bond_id}
+                  onClick={() => handleBondClick(purchase)}
+                  className={`backdrop-blur-sm rounded-xl p-4 sm:p-6 
+                    border border-gray-700/50 bg-gray-800/80
+                    ${purchase.canListForResale ? 
+                      'cursor-pointer hover:bg-gray-700/80 hover:border-gray-600/50 transition-all duration-200' : 
+                      'opacity-75'
+                    }`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{purchase.name}</h3>
+                      <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                      status === 'Available for Resale' 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : status === 'Matured'
+                        ? 'bg-gray-500/20 text-gray-400'
+                        : 'bg-yellow-500/20 text-yellow-400'
+                    }`}>
+                      {status}
                     </span>
                   </div>
-
-                  {purchase.canListForResale && (
-                    <div className="pt-3 border-t border-gray-700 mt-3">
-                      <div className="grid grid-cols-12 gap-1.5 items-center">
-                        <input
-                          type="text"
-                          placeholder="Price"
-                          value={quickResalePrices[bondKey]}
-                          onChange={(e) => {
-                            const newValue = e.target.value;
-                            if (newValue === '' || validateNumberInput(newValue)) {
-                              setQuickResalePrices(prev => ({
-                                ...prev,
-                                [bondKey]: newValue
-                              }));
-                            }
-                          }}
-                          className="col-span-full p-1.5 text-sm rounded bg-gray-700/50 border border-gray-600 
-                            focus:border-yellow-500 focus:outline-none w-full"
-                        />
-                        <div className="col-span-full">
-                          <TokenDropdown
-                            name={`resale_denom_${bondKey}`}
-                            value={quickResaleDenoms[bondKey]}
-                            onChange={(e) => setQuickResaleDenoms(prev => ({
-                              ...prev,
-                              [bondKey]: e.target.value
-                            }))}
-                            allowedDenoms={allowedDenoms}
-                            isTestnet={isTestnet}
-                            className="w-full"
-                          />
-                        </div>
-                        <button
-                          onClick={() => handleQuickResale(
-                            purchase,
-                            quickResalePrices[bondKey],
-                            quickResaleDenoms[bondKey]
-                          )}
-                          disabled={!quickResalePrices[bondKey]}
-                          className={`col-span-full px-2 py-1.5 rounded text-sm ${
-                            quickResalePrices[bondKey]
-                              ? 'landing-button hover:bg-yellow-500' 
-                              : 'bg-gray-700 cursor-not-allowed'
-                          } transition duration-300 w-full`}
-                        >
-                          List
-                        </button>
-                      </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Amount</span>
+                      <span className="font-medium">{formatTokenAmount(purchase.amount)}</span>
                     </div>
-                  )}
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Purchase Date</span>
+                      <span className="font-medium">
+                        {purchase.purchase_time.toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    {purchase.canListForResale && (
+                      <div className="mt-3 pt-3 border-t border-gray-700/50">
+                        <div className="text-sm text-center text-gray-400">
+                          Click to create resale offer
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -1186,6 +1186,27 @@ function ResaleBonds() {
     return filteredOffers.map((offer) => (
       <ResaleCard key={getUniqueCardKey(offer)} offer={offer} />
     ));
+  };
+
+  const getBondStatus = (bond) => {
+    const now = new Date();
+    if (now < bond.purchaseEndDate) return 'Purchase Period Active';
+    if (now > bond.maturityDate) return 'Matured';
+    return 'Available for Resale';
+  };
+
+  // Add this utility function near the top with other utility functions
+  const getTimestampOffsets = (startDate, endDate) => {
+    const now = new Date();
+    const startOffset = Math.ceil((startDate - now) / (1000 * 60));
+    const endOffset = Math.ceil((endDate - now) / (1000 * 60));
+    
+    return {
+      start_offset: startOffset,
+      end_offset: endOffset,
+      claim_start_offset: endOffset + 30,
+      mature_offset: endOffset + 30
+    };
   };
 
   return (
@@ -1275,7 +1296,7 @@ function ResaleBonds() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {isLoading ? (
+          {isResaleOffersLoading ? (
             <div className="col-span-full text-center text-gray-400 mt-8">
               <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-yellow-400 mx-auto mb-4"></div>
               Loading Resale Offers...
