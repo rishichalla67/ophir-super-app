@@ -301,98 +301,133 @@ function ResaleBonds() {
       const response = await queryContract(message);
       
       if (response && Array.isArray(response.pairs)) {
-        // Fetch bond details for each purchase to get names
-        const transformedBonds = await Promise.all(response.pairs.map(async pair => {
-          // Fetch bond details to get the name
-          const bondDetailsMessage = {
-            get_bond_offer: { 
-              bond_id: parseInt(pair.bond_id) 
-            }
-          };
+        // Create a Map to deduplicate bonds using a composite key
+        const uniqueBonds = new Map();
+        
+        // Group bonds by contract address for efficient ownership checking
+        const bondsByContract = response.pairs.reduce((acc, pair) => {
+          // Create a unique key for each bond
+          const bondKey = `${pair.bond_id}_${pair.nft_id}`;
           
-          try {
-            const bondData = await queryContract(bondDetailsMessage);
-            const bondOffer = bondData.bond_offer;
+          // Only add if we haven't seen this combination before
+          if (!uniqueBonds.has(bondKey)) {
+            uniqueBonds.set(bondKey, pair);
             
-            // Try to get NFT info if available
-            let nftInfo = null;
-            if (pair.contract_addr) {
-              // Check cache first
-              const cachedInfo = nftInfoCache.get(pair.contract_addr, pair.nft_id);
-              if (cachedInfo) {
-                nftInfo = cachedInfo;
-              } else {
-                try {
-                  const client = await CosmWasmClient.connect(rpc);
-                  nftInfo = await client.queryContractSmart(
-                    pair.contract_addr,
-                    {
-                      nft_info: {
-                        token_id: pair.nft_id
-                      }
-                    }
-                  );
-                  // Cache the result
-                  nftInfoCache.set(pair.contract_addr, pair.nft_id, nftInfo);
-                } catch (error) {
-                  console.error(`Error fetching NFT info for token ${pair.nft_id}:`, error);
+            if (!acc[pair.contract_addr]) {
+              acc[pair.contract_addr] = [];
+            }
+            acc[pair.contract_addr].push(pair);
+          }
+          return acc;
+        }, {});
+
+        // Rest of the ownership checking and transformation logic...
+        const ownedNFTsByContract = {};
+        for (const contractAddr of Object.keys(bondsByContract)) {
+          try {
+            const client = await CosmWasmClient.connect(rpc);
+            const ownedTokensResponse = await client.queryContractSmart(
+              contractAddr,
+              {
+                tokens: {
+                  owner: connectedWalletAddress
                 }
               }
-            }
-
-            // Check if the bond can be listed for resale
-            const now = new Date();
-            const purchaseEndDate = convertContractTimeToDate(bondOffer.purchase_end_time);
-            const maturityDate = convertContractTimeToDate(bondOffer.maturity_date);
-            const canListForResale = now > purchaseEndDate && now < maturityDate;
-
-            // Get amount from NFT info or bond offer
-            const amount = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'amount')?.value || 
-                          bondOffer.total_amount;
-
-            // Get purchase time from NFT info or use current time as fallback
-            let purchaseTime;
-            const purchaseTimeAttr = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'purchase_time');
-            if (purchaseTimeAttr?.value) {
-              purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
-            } else {
-              purchaseTime = new Date();
-            }
-
-            return {
-              ...pair,
-              purchase_time: purchaseTime,
-              amount: amount,
-              claimed_amount: nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'claimed_amount')?.value || "0",
-              bond_id: parseInt(pair.bond_id),
-              nft_id: pair.nft_id,
-              contract_address: pair.contract_addr,
-              // Use bond name from bond offer, or NFT name, or fallback
-              name: bondOffer?.bond_name || 
-                    nftInfo?.extension?.name || 
-                    `Bond #${pair.bond_id}`,
-              canListForResale,
-              purchaseEndDate,
-              maturityDate,
-              bondOffer,
-              nftInfo
-            };
+            );
+            ownedNFTsByContract[contractAddr] = new Set(ownedTokensResponse.tokens);
           } catch (error) {
-            console.error(`Error fetching details for bond ${pair.bond_id}:`, error);
-            return {
-              ...pair,
-              purchase_time: new Date(),
-              name: `Bond #${pair.bond_id}`,
-              canListForResale: false,
-              nft_id: pair.nft_id,
-              contract_address: pair.contract_addr,
-              amount: "0"
-            };
+            console.error(`Error fetching owned NFTs for contract ${contractAddr}:`, error);
+            ownedNFTsByContract[contractAddr] = new Set();
           }
-        }));
+        }
 
-        console.log('✨ Transformed bonds with names:', transformedBonds);
-        setUserBonds(transformedBonds);
+        // Transform only the unique bonds
+        const transformedBonds = await Promise.all(
+          Array.from(uniqueBonds.values())
+            .filter(pair => {
+              const ownedTokens = ownedNFTsByContract[pair.contract_addr];
+              return ownedTokens && ownedTokens.has(pair.nft_id.toString());
+            })
+            .map(async pair => {
+              // Rest of the transformation logic remains the same
+              const bondDetailsMessage = {
+                get_bond_offer: { 
+                  bond_id: parseInt(pair.bond_id) 
+                }
+              };
+              
+              try {
+                const bondData = await queryContract(bondDetailsMessage);
+                const bondOffer = bondData.bond_offer;
+                
+                // NFT info fetching with cache
+                let nftInfo = null;
+                if (pair.contract_addr) {
+                  const cachedInfo = nftInfoCache.get(pair.contract_addr, pair.nft_id);
+                  if (cachedInfo) {
+                    nftInfo = cachedInfo;
+                  } else {
+                    try {
+                      const client = await CosmWasmClient.connect(rpc);
+                      nftInfo = await client.queryContractSmart(
+                        pair.contract_addr,
+                        {
+                          nft_info: {
+                            token_id: pair.nft_id
+                          }
+                        }
+                      );
+                      nftInfoCache.set(pair.contract_addr, pair.nft_id, nftInfo);
+                    } catch (error) {
+                      console.error(`Error fetching NFT info for token ${pair.nft_id}:`, error);
+                    }
+                  }
+                }
+
+                const now = new Date();
+                const purchaseEndDate = convertContractTimeToDate(bondOffer.purchase_end_time);
+                const maturityDate = convertContractTimeToDate(bondOffer.maturity_date);
+                const canListForResale = now > purchaseEndDate && now < maturityDate;
+
+                const amount = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'amount')?.value || 
+                              bondOffer.total_amount;
+
+                let purchaseTime;
+                const purchaseTimeAttr = nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'purchase_time');
+                if (purchaseTimeAttr?.value) {
+                  purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
+                } else {
+                  purchaseTime = new Date();
+                }
+
+                return {
+                  ...pair,
+                  purchase_time: purchaseTime,
+                  amount: amount,
+                  claimed_amount: nftInfo?.extension?.attributes?.find(attr => attr.trait_type === 'claimed_amount')?.value || "0",
+                  bond_id: parseInt(pair.bond_id),
+                  nft_id: pair.nft_id,
+                  contract_address: pair.contract_addr,
+                  name: bondOffer?.bond_name || 
+                        nftInfo?.extension?.name || 
+                        `Bond #${pair.bond_id}`,
+                  canListForResale,
+                  purchaseEndDate,
+                  maturityDate,
+                  bondOffer,
+                  nftInfo
+                };
+              } catch (error) {
+                console.error(`Error fetching details for bond ${pair.bond_id}:`, error);
+                return null;
+              }
+            })
+        );
+
+        // Filter out null results and set state
+        const validBonds = transformedBonds.filter(bond => bond !== null);
+        console.log('✨ Transformed bonds with names:', validBonds);
+        setUserBonds(validBonds);
       }
     } catch (error) {
       console.error('❌ Error fetching user bonds:', error);
