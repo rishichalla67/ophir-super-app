@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
 import { Link } from 'react-router-dom';
@@ -17,10 +17,25 @@ import { useNetwork } from '../context/NetworkContext';
 import TokenDropdown from '../components/TokenDropdown';
 import NetworkSwitcher from '../components/NetworkSwitcher';
 import { getNFTInfo, nftInfoCache, batchGetNFTInfo } from '../utils/nftCache';
+import { useCrypto } from '../context/CryptoContext';
+
+const DiscountTooltip = ({ bondDenom }) => (
+  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 
+    bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 
+    transition-opacity duration-200 whitespace-normal max-w-xs z-10 border border-gray-700">
+    <div className="mb-2">
+      <span className="text-green-400">Discount</span>: Token is selling below market price
+    </div>
+    <div>
+      <span className="text-red-400">Premium</span>: Token is selling above market price
+    </div>
+  </div>
+);
 
 function ResaleBonds() {
 
   const { isTestnet, rpc, chainId } = useNetwork();
+  const { prices } = useCrypto();
   const OPHIR_DECIMAL = BigInt(1000000);
 
   const convertContractTimeToDate = (contractTime) => {
@@ -590,15 +605,45 @@ function ResaleBonds() {
   const [selectedBondForPurchase, setSelectedBondForPurchase] = useState(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
+  // Move calculateDiscount outside of ResaleCard but keep it inside ResaleBonds
+  const calculateDiscount = useCallback((offer) => {
+    if (!offer || !prices) return null;
+
+    // Convert denoms to lowercase and handle special testnet case
+    let listTokenDenom = tokenMappings[offer.token_denom]?.symbol?.toLowerCase() || offer.token_denom?.toLowerCase();
+    let saleTokenDenom = tokenMappings[offer.price_denom]?.symbol?.toLowerCase() || offer.price_denom?.toLowerCase();
+    
+    // Map daoOphir to ophir for price lookup
+    if (listTokenDenom?.includes('daoophir')) {
+      listTokenDenom = 'ophir';
+    }
+    if (saleTokenDenom?.includes('daoophir')) {
+      saleTokenDenom = 'ophir';
+    }
+    
+    // Get prices from context
+    const listTokenPrice = prices[listTokenDenom];
+    const saleTokenPrice = prices[saleTokenDenom];
+
+    if (!listTokenPrice || !saleTokenPrice) return null;
+
+    // Calculate using the formula:
+    // ((Bond Price * Sale Token Market Price) - List Token Market Price) / List Token Market Price
+    const bondPriceInUSD = parseFloat(offer.price) * saleTokenPrice;
+    const discount = ((bondPriceInUSD - listTokenPrice) / listTokenPrice) * 100;
+    
+    return discount;
+  }, [prices]);
+
   // Update the ResaleCard component
   const ResaleCard = ({ offer }) => {
     if (!offer) return null;
     const tokenSymbol = getTokenSymbol(offer.token_denom);
     const tokenImage = offer.nft_info?.extension?.image || getTokenImage(tokenSymbol);
     const priceTokenSymbol = getTokenSymbol(offer.price_denom);
-
     const resaleStatus = getBondResaleStatus(offer.start_time, offer.end_time);
-    
+    const discount = calculateDiscount(offer); // Use calculateDiscount from parent scope
+
     // Add this to format the time remaining
     const formatTimeLeft = (ms) => {
       const seconds = Math.floor(ms / 1000);
@@ -726,6 +771,23 @@ function ResaleBonds() {
             </button>
           )}
         </div>
+
+        {discount !== null && (
+          <div className={`mt-2 text-sm relative group`}>
+            <span className={`${
+              discount < 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {Math.abs(discount).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}%
+              <span className="text-xs ml-1">
+                {discount < 0 ? 'Discount' : 'Premium'}
+              </span>
+            </span>
+            <DiscountTooltip bondDenom={getTokenSymbol(offer.token_denom)} />
+          </div>
+        )}
       </div>
     );
   };

@@ -1511,14 +1511,11 @@ const CreateBonds = () => {
                   <div className="mb-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-gray-300">Fee Split</span>
-                      <span className="text-sm text-gray-400">
-                        {100 - feeSplit}% Maker / {feeSplit}% Taker
-                      </span>
                     </div>
                     <div className="mt-4 relative">
                       <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>Maker (Issuer)</span>
-                        <span>Taker (Purchaser)</span>
+                        <span>{100 - feeSplit}% Maker</span>
+                        <span>{feeSplit}% Taker</span>
                       </div>
                       <input
                         type="range"
@@ -1547,6 +1544,15 @@ const CreateBonds = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Add default split info when advanced settings are hidden */}
+              {!showAdvancedSettings && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-400">
+                    Default Fee Split: 70% Maker / 30% Taker
+                  </p>
                 </div>
               )}
             </div>
