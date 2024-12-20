@@ -703,7 +703,9 @@ const Bonds = () => {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-gray-400">Total Supply</span>
-            <span className="font-medium">{formatAmount(bond.total_amount)}</span>
+            <span className="font-medium">
+              <ToggleableAmount amount={bond.total_amount} denom={bond.token_denom} />
+            </span>
           </div>
 
           <div className="flex justify-between items-center">
@@ -711,7 +713,9 @@ const Bonds = () => {
             {isSoldOut(bond.remaining_supply) ? (
               <span className="text-red-400 font-medium">Sold Out</span>
             ) : (
-              <span className="font-medium">{formatAmount(bond.remaining_supply)}</span>
+              <span className="font-medium">
+                <ToggleableAmount amount={bond.remaining_supply} denom={bond.token_denom} />
+              </span>
             )}
           </div>
 
@@ -934,7 +938,11 @@ const Bonds = () => {
                   </td>
                   <td className="py-4 text-center">
                     <div className="flex items-center justify-center">
-                      <span className="mr-2">{formatAmount(bond.total_amount)}</span>
+                      <ToggleableAmount 
+                        amount={bond.total_amount} 
+                        denom={bond.token_denom} 
+                        className="mr-2"
+                      />
                       {bondImage && (
                         <div className="w-5 h-5 rounded-full overflow-hidden">
                           <img src={bondImage} alt={bondSymbol} className="w-full h-full object-cover" />
@@ -1522,9 +1530,15 @@ const Bonds = () => {
                     {/* Stats and Actions */}
                     <div className="flex items-center justify-between sm:justify-end space-x-4">
                       <div className="flex items-center space-x-1.5">
-                        <span className="text-sm text-gray-400">
-                          {formatAmount(totalClaimedAmount)}/{formatAmount(totalAmount)}
-                        </span>
+                        <ToggleableAmount 
+                          amount={totalClaimedAmount} 
+                          denom={bond?.token_denom} 
+                        />
+                        <span className="text-gray-400">/</span>
+                        <ToggleableAmount 
+                          amount={totalAmount} 
+                          denom={bond?.token_denom} 
+                        />
                         {tokenImage && (
                           <img 
                             src={tokenImage} 
@@ -1673,7 +1687,9 @@ const Bonds = () => {
                                     <span className="text-gray-400">Amount:</span>
                                     <div className="flex flex-col items-end">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-lg font-medium">{formatAmount(purchase.amount)}</span>
+                                        <span className="text-lg font-medium">
+                                          <ToggleableAmount amount={purchase.amount} denom={bond?.token_denom} />
+                                        </span>
                                         {bond?.token_denom && (
                                           <img
                                             src={getTokenImage(bond.token_denom)}
@@ -1684,7 +1700,8 @@ const Bonds = () => {
                                       </div>
                                       {purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0 && (
                                         <span className="text-sm text-gray-400">
-                                          Claimed: {formatAmount(purchase.claimed_amount)} / {formatAmount(purchase.amount)}
+                                          Claimed: <ToggleableAmount amount={purchase.claimed_amount} denom={bond?.token_denom} /> / 
+                                          <ToggleableAmount amount={purchase.amount} denom={bond?.token_denom} />
                                         </span>
                                       )}
                                     </div>
@@ -2044,6 +2061,36 @@ const Bonds = () => {
       fetchNFTCollections();
     }
   }, [connectedWalletAddress, isTestnet]);
+
+  const ToggleableAmount = ({ amount, denom, className = "" }) => {
+    const [showPrice, setShowPrice] = useState(false);
+
+    const tokenSymbol = getTokenSymbol(denom)?.toLowerCase();
+    const price = prices[tokenSymbol];
+    const formattedAmount = formatAmount(amount);
+    
+    // Calculate USD value based on raw amount
+    const rawAmount = parseFloat(amount) / OPHIR_DECIMAL;
+    const value = price ? (rawAmount * price).toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }) : null;
+
+    return (
+      <div 
+        onClick={(e) => {
+          e.stopPropagation();
+          if (price) setShowPrice(!showPrice);
+        }}
+        className={`cursor-pointer transition-all duration-300 ${className} ${price ? 'hover:text-yellow-400' : ''}`}
+        title={price ? 'Click to toggle USD value' : 'Price data unavailable'}
+      >
+        {showPrice && price ? value : formattedAmount}
+      </div>
+    );
+  };
 
   return (
     <div 
