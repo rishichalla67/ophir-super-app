@@ -306,113 +306,127 @@ const Bonds = () => {
       console.log('🔍 Starting user bonds fetch for:', connectedWalletAddress);
       
       let allUserBonds = new Map();
-      let startAfter = null;
-      const limit = 20;
-      let hasMore = true;
       
-      while (hasMore) {
+      // Create a single CosmWasm client instance to reuse
+      const client = await CosmWasmClient.connect(rpc);
+      console.log('✅ Connected to CosmWasm client');
+      
+      // First get all bond offers to get NFT contract addresses
+      const message = {
+        get_all_bond_offers: {
+          limit: 100 // Adjust as needed
+        }
+      };
+      
+      const bondOffersResponse = await queryContract(message);
+      console.log('📦 Got bond offers response:', bondOffersResponse);
+      
+      if (!bondOffersResponse?.bond_offers) {
+        console.warn('No bond offers found');
+        return;
+      }
+      
+      // Create a map of bond ID to NFT contract address
+      const bondContracts = new Map();
+      bondOffersResponse.bond_offers.forEach(offer => {
+        if (offer.contract_addr) {
+          bondContracts.set(offer.bond_offer.bond_id, offer.contract_addr);
+        }
+      });
+      
+      console.log('📦 Found NFT contracts:', Array.from(bondContracts.entries()));
+
+      // Process each bond's NFT contract
+      const contractQueries = Array.from(bondContracts.entries()).map(async ([bondId, contractAddr]) => {
         try {
-          const message = {
-            get_bonds_by_user: {
-              buyer: connectedWalletAddress,
-              limit: limit,
-              ...(startAfter && { start_after: startAfter })
+          console.log(`🔍 Checking ownership for bond ${bondId} at contract ${contractAddr}`);
+          
+          // Query current ownership for this contract
+          const ownershipQuery = {
+            tokens: {
+              owner: connectedWalletAddress
             }
           };
 
-          const response = await queryContract(message);
-          
-          if (!response?.pairs || response.pairs.length === 0) {
-            break;
-          }
+          const ownershipResponse = await client.queryContractSmart(contractAddr, ownershipQuery);
+          const ownedTokenIds = ownershipResponse.tokens || [];
+          console.log(`Found ${ownedTokenIds.length} tokens for bond ${bondId}:`, ownedTokenIds);
 
-          const pairsByContract = response.pairs.reduce((acc, pair) => {
-            const contractAddr = pair.contract_addr.toLowerCase();
-            if (!acc[contractAddr]) {
-              acc[contractAddr] = [];
+          if (ownedTokenIds.length === 0) return;
+
+          // Get NFT info for each owned token
+          const nftInfos = await batchGetNFTInfo(contractAddr, ownedTokenIds, rpc);
+          console.log(`📦 Got NFT info for bond ${bondId}:`, nftInfos);
+
+          // Process each owned NFT
+          const nftProcessing = ownedTokenIds.map(async (tokenId) => {
+            const nftInfo = nftInfos[tokenId];
+            if (!nftInfo) {
+              console.warn(`No NFT info found for token ${tokenId} in bond ${bondId}`);
+              return;
             }
-            acc[contractAddr].push(pair);
-            return acc;
-          }, {});
 
-          // Process each contract's pairs
-          await Promise.all(Object.entries(pairsByContract).map(async ([contractAddr, pairs]) => {
-            // Query current ownership for this contract
-            const ownershipQuery = {
-              tokens: {
-                owner: connectedWalletAddress
-              }
-            };
+            const attributes = nftInfo.extension?.attributes || [];
+            const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
+            const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
+            const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
+            const statusAttr = attributes.find(attr => attr.trait_type === 'status');
+            const originalOwnerAttr = attributes.find(attr => attr.trait_type === 'original_owner');
+            const bondIdAttr = attributes.find(attr => attr.trait_type === 'bond_id');
 
-            const client = await CosmWasmClient.connect(rpc);
-            const ownershipResponse = await client.queryContractSmart(contractAddr, ownershipQuery);
-            const ownedTokenIds = new Set(ownershipResponse.tokens.map(id => id.toString()));
+            // Skip if this NFT is not for this bond
+            const nftBondId = bondIdAttr ? parseInt(bondIdAttr.value) : parseInt(bondId);
+            if (nftBondId !== parseInt(bondId)) {
+              console.log(`Token ${tokenId} bond ID ${nftBondId} doesn't match expected bond ${bondId}`);
+              return;
+            }
 
-            // Filter pairs to only those currently owned + originally purchased
-            const validPairs = pairs.filter(pair => 
-              ownedTokenIds.has(pair.nft_id.toString()) || 
-              pair.buyer === connectedWalletAddress
-            );
+            let purchaseTime;
+            if (purchaseTimeAttr?.value) {
+              purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
+            }
 
-            if (validPairs.length === 0) return;
+            if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
+              purchaseTime = new Date();
+            }
 
-            const tokenIds = validPairs.map(pair => pair.nft_id);
-            const nftInfos = await batchGetNFTInfo(contractAddr, tokenIds, rpc);
+            const matchingBond = bonds.find(b => b.bond_id === parseInt(bondId));
+            if (!matchingBond) {
+              console.warn(`No matching bond found for ID ${bondId}`);
+              return;
+            }
 
-            validPairs.forEach(pair => {
-              const matchingBond = bonds.find(b => b.bond_id === pair.bond_id);
-              if (!matchingBond) return;
-
-              const nftInfo = nftInfos[pair.nft_id];
-              if (!nftInfo) return;
-
-              const attributes = nftInfo.extension?.attributes || [];
-              const purchaseTimeAttr = attributes.find(attr => attr.trait_type === 'purchase_time');
-              const claimedAmountAttr = attributes.find(attr => attr.trait_type === 'claimed_amount');
-              const amountAttr = attributes.find(attr => attr.trait_type === 'amount');
-              const statusAttr = attributes.find(attr => attr.trait_type === 'status');
-              const originalOwnerAttr = attributes.find(attr => attr.trait_type === 'original_owner');
-
-              let purchaseTime;
-              if (purchaseTimeAttr?.value) {
-                purchaseTime = new Date(parseInt(purchaseTimeAttr.value) * 1000);
-              }
-
-              if (!purchaseTime || purchaseTime.toString() === 'Invalid Date') {
-                purchaseTime = new Date();
-              }
-
-              const uniqueKey = `${pair.bond_id}_${pair.nft_id}`;
-              const isCurrentlyOwned = ownedTokenIds.has(pair.nft_id.toString());
-
-              allUserBonds.set(uniqueKey, {
-                bond_id: pair.bond_id,
-                nft_token_id: pair.nft_id,
-                contract_address: pair.contract_addr,
-                purchase_time: purchaseTime,
-                amount: amountAttr?.value || matchingBond.total_amount,
-                claimed_amount: claimedAmountAttr?.value || "0",
-                status: statusAttr?.value || "Unclaimed",
-                name: nftInfo.extension?.name || `Bond #${pair.bond_id}`,
-                original_owner: originalOwnerAttr?.value || pair.buyer,
-                is_transferred: !isCurrentlyOwned && originalOwnerAttr?.value === connectedWalletAddress,
-                currently_owned: isCurrentlyOwned
-              });
+            const uniqueKey = `${bondId}_${tokenId}`;
+            console.log(`Adding bond to collection: ${uniqueKey}`, {
+              bondId,
+              tokenId,
+              amount: amountAttr?.value || matchingBond.total_amount,
+              claimed: claimedAmountAttr?.value || "0",
+              status: statusAttr?.value || "Unclaimed"
             });
-          }));
 
-          if (response.pairs.length === limit) {
-            startAfter = response.pairs[response.pairs.length - 1].nft_id;
-          } else {
-            hasMore = false;
-          }
-          
+            allUserBonds.set(uniqueKey, {
+              bond_id: parseInt(bondId),
+              nft_token_id: tokenId,
+              contract_address: contractAddr,
+              purchase_time: purchaseTime,
+              amount: amountAttr?.value || matchingBond.total_amount,
+              claimed_amount: claimedAmountAttr?.value || "0",
+              status: statusAttr?.value || "Unclaimed",
+              name: nftInfo.extension?.name || `Bond #${bondId}`,
+              original_owner: originalOwnerAttr?.value || connectedWalletAddress,
+              is_transferred: originalOwnerAttr?.value && originalOwnerAttr.value !== connectedWalletAddress,
+              currently_owned: true
+            });
+          });
+
+          await Promise.all(nftProcessing);
         } catch (error) {
-          console.error('Loop iteration error:', error);
-          hasMore = false;
-          break;
+          console.error(`Error processing bond ${bondId}:`, error);
         }
-      }
+      });
+
+      await Promise.all(contractQueries);
 
       const uniqueUserBonds = Array.from(allUserBonds.values());
       console.log('✅ Final unique user bonds array:', uniqueUserBonds);
