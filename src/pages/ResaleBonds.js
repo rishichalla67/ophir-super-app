@@ -586,6 +586,10 @@ function ResaleBonds() {
     };
   };
 
+  // Add these state variables at the top with other states
+  const [selectedBondForPurchase, setSelectedBondForPurchase] = useState(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+
   // Update the ResaleCard component
   const ResaleCard = ({ offer }) => {
     if (!offer) return null;
@@ -628,10 +632,16 @@ function ResaleBonds() {
       });
     };
 
+    const handleBuyClick = (e) => {
+      e.stopPropagation(); // Prevent card click navigation
+      setSelectedBondForPurchase(offer);
+      setShowPurchaseModal(true);
+    };
+
     return (
       <div 
         key={`${offer.bond_id}_${offer.nft_token_id}`}
-        className={`backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
+        className={`relative backdrop-blur-sm rounded-xl p-6 mb-4 cursor-pointer 
           transition duration-300 shadow-lg hover:shadow-xl 
           border border-gray-700/50 hover:border-gray-600/50
           bg-gray-800/80 hover:bg-gray-700/80
@@ -684,6 +694,37 @@ function ResaleBonds() {
               {formatDateTime(offer.end_time)}
             </span>
           </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-700/50">
+          {resaleStatus.status === 'upcoming' ? (
+            <button
+              disabled
+              className="w-full px-4 py-2 rounded-lg text-sm font-medium 
+                bg-gray-700/50 text-gray-400 cursor-not-allowed"
+            >
+              Not Available Yet
+            </button>
+          ) : resaleStatus.status === 'ended' ? (
+            <button
+              disabled
+              className="w-full px-4 py-2 rounded-lg text-sm font-medium 
+                bg-gray-700/50 text-gray-400 cursor-not-allowed"
+            >
+              Offer Ended
+            </button>
+          ) : (
+            <button
+              onClick={handleBuyClick}
+              className="w-full px-4 py-2 rounded-lg text-sm font-medium
+                bg-gradient-to-r from-yellow-500/80 to-yellow-600/80 
+                hover:from-yellow-500 hover:to-yellow-600 
+                text-black shadow-lg hover:shadow-xl
+                transition-all duration-200"
+            >
+              Buy Now
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1209,6 +1250,131 @@ function ResaleBonds() {
     };
   };
 
+  // Add this state near other state declarations
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  // Update the PurchaseConfirmationModal component
+  const PurchaseConfirmationModal = () => {
+    if (!selectedBondForPurchase) return null;
+
+    const handleConfirmPurchase = async () => {
+      try {
+        if (!window.keplr || !connectedWalletAddress) {
+          showAlert("Please connect your wallet first", "error");
+          return;
+        }
+
+        setIsPurchasing(true);
+        console.log('Selected bond:', selectedBondForPurchase);
+
+        const msg = {
+          purchase_resale_offer: {
+            bond_id: parseInt(selectedBondForPurchase.bond_id),
+            nft_token_id: selectedBondForPurchase.nft_token_id
+          }
+        };
+
+        const fee = {
+          amount: [{ denom: "uwhale", amount: "1000000" }],
+          gas: "1000000"
+        };
+
+        // Fix the amount calculation
+        const tokenDecimals = tokenMappings[selectedBondForPurchase.price_denom]?.decimals || 6;
+        const amount = selectedBondForPurchase.price_per_bond 
+          ? (parseFloat(selectedBondForPurchase.price_per_bond) * Math.pow(10, tokenDecimals)).toString()
+          : (parseFloat(selectedBondForPurchase.price) * Math.pow(10, tokenDecimals)).toString();
+
+        const funds = [{
+          denom: selectedBondForPurchase.price_denom,
+          amount: amount.split('.')[0] // Remove any decimals after calculation
+        }];
+
+        console.log('Executing purchase with funds:', funds);
+        console.log('Purchase message:', msg);
+        console.log('Selected bond:', selectedBondForPurchase);
+
+        const response = await signingClient.execute(
+          connectedWalletAddress,
+          bondContractAddress,
+          msg,
+          fee,
+          "",
+          funds
+        );
+
+        showAlert("Purchase successful!", "success");
+        setShowPurchaseModal(false);
+        fetchResaleOffers();
+
+      } catch (error) {
+        console.error('Error purchasing bond:', error);
+        showAlert(`Error purchasing bond: ${error.message}`, "error");
+      } finally {
+        setIsPurchasing(false);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl p-6">
+          <h3 className="text-lg font-bold mb-4 text-center text-white">Confirm Purchase</h3>
+          
+          <div className="space-y-3 mb-6">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Bond Name</span>
+              <span className="font-medium">{selectedBondForPurchase.bond_name}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Amount</span>
+              <span className="font-medium">
+                {formatTokenAmount(selectedBondForPurchase.amount)} {getTokenSymbol(selectedBondForPurchase.token_denom)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Price</span>
+              <span className="font-medium">
+                {selectedBondForPurchase.price} {getTokenSymbol(selectedBondForPurchase.price_denom)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => setShowPurchaseModal(false)}
+              disabled={isPurchasing}
+              className="px-4 py-2 rounded-lg text-sm font-medium
+                bg-gray-700 hover:bg-gray-600 transition-all duration-200
+                disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmPurchase}
+              disabled={isPurchasing}
+              className="px-4 py-2 rounded-lg text-sm font-medium
+                bg-gradient-to-r from-yellow-500/80 to-yellow-600/80 
+                hover:from-yellow-500 hover:to-yellow-600 
+                text-black shadow-lg hover:shadow-xl
+                transition-all duration-200
+                disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center min-w-[100px]"
+            >
+              {isPurchasing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-black/20 border-t-black mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                'Confirm Purchase'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -1399,6 +1565,8 @@ function ResaleBonds() {
             </div>
           </div>
         )}
+
+        {showPurchaseModal && <PurchaseConfirmationModal />}
       </div>
     </div>
   );
