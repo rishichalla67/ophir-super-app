@@ -1079,6 +1079,11 @@ const CreateBonds = () => {
   // In the CreateBonds component, add this state
   const [showPriceTooltip, setShowPriceTooltip] = useState(false);
 
+  // Add new state for advanced settings
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [feeSplit, setFeeSplit] = useState(30);
+  const feeSplitRef = React.useRef(null);
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -1485,6 +1490,66 @@ const CreateBonds = () => {
                 })()}
               </div>
             )}
+
+            {/* Advanced Settings Section */}
+            <div className="mt-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="showAdvancedSettings"
+                  checked={showAdvancedSettings}
+                  onChange={(e) => setShowAdvancedSettings(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                />
+                <label htmlFor="showAdvancedSettings" className="text-sm font-medium text-gray-300">
+                  Advanced Settings
+                </label>
+              </div>
+
+              {showAdvancedSettings && (
+                <div className="mt-4 p-4 rounded-md bg-gray-800/50 border border-gray-700">
+                  <div className="mb-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-300">Fee Split</span>
+                      <span className="text-sm text-gray-400">
+                        {100 - feeSplit}% Maker / {feeSplit}% Taker
+                      </span>
+                    </div>
+                    <div className="mt-4 relative">
+                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>Maker (Issuer)</span>
+                        <span>Taker (Purchaser)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={feeSplit}
+                        onChange={(e) => setFeeSplit(Number(e.target.value))}
+                        ref={feeSplitRef}
+                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer
+                          [&::-webkit-slider-thumb]:appearance-none
+                          [&::-webkit-slider-thumb]:w-4
+                          [&::-webkit-slider-thumb]:h-4
+                          [&::-webkit-slider-thumb]:rounded-full
+                          [&::-webkit-slider-thumb]:bg-yellow-500
+                          [&::-webkit-slider-thumb]:cursor-pointer
+                          [&::-moz-range-thumb]:w-4
+                          [&::-moz-range-thumb]:h-4
+                          [&::-moz-range-thumb]:rounded-full
+                          [&::-moz-range-thumb]:bg-yellow-500
+                          [&::-moz-range-thumb]:cursor-pointer
+                          [&::-moz-range-thumb]:border-0"
+                      />
+                      <div className="absolute w-0.5 h-3 bg-gray-500 top-[calc(100%+2px)] left-1/2 transform -translate-x-1/2"></div>
+                      <div className="absolute top-[calc(100%+8px)] left-1/2 transform -translate-x-1/2 text-xs text-gray-400">
+                        50/50
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div>
               <LabelWithTooltip
