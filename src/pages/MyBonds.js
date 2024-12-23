@@ -412,11 +412,14 @@ const MyBonds = () => {
           b.bond_id === parseInt(bondId) && b.nft_token_id === tokenId
         );
 
-        if (!bond) continue;
+        if (!bond || !bond.contract_address) {
+          console.error(`No contract address found for bond ${bondId}`);
+          continue;
+        }
 
         setTransferringStates(prev => ({ ...prev, [bondKey]: true }));
 
-        const transferMsg = {
+        const msg = {
           transfer_nft: {
             recipient: transferAddress,
             token_id: tokenId
@@ -428,13 +431,16 @@ const MyBonds = () => {
           gas: "500000",
         };
 
-        await client.execute(
+        // Execute transfer against the NFT contract address
+        const result = await client.execute(
           connectedWalletAddress,
-          bond.contract_address,
-          transferMsg,
+          bond.contract_address, // Use the NFT contract address
+          msg,
           fee,
           "Transfer Bond NFT"
         );
+
+        console.log(`Transfer result for bond ${bondId}:`, result);
       }
 
       showAlert("Successfully transferred selected bonds!", "success");
@@ -612,6 +618,13 @@ const MyBonds = () => {
     }
   };
 
+  // Modify the transfer button click handler
+  const handleTransferClick = (e, bondId, nftTokenId) => {
+    e.stopPropagation(); // Prevent bond click event
+    setSelectedBonds(new Set([`${bondId}_${nftTokenId}`]));
+    setShowTransferModal(true);
+  };
+
   if (!connectedWalletAddress) {
     return (
       <div className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -779,7 +792,7 @@ const MyBonds = () => {
                             </>
                           )}
                           <button
-                            onClick={() => handleTransfer(bond.bond_id, bond.nft_token_id)}
+                            onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
                             className="px-4 py-1.5 bg-blue-500 hover:bg-blue-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/20"
                           >
                             Transfer
@@ -909,7 +922,7 @@ const MyBonds = () => {
                         List
                       </button>
                       <button
-                        onClick={() => handleTransfer(bond.bond_id, bond.nft_token_id)}
+                        onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
                         className="px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
                       >
                         Transfer
@@ -917,7 +930,7 @@ const MyBonds = () => {
                     </>
                   ) : (
                     <button
-                      onClick={() => handleTransfer(bond.bond_id, bond.nft_token_id)}
+                      onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
                       className="col-span-3 px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
                     >
                       Transfer
@@ -933,29 +946,89 @@ const MyBonds = () => {
         {showTransferModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-gray-900 rounded-lg p-8 max-w-md w-full mx-4">
-              <h2 className="text-xl font-bold mb-4">Transfer Bonds</h2>
-              <p className="text-gray-400 mb-4">
-                Selected bonds: {selectedBonds.size}
-              </p>
-              <input
-                type="text"
-                value={transferAddress}
-                onChange={(e) => setTransferAddress(e.target.value)}
-                placeholder="Enter recipient address"
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md 
-                  focus:outline-none focus:border-yellow-400 mb-4"
-              />
+              <h2 className="text-xl font-bold mb-4">Transfer Bond</h2>
+              
+              {/* Bond Details */}
+              {Array.from(selectedBonds).map(bondKey => {
+                const [bondId, tokenId] = bondKey.split('_');
+                const bond = userBonds.find(b => 
+                  b.bond_id === parseInt(bondId) && b.nft_token_id === tokenId
+                );
+                
+                return bond && (
+                  <div key={bondKey} className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Bond Name:</span>
+                        <span className="font-medium">{formatBondName(bond.name) || `Bond #${bond.bond_id}`}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Bond ID:</span>
+                        <span className="font-medium">{bond.bond_id}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Token ID:</span>
+                        <span className="font-medium">{bond.nft_token_id}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Amount:</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium">{formatAmount(bond.amount)}</span>
+                          {bond?.token_denom && (
+                            <img
+                              src={getTokenImage(bond.token_denom)}
+                              alt={getTokenSymbol(bond.token_denom)}
+                              className="w-5 h-5 rounded-full"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Status:</span>
+                        <span className={`px-2 py-0.5 rounded text-sm ${
+                          bond.status === "Claimed" ? 'bg-gray-700 text-gray-300' : 'bg-green-500/20 text-green-400'
+                        }`}>
+                          {bond.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="space-y-2 mb-6">
+                <label className="block text-sm font-medium text-gray-400">
+                  Recipient Address
+                </label>
+                <input
+                  type="text"
+                  value={transferAddress}
+                  onChange={(e) => setTransferAddress(e.target.value)}
+                  placeholder="Enter recipient address"
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg 
+                    focus:outline-none focus:border-yellow-400 text-white placeholder-gray-500"
+                />
+              </div>
+
               <div className="flex justify-end space-x-4">
                 <button
-                  onClick={() => setShowTransferModal(false)}
+                  onClick={() => {
+                    setShowTransferModal(false);
+                    setSelectedBonds(new Set());
+                    setTransferAddress('');
+                  }}
                   className="px-4 py-2 text-gray-400 hover:text-white transition-colors duration-300"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleTransfer}
-                  className="px-4 py-2 bg-yellow-500 text-black rounded-md hover:bg-yellow-400 
-                    transition-colors duration-300"
+                  disabled={!transferAddress}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                    transferAddress 
+                      ? 'bg-blue-500 hover:bg-blue-400 text-black' 
+                      : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
                   Confirm Transfer
                 </button>
