@@ -115,7 +115,7 @@ const Bonds = () => {
   const [page, setPage] = useState(1);
   const [hasMoreBonds, setHasMoreBonds] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const BONDS_PER_PAGE = 20;
+  const BONDS_PER_PAGE = 100;
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
