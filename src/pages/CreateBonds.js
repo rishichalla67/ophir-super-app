@@ -657,6 +657,18 @@ const CreateBonds = () => {
       // For cliff bonds, claim start time should match maturity date
       const claimStartOffset = bondType === 'cliff' ? maturityOffset : endOffset + 2;
 
+      // Query contract config to get fee rate
+      const configQuery = {
+        config: {}
+      };
+      
+      const config = await client.queryContractSmart(
+        contractAddress,
+        configQuery
+      );
+
+      console.log('Contract config:', config); // Debug log
+
       // Single timestamp query with all offsets
       const timestampQuery = {
         get_timestamp_offsets: {
@@ -673,40 +685,60 @@ const CreateBonds = () => {
         timestampQuery
       );
 
-      const message = {
-        issue_bond: {
-          bond_denom_name: fullBondDenomName,
-          expect_to_receive: {
-            denom: formData.purchasing_denom,
-            amount: String(
-              Math.round(
-                parseFloat(formData.total_supply) * 
-                parseFloat(formData.price) * 
-                10 ** (tokenMappings[formData.purchasing_denom]?.decimals || 6)
-              )
+      // Base message structure
+      let bondMessage = {
+        bond_denom_name: fullBondDenomName,
+        expect_to_receive: {
+          denom: formData.purchasing_denom,
+          amount: String(
+            Math.round(
+              parseFloat(formData.total_supply) * 
+              parseFloat(formData.price) * 
+              10 ** (tokenMappings[formData.purchasing_denom]?.decimals || 6)
             )
-          },
-          purchase_start_time: timestamps.start_time.toString(),
-          purchase_end_time: timestamps.end_time.toString(),
-          claim_start_time: timestamps.claim_start_time.toString(),
-          maturity_date: timestamps.mature_time.toString(),
-          bond_type: bondType,
-          description: formData.description,
-          nft_metadata: {
-            name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
-            symbol: formData.nft_metadata.symbol || fullBondDenomName,
-            image: formData.nft_metadata.image || ""
-          }
+          )
         },
+        purchase_start_time: timestamps.start_time.toString(),
+        purchase_end_time: timestamps.end_time.toString(),
+        claim_start_time: timestamps.claim_start_time.toString(),
+        maturity_date: timestamps.mature_time.toString(),
+        bond_type: bondType,
+        description: formData.description,
+        nft_metadata: {
+          name: formData.nft_metadata.name || `${fullBondDenomName} Bond NFT`,
+          symbol: formData.nft_metadata.symbol || fullBondDenomName,
+          image: formData.nft_metadata.image || null
+        }
       };
 
-      // Log timestamps for debugging
-      console.log('Timestamps:', {
-        purchase_start: timestamps.start_time,
-        purchase_end: timestamps.end_time,
-        claim_start: timestamps.claim_start_time,
-        claim_end: timestamps.claim_end_time
-      });
+      console.log("config.fee_rate", config.config.fee_rate)
+      // Add maker/taker fee rates if using custom fee split
+      if (showAdvancedSettings && feeSplit !== 30) { // 30 is the default taker percentage
+        const totalFeeRate = parseFloat(config.config.fee_rate);
+        console.log('Total fee rate:', totalFeeRate); // Debug log
+        console.log('Current fee split:', feeSplit); // Debug log
+
+        if (!isNaN(totalFeeRate) && totalFeeRate > 0) {
+          // Calculate maker and taker rates based on the fee split
+          const makerRate = ((100 - feeSplit) / 100) * totalFeeRate;
+          const takerRate = (feeSplit / 100) * totalFeeRate;
+          
+          // Add to message
+          bondMessage.maker_fee_rate = makerRate.toString();
+          bondMessage.taker_fee_rate = takerRate.toString();
+
+          console.log('Custom fee rates:', { // Debug log
+            maker: makerRate,
+            taker: takerRate
+          });
+        }
+      }
+
+      const message = {
+        issue_bond: bondMessage
+      };
+
+      console.log('Final message:', message); // Debug log
 
       // Calculate the fee in uwhale (25 WHALE)
       const whaleFee = "25000000"; // 25 WHALE in uwhale
@@ -1698,6 +1730,8 @@ const CreateBonds = () => {
         customBondName={customBondName}
         fullBondDenomName={fullBondDenomName}
         bondType={bondType}
+        feeSplit={feeSplit}
+        showAdvancedSettings={showAdvancedSettings}
         className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-8 shadow-xl border border-gray-700"
       />
 

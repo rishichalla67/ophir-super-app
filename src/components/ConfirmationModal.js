@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { tokenMappings } from '../utils/tokenMappings';
 import { ChevronDownIcon, ChevronUpIcon, ClockIcon } from '@heroicons/react/24/solid';
 
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, isLoading, customBondName, fullBondDenomName, bondType }) => {
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, isLoading, customBondName, fullBondDenomName, bondType, feeSplit, showAdvancedSettings, contractConfig, ...props }) => {
   const [isNFTExpanded, setIsNFTExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -15,6 +15,20 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
 
     return () => clearInterval(timer);
   }, [isOpen]);
+
+  // Add debug logging when component renders
+  useEffect(() => {
+    console.log('ConfirmationModal props:', {
+      showAdvancedSettings,
+      feeSplit,
+      contractConfig,
+      formData: {
+        total_supply: formData.total_supply,
+        price: formData.price,
+        purchasing_denom: formData.purchasing_denom
+      }
+    });
+  }, [showAdvancedSettings, feeSplit, contractConfig, formData]);
 
   if (!isOpen) return null;
 
@@ -49,14 +63,60 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
     
     const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
     const rawAmount = parseFloat(totalSupply) * parseFloat(price);
-    const feeAmount = rawAmount * 0.03; // 3% fee
-    const netAmount = rawAmount - feeAmount;
+    const totalFeeAmount = rawAmount * 0.03; // 3% total fee
+    
+    // Calculate maker and taker fees based on feeSplit
+    const takerFeeAmount = totalFeeAmount * (feeSplit / 100);
+    const makerFeeAmount = totalFeeAmount * ((100 - feeSplit) / 100);
+    const netAmount = rawAmount - totalFeeAmount;
+    
+    // Calculate percentages of total deposit
+    const makerFeePercent = (makerFeeAmount / rawAmount) * 100;
+    const takerFeePercent = (takerFeeAmount / rawAmount) * 100;
+    const totalFeePercent = (totalFeeAmount / rawAmount) * 100;
     
     return {
       gross: rawAmount.toFixed(decimals),
-      fee: feeAmount.toFixed(decimals),
-      net: netAmount.toFixed(decimals)
+      makerFee: makerFeeAmount.toFixed(decimals),
+      takerFee: takerFeeAmount.toFixed(decimals),
+      totalFee: totalFeeAmount.toFixed(decimals),
+      net: netAmount.toFixed(decimals),
+      makerFeePercent: makerFeePercent.toFixed(2),
+      takerFeePercent: takerFeePercent.toFixed(2),
+      totalFeePercent: totalFeePercent.toFixed(2)
     };
+  };
+
+  // Calculate fee rates if using custom split
+  const getFeeRates = () => {
+    if (showAdvancedSettings && feeSplit !== 30 && contractConfig?.fee_rate) {
+      const totalFeeRate = parseFloat(contractConfig.fee_rate);
+      if (!isNaN(totalFeeRate) && totalFeeRate > 0) {
+        const makerRate = ((100 - feeSplit) / 100) * totalFeeRate;
+        const takerRate = (feeSplit / 100) * totalFeeRate;
+        return {
+          maker_fee_rate: makerRate.toString(),
+          taker_fee_rate: takerRate.toString()
+        };
+      }
+    }
+    return null;
+  };
+
+  const feeRates = getFeeRates();
+
+  // Add fee rates to the confirmation details if they exist
+  const getConfirmationDetails = () => {
+    const details = {
+      // ... existing details ...
+    };
+
+    if (feeRates) {
+      details.maker_fee_rate = feeRates.maker_fee_rate;
+      details.taker_fee_rate = feeRates.taker_fee_rate;
+    }
+
+    return details;
   };
 
   return (
@@ -156,12 +216,29 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
           {/* Add Expected Amount Section */}
           {formData.total_supply && formData.price && formData.purchasing_denom && (
             <>
-              <div className="flex justify-between text-red-400">
-                <span>Ophir Fee (3%)</span>
-                <span>
-                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).fee} {tokenMappings[formData.purchasing_denom]?.symbol}
-                </span>
-              </div>
+              {showAdvancedSettings ? (
+                <>
+                  <div className="flex justify-between text-red-400">
+                    <span>Maker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFeePercent}%)</span>
+                    <span>
+                      {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-gray-300">
+                    <span>Taker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFeePercent}%)</span>
+                    <span>
+                      {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-red-400">
+                  <span>Ophir Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFeePercent}%)</span>
+                  <span>
+                    {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between text-green-400">
                 <span>Max Net Amount</span>
                 <span>
