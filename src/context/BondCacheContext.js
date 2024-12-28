@@ -50,20 +50,47 @@ export function BondCacheProvider({ children }) {
     try {
       setIsFetching(true);
       const client = await CosmWasmClient.connect(rpc);
-      const message = { get_all_bond_offers: { limit: 100 } };
-      const data = await client.queryContractSmart(contractAddress, message);
+      let allBonds = [];
+      let hasMore = true;
 
-      if (!data?.bond_offers) return [];
+      while (hasMore) {
+        // Get the last bond's ID for pagination
+        const lastBondId = allBonds.length > 0 
+          ? allBonds[allBonds.length - 1].bond_id.toString()
+          : undefined;
+
+        const message = {
+          get_all_bond_offers: {
+            limit: 30,
+            ...(lastBondId && { start_after: lastBondId })
+          }
+        };
+
+        const data = await client.queryContractSmart(contractAddress, message);
+        
+        if (!data?.bond_offers || data.bond_offers.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        const transformedBonds = data.bond_offers.map(offer => 
+          transformBondOffer(offer)
+        );
+
+        allBonds = [...allBonds, ...transformedBonds];
+        
+        // If we got less than the limit, we're done
+        hasMore = data.bond_offers.length === 30;
+      }
 
       const newBondCache = new Map();
-      data.bond_offers.forEach(offer => {
-        const transformedBond = transformBondOffer(offer);
-        newBondCache.set(transformedBond.bond_id, transformedBond);
+      allBonds.forEach(bond => {
+        newBondCache.set(bond.bond_id, bond);
       });
 
       setBondCache(newBondCache);
       setLastFetchTime(now);
-      return Array.from(newBondCache.values());
+      return allBonds;
     } catch (error) {
       console.error('Error fetching all bonds:', error);
       return Array.from(bondCache.values());
