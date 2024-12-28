@@ -16,10 +16,12 @@ import { nftInfoCache, CACHE_DURATION, batchGetNFTInfo } from '../utils/nftCache
 import { useCrypto } from '../context/CryptoContext';
 import { useNetwork } from '../context/NetworkContext';
 import NetworkSwitcher from '../components/NetworkSwitcher';
+import { useBondCache } from '../context/BondCacheContext';
 
 const migalooRPC = "https://migaloo-rpc.polkachu.com/";
 const migalooTestnetRPC = "https://migaloo-testnet-rpc.polkachu.com:443";
 const OPHIR_DECIMAL = BigInt(1000000);
+const BONDS_PER_PAGE = 100; // Increased from default 30 to 100
 
 const CountdownTimer = ({ targetDate, label, onEnd, bondId }) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -88,6 +90,7 @@ const Bonds = () => {
   const { prices } = useCrypto();
   const navigate = useNavigate();
   const { isTestnet, rpc, contractAddress } = useNetwork();
+  const { fetchAllBonds, bonds: cachedBonds, isFetching: isCacheFetching } = useBondCache();
 
   const [alertInfo, setAlertInfo] = useState({
     open: false,
@@ -110,12 +113,9 @@ const Bonds = () => {
   const [refreshingBonds, setRefreshingBonds] = useState({});
   const [claimingAllStates, setClaimingAllStates] = useState({});
   const [nftCollections, setNftCollections] = useState([]);
-
-  // Add new state for progressive loading
   const [page, setPage] = useState(1);
   const [hasMoreBonds, setHasMoreBonds] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const BONDS_PER_PAGE = 100;
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
@@ -192,16 +192,21 @@ const Bonds = () => {
         setIsFetchingMore(true);
       }
 
+      // Calculate the start_after based on the page number
+      const startAfter = pageToFetch > 1 ? ((pageToFetch - 1) * 30).toString() : undefined;
+
       const message = {
         get_all_bond_offers: {
-          limit: BONDS_PER_PAGE,
-          start_after: pageToFetch > 1 ? ((pageToFetch - 1) * BONDS_PER_PAGE).toString() : undefined
+          limit: 30,
+          ...(startAfter && { start_after: startAfter })
         }
       };
 
+      console.log('📤 Fetching bonds with message:', JSON.stringify(message));
       const data = await queryContract(message);
       
       if (!data?.bond_offers || data.bond_offers.length === 0) {
+        console.log('No more bonds to fetch');
         setHasMoreBonds(false);
         return;
       }
@@ -217,19 +222,50 @@ const Bonds = () => {
       console.log(`📦 Fetched ${transformedBonds.length} bonds for page ${pageToFetch}`);
 
       if (shouldAppend) {
-        setBonds(prevBonds => [...prevBonds, ...transformedBonds]);
+        setBonds(prevBonds => {
+          // Create a map of existing bond IDs
+          const existingBondIds = new Set(prevBonds.map(bond => bond.bond_id));
+          
+          // Filter out any bonds that we already have
+          const uniqueNewBonds = transformedBonds.filter(bond => !existingBondIds.has(bond.bond_id));
+          
+          console.log(`📦 Adding ${uniqueNewBonds.length} unique new bonds`);
+          
+          if (uniqueNewBonds.length === 0) {
+            setHasMoreBonds(false);
+            return prevBonds;
+          }
+          
+          return [...prevBonds, ...uniqueNewBonds];
+        });
       } else {
         setBonds(transformedBonds);
       }
 
-      setHasMoreBonds(transformedBonds.length === BONDS_PER_PAGE);
+      // If we got exactly 30 results, there might be more
+      const hasMore = transformedBonds.length === 30;
+      setHasMoreBonds(hasMore);
       setPage(pageToFetch);
+
+      // Automatically fetch next page if we got a full page of results
+      if (hasMore) {
+        // Increase delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await fetchData(pageToFetch + 1, true);
+      }
 
     } catch (error) {
       console.error("Error fetching bonds:", error);
       showAlert("Failed to fetch bonds. Please try again later.", "error");
+      // On error, wait longer before retrying
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (pageToFetch === 1) {
+        fetchData(pageToFetch, shouldAppend);
+      }
     } finally {
-      setIsLoading(false);
+      if (pageToFetch === 1) {
+        setIsLoading(false);
+      }
       setIsFetchingMore(false);
     }
   };
