@@ -63,7 +63,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
     
     const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
     const rawAmount = parseFloat(totalSupply) * parseFloat(price);
-    const totalFeeAmount = rawAmount * 0.03; // 3% total fee
+    const totalFeeAmount = rawAmount * (parseFloat(contractConfig?.fee_rate || "0.03")); // Use contract fee rate or default to 3%
     
     // Calculate maker and taker fees based on feeSplit
     const takerFeeAmount = totalFeeAmount * (feeSplit / 100);
@@ -216,29 +216,24 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
           {/* Add Expected Amount Section */}
           {formData.total_supply && formData.price && formData.purchasing_denom && (
             <>
-              {showAdvancedSettings ? (
-                <>
-                  <div className="flex justify-between text-red-400">
-                    <span>Maker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFeePercent}%)</span>
-                    <span>
-                      {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-gray-300">
-                    <span>Taker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFeePercent}%)</span>
-                    <span>
-                      {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex justify-between text-red-400">
-                  <span>Ophir Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFeePercent}%)</span>
-                  <span>
-                    {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFee} {tokenMappings[formData.purchasing_denom]?.symbol}
-                  </span>
-                </div>
-              )}
+              <div className="flex justify-between text-red-400">
+                <span>Maker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFeePercent}%)</span>
+                <span>
+                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).makerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                </span>
+              </div>
+              <div className="flex justify-between text-gray-300">
+                <span>Taker Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFeePercent}%)</span>
+                <span>
+                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).takerFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                </span>
+              </div>
+              {/* <div className="flex justify-between text-red-400">
+                <span>Total Fee ({calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFeePercent}%)</span>
+                <span>
+                  {calculateExpectedAmount(formData.total_supply, formData.price, formData.purchasing_denom).totalFee} {tokenMappings[formData.purchasing_denom]?.symbol}
+                </span>
+              </div> */}
               <div className="flex justify-between text-green-400">
                 <span>Max Net Amount</span>
                 <span>

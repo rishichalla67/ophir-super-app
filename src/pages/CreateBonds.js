@@ -1530,7 +1530,13 @@ const CreateBonds = () => {
                   type="checkbox"
                   id="showAdvancedSettings"
                   checked={showAdvancedSettings}
-                  onChange={(e) => setShowAdvancedSettings(e.target.checked)}
+                  onChange={(e) => {
+                    setShowAdvancedSettings(e.target.checked);
+                    // Reset fee split to default (30% taker) when unchecking
+                    if (!e.target.checked) {
+                      setFeeSplit(30);
+                    }
+                  }}
                   className="w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
                 />
                 <label htmlFor="showAdvancedSettings" className="text-sm font-medium text-gray-300">
