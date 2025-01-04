@@ -28,6 +28,8 @@ const MyBonds = () => {
   const { isTestnet, rpc, contractAddress } = useNetwork();
   const { bonds, fetchAllBonds, invalidateBond } = useBondCache();
 
+  const [activeTab, setActiveTab] = useState('owned');
+  const [createdBonds, setCreatedBonds] = useState([]);
   const [alertInfo, setAlertInfo] = useState({
     open: false,
     message: "",
@@ -52,6 +54,8 @@ const MyBonds = () => {
     end_time: ''
   });
   const [cosmWasmClient, setCosmWasmClient] = useState(null);
+  const [withdrawingStates, setWithdrawingStates] = useState({});
+  const [isWithdrawingAll, setIsWithdrawingAll] = useState(false);
 
   const showAlert = (message, severity = "info", htmlContent = null) => {
     setAlertInfo({ open: true, message, severity, htmlContent });
@@ -176,16 +180,31 @@ const MyBonds = () => {
     }
   }, [connectedWalletAddress, bonds, rpc, contractAddress]);
 
+  const fetchCreatedBonds = useCallback(async () => {
+    if (!connectedWalletAddress || !bonds.length) return;
+    
+    try {
+      const userCreatedBonds = bonds.filter(bond => 
+        bond.issuer === connectedWalletAddress
+      );
+      setCreatedBonds(userCreatedBonds);
+    } catch (error) {
+      console.error("Error fetching created bonds:", error);
+      showAlert("Error fetching your created bonds", "error");
+    }
+  }, [connectedWalletAddress, bonds]);
+
   useEffect(() => {
     const initializeBonds = async () => {
       if (!connectedWalletAddress) return;
       
       try {
-        // First ensure we have all bonds
         const allBonds = await fetchAllBonds();
         if (allBonds.length > 0) {
-          // Only fetch user bonds after we have all bonds
-          await fetchUserBonds();
+          await Promise.all([
+            fetchUserBonds(),
+            fetchCreatedBonds()
+          ]);
         }
       } catch (error) {
         console.error("Error initializing bonds:", error);
@@ -193,7 +212,7 @@ const MyBonds = () => {
     };
 
     initializeBonds();
-  }, [connectedWalletAddress, fetchAllBonds, fetchUserBonds]);
+  }, [connectedWalletAddress, fetchAllBonds, fetchUserBonds, fetchCreatedBonds]);
 
   useEffect(() => {
     const initClient = async () => {
@@ -625,6 +644,157 @@ const MyBonds = () => {
     setShowTransferModal(true);
   };
 
+  const handleWithdraw = async (bondId) => {
+    try {
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      setWithdrawingStates(prev => ({ ...prev, [bondId]: true }));
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+      
+      const withdrawMsg = {
+        withdraw: {
+          bond_id: parseInt(bondId)
+        }
+      };
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "50000" }],
+        gas: "500000",
+      };
+
+      const result = await client.execute(
+        connectedWalletAddress,
+        contractAddress,
+        withdrawMsg,
+        fee,
+        `Withdraw Bond: ${bondId}`
+      );
+
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        showAlert(
+          "Successfully withdrew bond tokens!",
+          "success",
+          `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
+        );
+        
+        // Update the bond status in createdBonds
+        setCreatedBonds(prev => prev.map(bond => {
+          if (bond.bond_id === bondId) {
+            return { ...bond, closed: true };
+          }
+          return bond;
+        }));
+
+        // Refresh data in background
+        fetchAllBonds();
+        fetchUserBonds();
+        fetchCreatedBonds();
+      }
+    } catch (error) {
+      console.error("Error withdrawing:", error);
+      showAlert(`Error withdrawing: ${error.message}`, "error");
+    } finally {
+      setWithdrawingStates(prev => ({ ...prev, [bondId]: false }));
+    }
+  };
+
+  const handleWithdrawAll = async () => {
+    try {
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      const withdrawableBonds = createdBonds.filter(bond => {
+        const now = new Date();
+        const endTime = new Date(parseInt(bond.purchase_end_time) / 1_000_000);
+        const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+        return now > endTime && hasRemainingSupply && !bond.closed;
+      });
+
+      if (withdrawableBonds.length === 0) {
+        showAlert("No withdrawable bonds found", "info");
+        return;
+      }
+
+      setIsWithdrawingAll(true);
+      // Set loading state for all bonds being withdrawn
+      setWithdrawingStates(prev => ({
+        ...prev,
+        ...Object.fromEntries(withdrawableBonds.map(bond => [bond.bond_id, true]))
+      }));
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+
+      const gasPerMsg = 750000;
+      const totalGas = Math.min(3000000, gasPerMsg * withdrawableBonds.length);
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "75000" }],
+        gas: totalGas.toString(),
+      };
+
+      const withdrawMsgs = withdrawableBonds.map(bond => ({
+        contractAddress: contractAddress,
+        msg: {
+          withdraw: {
+            bond_id: parseInt(bond.bond_id)
+          }
+        }
+      }));
+
+      const result = await client.executeMultiple(
+        connectedWalletAddress,
+        withdrawMsgs,
+        fee,
+        "Withdraw All Bonds"
+      );
+
+      if (result.transactionHash) {
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
+        showAlert(
+          `Successfully withdrew all bonds! (${withdrawableBonds.length} bonds)`,
+          "success",
+          `<a href="${txnUrl}" target="_blank" class="text-yellow-300 hover:text-yellow-400">View Transaction</a>`
+        );
+        
+        // Update all withdrawn bonds' status
+        setCreatedBonds(prev => prev.map(bond => {
+          if (withdrawableBonds.some(wb => wb.bond_id === bond.bond_id)) {
+            return { ...bond, closed: true };
+          }
+          return bond;
+        }));
+
+        // Refresh data in background
+        fetchAllBonds();
+        fetchUserBonds();
+        fetchCreatedBonds();
+      }
+    } catch (error) {
+      console.error("Error withdrawing all bonds:", error);
+      showAlert(`Error withdrawing bonds: ${error.message}`, "error");
+    } finally {
+      setIsWithdrawingAll(false);
+      // Clear all withdraw loading states
+      setWithdrawingStates({});
+    }
+  };
+
   if (!connectedWalletAddress) {
     return (
       <div className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -648,19 +818,43 @@ const MyBonds = () => {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-xl md:text-3xl font-bold h1-color">My Bonds</h1>
           <div className="flex gap-2 md:gap-4">
-            <button
-              onClick={handleClaimAll}
-              className="px-4 py-2 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-colors"
-            >
-              Claim All
-            </button>
-            {/* <button
-              onClick={() => setShowTransferModal(true)}
-              disabled={selectedBonds.size === 0}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-black font-bold rounded-lg transition-colors disabled:opacity-50"
-            >
-              Transfer Selected
-            </button> */}
+            {activeTab === 'owned' ? (
+              <button
+                onClick={handleClaimAll}
+                disabled={isClaimingAll}
+                className="px-4 py-2 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isClaimingAll ? (
+                  <div className="flex items-center space-x-2">
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Claiming All...</span>
+                  </div>
+                ) : (
+                  "Claim All"
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleWithdrawAll}
+                disabled={isWithdrawingAll}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isWithdrawingAll ? (
+                  <div className="flex items-center space-x-2">
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Withdrawing All...</span>
+                  </div>
+                ) : (
+                  "Withdraw All"
+                )}
+              </button>
+            )}
             <button
               onClick={handleCreateOffer}
               className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg transition-colors"
@@ -670,138 +864,283 @@ const MyBonds = () => {
           </div>
         </div>
 
+        {/* Add Tabs */}
+        <div className="flex space-x-4 mb-6">
+          <button
+            onClick={() => setActiveTab('owned')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'owned'
+                ? 'bg-yellow-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Owned Bonds
+          </button>
+          <button
+            onClick={() => setActiveTab('created')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'created'
+                ? 'bg-yellow-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            Created Bonds
+          </button>
+        </div>
+
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <div className="backdrop-blur-md bg-black/20 rounded-xl border border-gray-800/50 shadow-2xl">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-700/50">
-                  <th className="p-4 text-gray-400 font-medium">Bond Name</th>
-                  <th className="p-4 text-gray-400 font-medium">Bond ID</th>
-                  <th className="p-4 text-gray-400 font-medium">Token ID</th>
-                  <th className="p-4 text-gray-400 font-medium">Amount</th>
-                  <th className="p-4 text-gray-400 font-medium">Progress</th>
-                  <th className="p-4 text-gray-400 font-medium">Status</th>
-                  <th className="p-4 text-gray-400 font-medium">Actions</th>
+                  <th className="p-4 text-gray-400 font-medium text-center">Bond Name</th>
+                  <th className="p-4 text-gray-400 font-medium text-center">Bond ID</th>
+                  {activeTab === 'owned' && (
+                    <th className="p-4 text-gray-400 font-medium text-center">Token ID</th>
+                  )}
+                  <th className="p-4 text-gray-400 font-medium text-center">Amount</th>
+                  {activeTab === 'owned' ? (
+                    <>
+                      <th className="p-4 text-gray-400 font-medium text-center">Progress</th>
+                      <th className="p-4 text-gray-400 font-medium text-center">Status</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-4 text-gray-400 font-medium text-center">Remaining Supply</th>
+                      <th className="p-4 text-gray-400 font-medium text-center">Status</th>
+                    </>
+                  )}
+                  <th className="p-4 text-gray-400 font-medium text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {userBonds.map((bond) => {
-                  const isClaimed = bond.status === "Claimed" || 
-                    (bond.claimed_amount && parseInt(bond.claimed_amount) >= parseInt(bond.amount));
+                {activeTab === 'owned' ? (
+                  // Existing owned bonds table rows
+                  userBonds.map((bond) => {
+                    const isClaimed = bond.status === "Claimed" || 
+                      (bond.claimed_amount && parseInt(bond.claimed_amount) >= parseInt(bond.amount));
 
-                  return (
-                    <tr 
-                      key={`${bond.bond_id}_${bond.nft_token_id}`} 
-                      className="border-b border-gray-700/50 transition-all duration-200 hover:bg-white/5 cursor-pointer"
-                      onClick={(e) => handleBondClick(e, bond.bond_id)}
-                    >
-                      <td className="p-4">
-                        <div className="font-medium text-white/90">
-                          {formatBondName(bond.name) || `Bond #${bond.bond_id}`}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="px-3 py-1 bg-gray-800/50 rounded-lg">
-                            {bond.bond_id}
+                    return (
+                      <tr 
+                        key={`${bond.bond_id}_${bond.nft_token_id}`} 
+                        className="border-b border-gray-700/50 transition-all duration-200 hover:bg-white/5 cursor-pointer"
+                        onClick={(e) => handleBondClick(e, bond.bond_id)}
+                      >
+                        <td className="p-4 text-center">
+                          <div className="font-medium text-white/90">
+                            {formatBondName(bond.name) || `Bond #${bond.bond_id}`}
                           </div>
-                          <button
-                            onClick={(e) => handleCopyAddress(bond.contract_address, e)}
-                            className="p-1.5 hover:bg-gray-700/50 rounded-lg transition-colors group"
-                            title="Copy NFT Contract Address"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="px-3 py-1 bg-gray-800/50 rounded-lg inline-block">
-                          {bond.nft_token_id}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-white/90">{formatAmount(bond.amount)}</span>
-                          {bond?.token_denom && (
-                            <img
-                              src={getTokenImage(bond.token_denom)}
-                              alt={getTokenSymbol(bond.token_denom)}
-                              className="w-6 h-6 rounded-full ring-2 ring-gray-700/50"
-                            />
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-14 h-14 relative">
-                            <CircularProgressbar
-                              value={(parseInt(bond.claimed_amount || 0) / parseInt(bond.amount)) * 100}
-                              text={`${((parseInt(bond.claimed_amount || 0) / parseInt(bond.amount)) * 100).toFixed(0)}%`}
-                              styles={buildStyles({
-                                textSize: '20px',
-                                pathColor: '#F59E0B',
-                                textColor: '#FFFFFF',
-                                trailColor: '#1F2937',
-                                pathTransitionDuration: 0.5,
-                              })}
-                            />
-                          </div>
-                          <div className="flex flex-col space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm text-gray-400">Claimed:</span>
-                              <span className="text-yellow-300 font-medium">{formatAmount(bond.claimed_amount || 0)}</span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="px-3 py-1 bg-gray-800/50 rounded-lg">
+                              {bond.bond_id}
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm text-gray-400">Total:</span>
-                              <span className="text-yellow-300 font-medium">{formatAmount(parseInt(bond.amount))}</span>
+                            <button
+                              onClick={(e) => handleCopyAddress(bond.contract_address, e)}
+                              className="p-1.5 hover:bg-gray-700/50 rounded-lg transition-colors group"
+                              title="Copy NFT Contract Address"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="px-3 py-1 bg-gray-800/50 rounded-lg inline-block">
+                            {bond.nft_token_id}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <span className="font-medium text-white/90">{formatAmount(bond.amount)}</span>
+                            {bond?.token_denom && (
+                              <img
+                                src={getTokenImage(bond.token_denom)}
+                                alt={getTokenSymbol(bond.token_denom)}
+                                className="w-6 h-6 rounded-full ring-2 ring-gray-700/50"
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-4">
+                            <div className="w-14 h-14 relative">
+                              <CircularProgressbar
+                                value={(parseInt(bond.claimed_amount || 0) / parseInt(bond.amount)) * 100}
+                                text={`${((parseInt(bond.claimed_amount || 0) / parseInt(bond.amount)) * 100).toFixed(0)}%`}
+                                styles={buildStyles({
+                                  textSize: '20px',
+                                  pathColor: '#F59E0B',
+                                  textColor: '#FFFFFF',
+                                  trailColor: '#1F2937',
+                                  pathTransitionDuration: 0.5,
+                                })}
+                              />
+                            </div>
+                            <div className="flex flex-col space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-gray-400">Claimed:</span>
+                                <span className="text-yellow-300 font-medium">{formatAmount(bond.claimed_amount || 0)}</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-gray-400">Total:</span>
+                                <span className="text-yellow-300 font-medium">{formatAmount(parseInt(bond.amount))}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className={`px-3 py-1.5 rounded-lg text-xs font-medium inline-block ${
-                          isClaimed 
-                            ? 'bg-gray-700/30 text-gray-400 border border-gray-600/30' 
-                            : 'bg-green-500/10 text-green-400 border border-green-500/30'
-                        }`}>
-                          {isClaimed ? 'Claimed' : 'Claimable'}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          {!isClaimed && (
-                            <>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className={`px-3 py-1.5 rounded-lg text-xs font-medium inline-block ${
+                            isClaimed 
+                              ? 'bg-gray-700/30 text-gray-400 border border-gray-600/30' 
+                              : 'bg-green-500/10 text-green-400 border border-green-500/30'
+                          }`}>
+                            {isClaimed ? 'Claimed' : 'Claimable'}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            {!isClaimed && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleClaim(bond.bond_id, bond.nft_token_id);
+                                  }}
+                                  className="px-4 py-1.5 bg-green-500 hover:bg-green-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-green-500/20"
+                                >
+                                  Claim
+                                </button>
+                                <button
+                                  onClick={(e) => handleListClick(e, bond)}
+                                  className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20"
+                                >
+                                  List
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
+                              className="px-4 py-1.5 bg-blue-500 hover:bg-blue-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/20"
+                            >
+                              Transfer
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  // Created bonds table rows
+                  createdBonds.map((bond) => {
+                    const now = new Date();
+                    const startTime = new Date(parseInt(bond.purchase_start_time) / 1_000_000);
+                    const endTime = new Date(parseInt(bond.purchase_end_time) / 1_000_000);
+                    const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+                    
+                    let bondStatus = 'Ended';
+                    if (now >= startTime && now <= endTime && !bond.closed) {
+                      bondStatus = 'Active';
+                    } else if (now < startTime) {
+                      bondStatus = 'Upcoming';
+                    } else if (parseInt(bond.remaining_supply) === 0) {
+                      bondStatus = 'Sold Out';
+                    } else if (bond.closed) {
+                      bondStatus = 'Withdrawn';
+                    }
+
+                    const canWithdraw = now > endTime && hasRemainingSupply && !bond.closed;
+
+                    return (
+                      <tr 
+                        key={bond.bond_id} 
+                        className="border-b border-gray-700/50 transition-all duration-200 hover:bg-white/5 cursor-pointer"
+                        onClick={(e) => handleBondClick(e, bond.bond_id)}
+                      >
+                        <td className="p-4 text-center">
+                          <div className="font-medium text-white/90">
+                            {formatBondName(bond.bond_name) || `Bond #${bond.bond_id}`}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="px-3 py-1 bg-gray-800/50 rounded-lg">
+                              {bond.bond_id}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <span className="font-medium text-white/90">
+                              {formatAmount(bond.total_amount)}
+                            </span>
+                            {bond?.token_denom && (
+                              <img
+                                src={getTokenImage(bond.token_denom)}
+                                alt={getTokenSymbol(bond.token_denom)}
+                                className="w-6 h-6 rounded-full ring-2 ring-gray-700/50"
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <span className="font-medium text-white/90">
+                              {formatAmount(bond.remaining_supply)}
+                            </span>
+                            {bond?.token_denom && (
+                              <img
+                                src={getTokenImage(bond.token_denom)}
+                                alt={getTokenSymbol(bond.token_denom)}
+                                className="w-6 h-6 rounded-full ring-2 ring-gray-700/50"
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className={`px-3 py-1.5 rounded-lg text-xs font-medium inline-block ${
+                            bondStatus === 'Active' ? 'bg-green-500/10 text-green-400 border border-green-500/30' :
+                            bondStatus === 'Upcoming' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
+                            bondStatus === 'Sold Out' ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
+                            bondStatus === 'Withdrawn' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' :
+                            'bg-gray-700/30 text-gray-400 border border-gray-600/30'
+                          }`}>
+                            {bondStatus}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            {canWithdraw && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleClaim(bond.bond_id, bond.nft_token_id);
+                                  handleWithdraw(bond.bond_id);
                                 }}
-                                className="px-4 py-1.5 bg-green-500 hover:bg-green-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-green-500/20"
+                                disabled={withdrawingStates[bond.bond_id]}
+                                className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                Claim
+                                {withdrawingStates[bond.bond_id] ? (
+                                  <div className="flex items-center space-x-2">
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Withdrawing...</span>
+                                  </div>
+                                ) : (
+                                  "Withdraw"
+                                )}
                               </button>
-                              <button
-                                onClick={(e) => handleListClick(e, bond)}
-                                className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20"
-                              >
-                                List
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
-                            className="px-4 py-1.5 bg-blue-500 hover:bg-blue-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/20"
-                          >
-                            Transfer
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -809,137 +1148,252 @@ const MyBonds = () => {
 
         {/* Mobile Card View */}
         <div className="grid grid-cols-1 gap-4 md:hidden">
-          {userBonds.map((bond) => {
-            const isClaimed = bond.status === "Claimed" || 
-              (bond.claimed_amount && parseInt(bond.claimed_amount) >= parseInt(bond.amount));
+          {activeTab === 'owned' ? (
+            // Existing owned bonds mobile view
+            userBonds.map((bond) => {
+              const isClaimed = bond.status === "Claimed" || 
+                (bond.claimed_amount && parseInt(bond.claimed_amount) >= parseInt(bond.amount));
 
-            return (
-              <div 
-                key={`${bond.bond_id}_${bond.nft_token_id}`} 
-                className="bond-buy backdrop-blur-sm rounded-lg p-4 shadow-xl border border-gray-700 cursor-pointer"
-                onClick={(e) => handleBondClick(e, bond.bond_id)}
-              >
-                {/* Bond Name */}
-                <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg mb-4">
-                  <p className="text-gray-400 text-xs mb-0.5">Bond Name:</p>
-                  <p className="text-sm md:text-xl font-bold text-center">
-                    {formatBondName(bond.name) || `Bond #${bond.bond_id}`}
-                  </p>
-                </div>
+              // Add these variables for owned bonds view
+              const now = new Date();
+              const startTime = new Date(parseInt(bond.purchase_start_time) / 1_000_000);
+              const endTime = new Date(parseInt(bond.purchase_end_time) / 1_000_000);
+              const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+              
+              let bondStatus = isClaimed ? 'Claimed' : 'Claimable';
+              const canWithdraw = false; // Owned bonds can't be withdrawn
 
-                {/* Bond Info Grid */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-                    <p className="text-gray-400 text-xs mb-0.5">Bond ID:</p>
-                    <div className="flex items-center justify-center space-x-2">
-                      <p className="text-sm md:text-xl font-bold">{bond.bond_id}</p>
-                      <button
-                        onClick={(e) => handleCopyAddress(bond.contract_address, e)}
-                        className="p-1.5 hover:bg-gray-700/50 rounded-lg transition-colors group"
-                        title="Copy NFT Contract Address"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-                    <p className="text-gray-400 text-xs mb-0.5">Token ID:</p>
-                    <p className="text-sm md:text-xl font-bold text-center">{bond.nft_token_id}</p>
-                  </div>
-
-                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-                    <p className="text-gray-400 text-xs mb-0.5">Amount:</p>
-                    <div className="flex items-center justify-center">
-                      <p className="text-sm md:text-xl font-bold">{formatAmount(bond.amount)}</p>
-                      {bond?.token_denom && (
-                        <img
-                          src={getTokenImage(bond.token_denom)}
-                          alt={getTokenSymbol(bond.token_denom)}
-                          className="w-6 h-6 ml-2 rounded-full"
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
-                    <p className="text-gray-400 text-xs mb-0.5">Status:</p>
+              return (
+                <div 
+                  key={`${bond.bond_id}_${bond.nft_token_id}`} 
+                  className="bond-buy backdrop-blur-sm rounded-lg p-4 shadow-xl border border-gray-700 cursor-pointer"
+                  onClick={(e) => handleBondClick(e, bond.bond_id)}
+                >
+                  {/* Bond Name */}
+                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg mb-4">
+                    <p className="text-gray-400 text-xs mb-0.5">Bond Name:</p>
                     <p className="text-sm md:text-xl font-bold text-center">
-                      {isClaimed ? 'Claimed' : 'Claimable'}
+                      {formatBondName(bond.name) || `Bond #${bond.bond_id}`}
                     </p>
                   </div>
-                </div>
 
-                {/* Progress Circle */}
-                {bond.claimed_amount && (
-                  <div className="mt-4 flex items-center p-3 bond-buy-text-container bg-gray-900/50 rounded-lg mb-4">
-                    <div className="w-16 h-16 md:w-24 md:h-24 mr-4">
-                      <CircularProgressbar
-                        value={(parseInt(bond.claimed_amount) / parseInt(bond.amount)) * 100}
-                        text={`${((parseInt(bond.claimed_amount) / parseInt(bond.amount)) * 100).toFixed(0)}%`}
-                        styles={buildStyles({
-                          textSize: '16px',
-                          pathColor: '#F59E0B',
-                          textColor: '#FFFFFF',
-                          trailColor: '#1F2937',
-                        })}
-                      />
+                  {/* Bond Info Grid */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Bond ID:</p>
+                      <p className="text-sm md:text-xl font-bold text-center">{bond.bond_id}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-xs md:text-sm">
-                        Claimed: <span className="text-yellow-300 font-bold">
-                          {formatAmount(bond.claimed_amount)}
-                        </span>
-                      </p>
-                      <p className="text-xs md:text-sm">
-                        Total: <span className="text-yellow-300 font-bold">
-                          {formatAmount(parseInt(bond.amount))}
-                        </span>
-                      </p>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Token ID:</p>
+                      <p className="text-sm md:text-xl font-bold text-center">{bond.nft_token_id}</p>
+                    </div>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Amount:</p>
+                      <div className="flex items-center justify-center">
+                        <p className="text-sm md:text-xl font-bold">{formatAmount(bond.amount)}</p>
+                        {bond?.token_denom && (
+                          <img
+                            src={getTokenImage(bond.token_denom)}
+                            alt={getTokenSymbol(bond.token_denom)}
+                            className="w-5 h-5 ml-2 rounded-full"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Status:</p>
+                      <div className={`px-2 py-1 rounded-lg text-xs font-medium text-center ${
+                        isClaimed 
+                          ? 'bg-gray-700/30 text-gray-400 border border-gray-600/30' 
+                          : 'bg-green-500/10 text-green-400 border border-green-500/30'
+                      }`}>
+                        {bondStatus}
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {/* Action Buttons */}
-                <div className="grid grid-cols-3 gap-2">
-                  {!isClaimed ? (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleClaim(bond.bond_id, bond.nft_token_id);
-                        }}
-                        className="px-3 py-2 bg-green-500 hover:bg-green-400 text-black text-sm font-bold rounded-lg transition-colors"
-                      >
-                        Claim
-                      </button>
-                      <button
-                        onClick={(e) => handleListClick(e, bond)}
-                        className="px-3 py-2 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold rounded-lg transition-colors"
-                      >
-                        List
-                      </button>
+                  {/* Progress Circle */}
+                  {bond.claimed_amount && (
+                    <div className="mt-4 flex items-center p-3 bond-buy-text-container bg-gray-900/50 rounded-lg mb-4">
+                      <div className="w-16 h-16 md:w-24 md:h-24 mr-4">
+                        <CircularProgressbar
+                          value={(parseInt(bond.claimed_amount) / parseInt(bond.amount)) * 100}
+                          text={`${((parseInt(bond.claimed_amount) / parseInt(bond.amount)) * 100).toFixed(0)}%`}
+                          styles={buildStyles({
+                            textSize: '16px',
+                            pathColor: '#F59E0B',
+                            textColor: '#FFFFFF',
+                            trailColor: '#1F2937',
+                          })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs md:text-sm">
+                          Claimed: <span className="text-yellow-300 font-bold">
+                            {formatAmount(bond.claimed_amount)}
+                          </span>
+                        </p>
+                        <p className="text-xs md:text-sm">
+                          Total: <span className="text-yellow-300 font-bold">
+                            {formatAmount(parseInt(bond.amount))}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {!isClaimed ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClaim(bond.bond_id, bond.nft_token_id);
+                          }}
+                          className="px-3 py-2 bg-green-500 hover:bg-green-400 text-black text-sm font-bold rounded-lg transition-colors"
+                        >
+                          Claim
+                        </button>
+                        <button
+                          onClick={(e) => handleListClick(e, bond)}
+                          className="px-3 py-2 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold rounded-lg transition-colors"
+                        >
+                          List
+                        </button>
+                        <button
+                          onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
+                          className="px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
+                        >
+                          Transfer
+                        </button>
+                      </>
+                    ) : (
                       <button
                         onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
-                        className="px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
+                        className="col-span-3 px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
                       >
                         Transfer
                       </button>
-                    </>
-                  ) : (
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            // Created bonds mobile view
+            createdBonds.map((bond) => {
+              const now = new Date();
+              const startTime = new Date(parseInt(bond.purchase_start_time) / 1_000_000);
+              const endTime = new Date(parseInt(bond.purchase_end_time) / 1_000_000);
+              const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+              
+              let bondStatus = 'Ended';
+              if (now >= startTime && now <= endTime && !bond.closed) {
+                bondStatus = 'Active';
+              } else if (now < startTime) {
+                bondStatus = 'Upcoming';
+              } else if (parseInt(bond.remaining_supply) === 0) {
+                bondStatus = 'Sold Out';
+              } else if (bond.closed) {
+                bondStatus = 'Withdrawn';
+              }
+
+              const canWithdraw = now > endTime && hasRemainingSupply && !bond.closed;
+
+              return (
+                <div 
+                  key={bond.bond_id} 
+                  className="bond-buy backdrop-blur-sm rounded-lg p-4 shadow-xl border border-gray-700 cursor-pointer"
+                  onClick={(e) => handleBondClick(e, bond.bond_id)}
+                >
+                  {/* Bond Name */}
+                  <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg mb-4">
+                    <p className="text-gray-400 text-xs mb-0.5">Bond Name:</p>
+                    <p className="text-sm md:text-xl font-bold text-center">
+                      {formatBondName(bond.bond_name) || `Bond #${bond.bond_id}`}
+                    </p>
+                  </div>
+
+                  {/* Bond Info Grid */}
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Bond ID:</p>
+                      <p className="text-sm md:text-xl font-bold text-center">{bond.bond_id}</p>
+                    </div>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Total Supply:</p>
+                      <div className="flex items-center justify-center">
+                        <p className="text-sm md:text-xl font-bold">{formatAmount(bond.total_amount)}</p>
+                        {bond?.token_denom && (
+                          <img
+                            src={getTokenImage(bond.token_denom)}
+                            alt={getTokenSymbol(bond.token_denom)}
+                            className="w-5 h-5 ml-2 rounded-full"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Remaining Supply:</p>
+                      <div className="flex items-center justify-center">
+                        <p className="text-sm md:text-xl font-bold">{formatAmount(bond.remaining_supply)}</p>
+                        {bond?.token_denom && (
+                          <img
+                            src={getTokenImage(bond.token_denom)}
+                            alt={getTokenSymbol(bond.token_denom)}
+                            className="w-5 h-5 ml-2 rounded-full"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+                      <p className="text-gray-400 text-xs mb-0.5">Status:</p>
+                      <div className={`px-2 py-1 rounded-lg text-xs font-medium text-center ${
+                        bondStatus === 'Active' ? 'bg-green-500/10 text-green-400 border border-green-500/30' :
+                        bondStatus === 'Upcoming' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
+                        bondStatus === 'Sold Out' ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
+                        bondStatus === 'Withdrawn' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' :
+                        'bg-gray-700/30 text-gray-400 border border-gray-600/30'
+                      }`}>
+                        {bondStatus}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  {canWithdraw && (
                     <button
-                      onClick={(e) => handleTransferClick(e, bond.bond_id, bond.nft_token_id)}
-                      className="col-span-3 px-3 py-2 bg-blue-500 hover:bg-blue-400 text-black text-sm font-bold rounded-lg transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleWithdraw(bond.bond_id);
+                      }}
+                      disabled={withdrawingStates[bond.bond_id]}
+                      className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Transfer
+                      {withdrawingStates[bond.bond_id] ? (
+                        <div className="flex items-center space-x-2">
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Withdrawing...</span>
+                        </div>
+                      ) : (
+                        "Withdraw"
+                      )}
                     </button>
                   )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Transfer Modal */}
