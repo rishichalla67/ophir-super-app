@@ -982,7 +982,7 @@ const BuyBonds = () => {
   const purchasingSymbol = bond.purchase_denom ? formatBondDenom(getTokenSymbol(bond.purchase_denom)) : '';
 
   const handleGoBack = () => {
-    navigate('/bonds');
+    window.history.back();
   };
 
   const isBondActive = getBondStatus(bond) === "Active";

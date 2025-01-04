@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { useWallet } from '../context/WalletContext';
 import { useSidebar } from '../context/SidebarContext';
@@ -17,6 +17,7 @@ import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import { getTimestampOffsets, convertContractTimeToDate, queryContract } from '../utils/contractUtils';
 import { daoConfig } from '../utils/daoConfig';
 import TokenDropdown from '../components/TokenDropdown';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 const OPHIR_DECIMAL = BigInt(1000000);
 
@@ -25,10 +26,27 @@ const MyBonds = () => {
   const { isSidebarOpen } = useSidebar();
   const { prices } = useCrypto();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isTestnet, rpc, contractAddress } = useNetwork();
   const { bonds, fetchAllBonds, invalidateBond } = useBondCache();
 
-  const [activeTab, setActiveTab] = useState('owned');
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.endsWith('/created')) return 'created';
+    if (path.endsWith('/owned')) return 'owned';
+    return 'owned'; // default tab
+  };
+
+  const setActiveTab = (tab) => {
+    navigate(`/my-bonds/${tab}`);
+  };
+
+  useEffect(() => {
+    if (location.pathname === '/my-bonds') {
+      navigate('/my-bonds/owned');
+    }
+  }, [location.pathname, navigate]);
+
   const [createdBonds, setCreatedBonds] = useState([]);
   const [alertInfo, setAlertInfo] = useState({
     open: false,
@@ -795,6 +813,10 @@ const MyBonds = () => {
     }
   };
 
+  const handleGoBack = () => {
+    window.history.back();
+  };
+
   if (!connectedWalletAddress) {
     return (
       <div className={`global-bg-new text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -816,9 +838,16 @@ const MyBonds = () => {
       <div className="pt-32 md:pt-24 w-[92%] md:w-[95%] md:max-w-10xl mx-auto">
         {/* Header with actions */}
         <div className="flex justify-between items-center mb-4">
+          <button
+            onClick={handleGoBack}
+            className="back-button flex items-center text-sm md:text-base text-gray-300 hover:text-white transition duration-300"
+          >
+            <ArrowLeftIcon className="h-4 w-4 mr-1" />
+            Back
+          </button>
           <h1 className="text-xl md:text-3xl font-bold h1-color">My Bonds</h1>
           <div className="flex gap-2 md:gap-4">
-            {activeTab === 'owned' ? (
+            {getActiveTab() === 'owned' ? (
               <button
                 onClick={handleClaimAll}
                 disabled={isClaimingAll}
@@ -869,7 +898,7 @@ const MyBonds = () => {
           <button
             onClick={() => setActiveTab('owned')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'owned'
+              getActiveTab() === 'owned'
                 ? 'bg-yellow-500 text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
             }`}
@@ -879,7 +908,7 @@ const MyBonds = () => {
           <button
             onClick={() => setActiveTab('created')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'created'
+              getActiveTab() === 'created'
                 ? 'bg-yellow-500 text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
             }`}
@@ -896,11 +925,11 @@ const MyBonds = () => {
                 <tr className="border-b border-gray-700/50">
                   <th className="p-4 text-gray-400 font-medium text-center">Bond Name</th>
                   <th className="p-4 text-gray-400 font-medium text-center">Bond ID</th>
-                  {activeTab === 'owned' && (
+                  {getActiveTab() === 'owned' && (
                     <th className="p-4 text-gray-400 font-medium text-center">Token ID</th>
                   )}
                   <th className="p-4 text-gray-400 font-medium text-center">Amount</th>
-                  {activeTab === 'owned' ? (
+                  {getActiveTab() === 'owned' ? (
                     <>
                       <th className="p-4 text-gray-400 font-medium text-center">Progress</th>
                       <th className="p-4 text-gray-400 font-medium text-center">Status</th>
@@ -911,11 +940,18 @@ const MyBonds = () => {
                       <th className="p-4 text-gray-400 font-medium text-center">Status</th>
                     </>
                   )}
-                  <th className="p-4 text-gray-400 font-medium text-center">Actions</th>
+                  {(getActiveTab() === 'owned' || createdBonds.some(bond => {
+                    const now = new Date();
+                    const endTime = new Date(parseInt(bond.purchase_end_time) / 1_000_000);
+                    const hasRemainingSupply = parseInt(bond.remaining_supply) > 0;
+                    return now > endTime && hasRemainingSupply && !bond.closed;
+                  })) && (
+                    <th className="p-4 text-gray-400 font-medium text-center">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {activeTab === 'owned' ? (
+                {getActiveTab() === 'owned' ? (
                   // Existing owned bonds table rows
                   userBonds.map((bond) => {
                     const isClaimed = bond.status === "Claimed" || 
@@ -1111,9 +1147,9 @@ const MyBonds = () => {
                             {bondStatus}
                           </div>
                         </td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center space-x-2">
-                            {canWithdraw && (
+                        {canWithdraw && (
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center space-x-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1134,9 +1170,9 @@ const MyBonds = () => {
                                   "Withdraw"
                                 )}
                               </button>
-                            )}
-                          </div>
-                        </td>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
@@ -1148,7 +1184,7 @@ const MyBonds = () => {
 
         {/* Mobile Card View */}
         <div className="grid grid-cols-1 gap-4 md:hidden">
-          {activeTab === 'owned' ? (
+          {getActiveTab() === 'owned' ? (
             // Existing owned bonds mobile view
             userBonds.map((bond) => {
               const isClaimed = bond.status === "Claimed" || 
@@ -1369,26 +1405,30 @@ const MyBonds = () => {
 
                   {/* Action Buttons */}
                   {canWithdraw && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleWithdraw(bond.bond_id);
-                      }}
-                      disabled={withdrawingStates[bond.bond_id]}
-                      className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {withdrawingStates[bond.bond_id] ? (
-                        <div className="flex items-center space-x-2">
-                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Withdrawing...</span>
-                        </div>
-                      ) : (
-                        "Withdraw"
-                      )}
-                    </button>
+                    <td className="p-4 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleWithdraw(bond.bond_id);
+                          }}
+                          disabled={withdrawingStates[bond.bond_id]}
+                          className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-medium rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {withdrawingStates[bond.bond_id] ? (
+                            <div className="flex items-center space-x-2">
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>Withdrawing...</span>
+                            </div>
+                          ) : (
+                            "Withdraw"
+                          )}
+                        </button>
+                      </div>
+                    </td>
                   )}
                 </div>
               );

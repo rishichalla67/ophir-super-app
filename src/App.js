@@ -42,14 +42,18 @@ function App() {
                       <Route path="/dashboard/redemptions" element={<RedeemAnalytics />} />
                       <Route path="/dashboard/treasury" element={<AnalyticsDashboard />} />
                       <Route path="/bonds" element={<Bonds />} />
-                      <Route path="/my-bonds" element={<MyBonds />} />
+                      <Route path="/my-bonds" element={<MyBonds />}>
+                        <Route index element={<MyBonds />} />
+                        <Route path="owned" element={<MyBonds />} />
+                        <Route path="created" element={<MyBonds />} />
+                      </Route>
                       <Route path="/bonds/create" element={<CreateBonds />} />
                       <Route path="/bonds/:bondId" element={<BuyBonds />} />
                       <Route path="/bonds/resale" element={<ResaleBonds />} />
                       <Route path="/bonds/resale/:bondIdNftId" element={<BuyResaleBonds />} />
                       <Route path="/analytics/new" element={<TreasuryAnalytics />} />
                       <Route path="/govern" element={<Govern />} />
-                      <Route path="/bonds/issuer" element={<Issuers />} />
+                      {/* <Route path="/bonds/issuer" element={<Issuers />} /> */}
                       <Route path="/wasmdev" element={<WasmDev />} />
                       <Route path="/seekers" element={<Seekers />} />
                     </Routes>

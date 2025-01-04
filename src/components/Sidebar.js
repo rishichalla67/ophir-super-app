@@ -85,11 +85,11 @@ const Sidebar = () => {
           path: '/my-bonds',
           icon: <FaHandHoldingUsd className="mr-2" size={14} />
         },
-        ...(isIssuer ? [{
-          name: 'Issuer', 
-          path: '/bonds/issuer',
-          icon: <FaCrown className="mr-2" size={14} />
-        }] : []),
+        // ...(isIssuer ? [{
+        //   name: 'Issuer', 
+        //   path: '/bonds/issuer',
+        //   icon: <FaCrown className="mr-2" size={14} />
+        // }] : []),
       ],
     },
     { 
