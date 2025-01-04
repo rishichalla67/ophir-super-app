@@ -1102,7 +1102,8 @@ const CreateBonds = () => {
       if (newPrice) {
         setFormData(prev => ({
           ...prev,
-          price: newPrice
+          price: newPrice,
+          markup: markupValue // Add markup to formData
         }));
       }
     }

@@ -210,7 +210,14 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, formData, setFormData, 
           </div>
           <div className="flex justify-between">
             <span>Price</span>
-            <span>{formData.price}</span>
+            <div className="flex items-center gap-2">
+              <span>{formData.price}</span>
+              {formData.markup !== undefined && (
+                <span className={`text-sm ${formData.markup < 0 ? 'text-green-400' : formData.markup > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                  ({formData.markup > 0 ? '+' : ''}{formData.markup}% {formData.markup < 0 ? 'Discount' : formData.markup > 0 ? 'Premium' : ''})
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Add Expected Amount Section */}
