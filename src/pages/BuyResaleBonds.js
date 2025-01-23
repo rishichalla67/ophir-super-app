@@ -220,6 +220,12 @@ function BuyResaleBonds() {
     return tokenMappings[denom]?.symbol || denom;
   };
 
+  const isOfferEnded = () => {
+    if (!offer?.end_time) return true;
+    const endTime = new Date(parseInt(offer.end_time) / 1_000_000);
+    return endTime < new Date();
+  };
+
   if (isLoading) {
     return (
       <div className="global-bg min-h-screen flex items-center justify-center">
@@ -256,6 +262,14 @@ function BuyResaleBonds() {
         </Snackbar>
 
         <div className="flex items-center gap-4 mb-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </button>
           <h1 className="text-3xl font-bold h1-color">Purchase Resale Bond</h1>
           <NetworkSwitcher />
         </div>
@@ -315,14 +329,19 @@ function BuyResaleBonds() {
 
             <button
               onClick={handlePurchase}
-              disabled={!connectedWalletAddress}
+              disabled={!connectedWalletAddress || isOfferEnded()}
               className={`w-full py-3 rounded-lg text-center transition duration-300 ${
-                connectedWalletAddress
+                connectedWalletAddress && !isOfferEnded()
                   ? 'landing-button hover:bg-yellow-500'
                   : 'bg-gray-700 cursor-not-allowed'
               }`}
             >
-              {connectedWalletAddress ? 'Purchase Bond' : 'Connect Wallet to Purchase'}
+              {!connectedWalletAddress 
+                ? 'Connect Wallet to Purchase' 
+                : isOfferEnded()
+                  ? 'Offer Has Ended'
+                  : 'Purchase Bond'
+              }
             </button>
           </div>
         </div>

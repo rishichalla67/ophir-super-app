@@ -58,10 +58,10 @@ function ResaleBonds() {
   const [isLoading, setIsLoading] = useState(false);
   const [resaleOffers, setResaleOffers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
   const navigate = useNavigate();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     bond_id: '',
     nft_id: '',
@@ -986,7 +986,7 @@ function ResaleBonds() {
       );
 
       showAlert("Resale offer created successfully!", "success");
-      setIsModalOpen(false);
+      setIsCreateOfferModalOpen(false);
       
       // Refresh data without page reload
       await Promise.all([
@@ -1086,120 +1086,30 @@ function ResaleBonds() {
   const [quickResaleDenoms, setQuickResaleDenoms] = useState({});
 
   const UserBondsSection = () => {
-    if (!connectedWalletAddress || (!isUserBondsLoading && userBonds.length === 0)) return null;
-
-    const handleBondClick = async (purchase) => {
-      if (!purchase.canListForResale) return;
-
-      try {
-        // Calculate default dates
-        const now = new Date();
-        const startDate = new Date(now.getTime() + 1 * 60 * 1000); // 1 minute from now
-        const endDate = new Date(purchase.maturityDate.getTime() - 1 * 60 * 1000); // 1 minute before maturity
-
-        // Get timestamp offsets
-        const offsets = getTimestampOffsets(startDate, endDate);
-        
-        // Query contract for actual timestamps
-        const timestampQuery = {
-          get_timestamp_offsets: offsets
-        };
-        
-        const timestamps = await queryContract(timestampQuery);
-        
-        // Convert contract timestamps to local dates
-        const contractStartTime = convertContractTimeToDate(timestamps.start_time);
-        const contractEndTime = convertContractTimeToDate(timestamps.end_time);
-
-        // Format dates for the form
-        const formatToLocalISOString = (date) => {
-          return date.toLocaleString('sv').slice(0, 16); // 'sv' locale gives YYYY-MM-DD HH:mm format
-        };
-
-        // Pre-populate form data with contract timestamps
-        setFormData({
-          bond_id: `${purchase.bond_id}|${purchase.nft_id}`,
-          nft_id: purchase.nft_id,
-          price_per_bond: '',
-          price_denom: 'uwhale',
-          start_time: formatToLocalISOString(contractStartTime),
-          end_time: formatToLocalISOString(contractEndTime),
-        });
-
-        // Open the modal
-        setIsModalOpen(true);
-      } catch (error) {
-        console.error('Error preparing resale form:', error);
-        showAlert('Error preparing resale form', 'error');
-      }
-    };
+    if (!connectedWalletAddress) return null;
 
     return (
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Your Bond Purchases</h2>
-        {isUserBondsLoading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yellow-400"></div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {userBonds.map((purchase) => {
-              const status = getBondStatus(purchase);
-
-              return (
-                <div 
-                  key={purchase.bond_id}
-                  onClick={() => handleBondClick(purchase)}
-                  className={`backdrop-blur-sm rounded-xl p-4 sm:p-6 
-                    border border-gray-700/50 bg-gray-800/80
-                    ${purchase.canListForResale ? 
-                      'cursor-pointer hover:bg-gray-700/80 hover:border-gray-600/50 transition-all duration-200' : 
-                      'opacity-75'
-                    }`}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">{purchase.name}</h3>
-                      <div className="text-sm text-gray-400">NFT ID: {purchase.nft_id}</div>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-sm ${
-                      status === 'Available for Resale' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : status === 'Matured'
-                        ? 'bg-gray-500/20 text-gray-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {status}
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Amount</span>
-                      <span className="font-medium">{formatTokenAmount(purchase.amount)}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Purchase Date</span>
-                      <span className="font-medium">
-                        {purchase.purchase_time.toLocaleDateString()}
-                      </span>
-                    </div>
-
-                    {purchase.canListForResale && (
-                      <div className="mt-3 pt-3 border-t border-gray-700/50">
-                        <div className="text-sm text-center text-gray-400">
-                          Click to create resale offer
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <button
+        onClick={() => navigate('/my-bonds/owned')}
+        className="mb-8 w-[95%] mt-6 mx-auto flex items-center justify-between px-6 py-5 rounded-xl 
+          bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/50 
+          transition-all duration-200 group"
+      >
+        <div className="flex flex-col items-start">
+          <span className="text-xl font-semibold">Your Bonds</span>
+        </div>
+        <div className="w-10 h-10 rounded-full bg-gray-700/50 flex items-center justify-center 
+          group-hover:bg-gray-600/50 transition-colors">
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            className="h-6 w-6 text-gray-400 group-hover:text-gray-300" 
+            viewBox="0 0 20 20" 
+            fill="currentColor"
+          >
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+      </button>
     );
   };
 
@@ -1428,6 +1338,53 @@ function ResaleBonds() {
     );
   };
 
+  // Move handleBondClick to parent component
+  const handleBondClick = async (purchase) => {
+    if (!purchase.canListForResale) return;
+
+    try {
+      // Calculate default dates
+      const now = new Date();
+      const startDate = new Date(now.getTime() + 1 * 60 * 1000); // 1 minute from now
+      const endDate = new Date(purchase.maturityDate.getTime() - 1 * 60 * 1000); // 1 minute before maturity
+
+      // Get timestamp offsets
+      const offsets = getTimestampOffsets(startDate, endDate);
+      
+      // Query contract for actual timestamps
+      const timestampQuery = {
+        get_timestamp_offsets: offsets
+      };
+      
+      const timestamps = await queryContract(timestampQuery);
+      
+      // Convert contract timestamps to local dates
+      const contractStartTime = convertContractTimeToDate(timestamps.start_time);
+      const contractEndTime = convertContractTimeToDate(timestamps.end_time);
+
+      // Format dates for the form
+      const formatToLocalISOString = (date) => {
+        return date.toLocaleString('sv').slice(0, 16); // 'sv' locale gives YYYY-MM-DD HH:mm format
+      };
+
+      // Pre-populate form data with contract timestamps
+      setFormData({
+        bond_id: `${purchase.bond_id}|${purchase.nft_id}`,
+        nft_id: purchase.nft_id,
+        price_per_bond: '',
+        price_denom: 'uwhale',
+        start_time: formatToLocalISOString(contractStartTime),
+        end_time: formatToLocalISOString(contractEndTime),
+      });
+
+      // Open the create offer modal
+      setIsCreateOfferModalOpen(true);
+    } catch (error) {
+      console.error('Error preparing resale form:', error);
+      showAlert('Error preparing resale form', 'error');
+    }
+  };
+
   return (
     <div 
       className={`global-bg text-white min-h-screen flex flex-col items-center w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-64' : ''}`}
@@ -1458,25 +1415,18 @@ function ResaleBonds() {
             </Alert>
           )}
         </Snackbar>
-        <div className="flex justify-between items-center w-full max-w-7xl mx-auto px-4 mt-10">
+        <div className="flex justify-between items-center w-[95%] mx-auto mt-10">
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl mb-4 font-bold h1-color">Bond Resale Market</h1>
-            <div className="mb-4">
+            <h1 className="text-3xl font-bold h1-color">Bond Resale Market</h1>
+            <div>
               <NetworkSwitcher />
             </div>
-              {/* <span className={`px-3 py-1 text-sm rounded-full ${
-                isTestnet 
-                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
-                : 'bg-green-500/20 text-green-400 border border-green-500/30'
-            }`}>
-              {isTestnet ? 'Testnet' : 'Mainnet'}
-            </span> */}
           </div>
           
           {connectedWalletAddress && (
             <div className="flex space-x-4 items-center">
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => setIsCreateOfferModalOpen(true)}
                 className="landing-button px-4 py-1.5 rounded-md hover:bg-yellow-500 transition duration-300 text-sm"
               >
                 Create Offer
@@ -1529,7 +1479,7 @@ function ResaleBonds() {
           )}
         </div>
 
-        {isModalOpen && (
+        {isCreateOfferModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
             <div className="bg-gray-900/90 rounded-2xl w-full max-w-sm border border-gray-700/50 shadow-xl">
               <div className="p-4">
@@ -1599,7 +1549,7 @@ function ResaleBonds() {
                   <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-700">
                     <button
                       type="button"
-                      onClick={() => setIsModalOpen(false)}
+                      onClick={() => setIsCreateOfferModalOpen(false)}
                       className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 
                         transition duration-300 text-sm"
                     >
