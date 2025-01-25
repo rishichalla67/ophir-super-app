@@ -1434,7 +1434,7 @@ const CreateBonds = () => {
 
             {formData.total_supply && formData.price && formData.purchasing_denom && (
               <div className="mt-2 p-4 rounded-md bg-gray-800/50 border border-gray-700">
-                <h4 className="text-sm font-medium text-gray-300 mb-2">Expected Returns</h4>
+                {/* <h4 className="text-sm font-medium text-gray-300 mb-2">Expected Returns</h4> */}
                 {(() => {
                   const amounts = calculateExpectedAmount(
                     formData.total_supply,
@@ -1469,55 +1469,109 @@ const CreateBonds = () => {
                   );
 
                   return (
-                    <div className="space-y-1 text-sm">
-                      <p 
-                        className="text-gray-400 mb-2 cursor-pointer hover:text-gray-300 transition-colors"
-                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, pricePer: !prev.pricePer }))}
-                      >
-                        Price per Bond: {showUsdAmounts.pricePer 
-                          ? formatUsd(singleBondUsdPrice)
-                          : `${formData.price} ${symbol}`
-                        }
-                      </p>
+                    <div className="space-y-3 text-sm">
+                      <h4 className="text-lg font-medium text-gray-200 mb-4">Expected Returns</h4>
                       
-                      <p 
-                        className="text-gray-400 cursor-pointer hover:text-gray-300 transition-colors"
-                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, gross: !prev.gross }))}
-                      >
-                        Gross Amount: {showUsdAmounts.gross 
-                          ? formatUsd(grossUsd)
-                          : `${amounts.gross} ${symbol}`
-                        }
-                      </p>
-                      
-                      <p 
-                        className="text-red-400 cursor-pointer hover:text-red-300 transition-colors"
-                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, fee: !prev.fee }))}
-                      >
-                        Fee ({BOND_PURCHASE_FEE_PERCENTAGE}%): {showUsdAmounts.fee 
-                          ? formatUsd(feeUsd)
-                          : `${amounts.fee} ${symbol}`
-                        }
-                      </p>
-                      
-                      <p 
-                        className="text-green-400 cursor-pointer hover:text-green-300 transition-colors"
-                        onClick={() => setShowUsdAmounts(prev => ({ ...prev, maxReturn: !prev.maxReturn }))}
-                      >
-                        Max Return: {showUsdAmounts.maxReturn 
-                          ? formatUsd(maxReturnUsd)
-                          : `${amounts.net} ${symbol}`
-                        }
-                      </p>
-                      
-                      {discount !== null && (
-                        <p className={`mt-2 ${discount < 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {Math.abs(discount).toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}% {discount < 0 ? 'Discount' : 'Premium'}
-                        </p>
-                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bond-create-text-container p-3 rounded-lg">
+                          <div className="text-xs text-gray-400 mb-1">Price per Bond</div>
+                          <div 
+                            className="text-base font-medium text-gray-200 cursor-pointer hover:text-white transition-colors"
+                            onClick={() => setShowUsdAmounts(prev => ({ ...prev, pricePer: !prev.pricePer }))}
+                          >
+                            {showUsdAmounts.pricePer 
+                              ? formatUsd(singleBondUsdPrice)
+                              : `${formData.price} ${symbol}`
+                            }
+                          </div>
+                        </div>
+
+                        <div className="bond-create-text-container p-3 rounded-lg">
+                          <div className="text-xs text-gray-400 mb-1">Gross Amount</div>
+                          <div 
+                            className="text-base font-medium text-gray-200 cursor-pointer hover:text-white transition-colors"
+                            onClick={() => setShowUsdAmounts(prev => ({ ...prev, gross: !prev.gross }))}
+                          >
+                            {showUsdAmounts.gross 
+                              ? formatUsd(grossUsd)
+                              : `${amounts.gross} ${symbol}`
+                            }
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bond-create-text-container p-3 rounded-lg">
+                        <div className="text-xs text-gray-400 mb-1">Total Fees ({BOND_PURCHASE_FEE_PERCENTAGE}%)</div>
+                        <div 
+                          className="text-base font-medium text-red-400 cursor-pointer hover:text-red-300 transition-colors"
+                          onClick={() => setShowUsdAmounts(prev => ({ ...prev, fee: !prev.fee }))}
+                        >
+                          {showUsdAmounts.fee 
+                            ? formatUsd(feeUsd)
+                            : `${amounts.fee} ${symbol}`
+                          }
+                        </div>
+                        
+                        {showAdvancedSettings && (
+                          <div className="mt-2 pt-2 border-t border-gray-700/50 grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="text-xs text-gray-400 mb-1">Maker ({100 - feeSplit}%)</div>
+                              <div style={{ 
+                                color: feeSplit > 50 
+                                  ? '#9CA3AF' 
+                                  : `rgba(239, 68, 68, ${Math.max(0.4, (100 - feeSplit) / 100)})`,
+                                fontSize: '0.875rem'
+                              }}>
+                                {showUsdAmounts.fee 
+                                  ? formatUsd(feeUsd * ((100 - feeSplit) / 100))
+                                  : `${(parseFloat(amounts.fee) * ((100 - feeSplit) / 100)).toFixed(6)} ${symbol}`
+                                }
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-400 mb-1">Taker ({feeSplit}%)</div>
+                              <div style={{ 
+                                color: feeSplit < 50 
+                                  ? '#9CA3AF' 
+                                  : `rgba(239, 68, 68, ${Math.max(0.4, feeSplit / 100)})`,
+                                fontSize: '0.875rem'
+                              }}>
+                                {showUsdAmounts.fee 
+                                  ? formatUsd(feeUsd * (feeSplit / 100))
+                                  : `${(parseFloat(amounts.fee) * (feeSplit / 100)).toFixed(6)} ${symbol}`
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bond-create-text-container p-3 rounded-lg">
+                          <div className="text-xs text-gray-400 mb-1">Max Received</div>
+                          <div 
+                            className="text-base font-medium text-green-400 cursor-pointer hover:text-green-300 transition-colors"
+                            onClick={() => setShowUsdAmounts(prev => ({ ...prev, maxReturn: !prev.maxReturn }))}
+                          >
+                            {showUsdAmounts.maxReturn 
+                              ? formatUsd(maxReturnUsd)
+                              : `${amounts.net} ${symbol}`
+                            }
+                          </div>
+                        </div>
+
+                        {discount !== null && (
+                          <div className="bond-create-text-container p-3 rounded-lg">
+                            <div className="text-xs text-gray-400 mb-1">Market Rate</div>
+                            <div className={`text-base font-medium ${discount < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {Math.abs(discount).toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              })}% {discount < 0 ? 'Discount' : 'Premium'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1553,8 +1607,27 @@ const CreateBonds = () => {
                     </div>
                     <div className="mt-4 relative">
                       <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>{100 - feeSplit}% Maker</span>
-                        <span>{feeSplit}% Taker</span>
+                        <span>
+                          {100 - feeSplit}% Maker
+                          <span className={`ml-1`} style={{
+                            color: feeSplit > 50 
+                              ? '#9CA3AF' 
+                              : `rgba(239, 68, 68, ${Math.max(0.4, (100 - feeSplit) / 100)})`
+                          }}>
+                            ({((100 - feeSplit) / 100 * BOND_PURCHASE_FEE_PERCENTAGE).toFixed(2)}% fee)
+                          </span>
+                        </span>
+                        <span>
+                          {feeSplit}% Taker
+                          <span className={`ml-1`} style={{
+                            color: feeSplit < 50 
+                              ? '#9CA3AF' 
+                              : `rgba(239, 68, 68, ${Math.max(0.4, feeSplit / 100)})`,
+                            fontSize: '0.875rem'
+                          }}>
+                            ({(feeSplit / 100 * BOND_PURCHASE_FEE_PERCENTAGE).toFixed(2)}% fee)
+                          </span>
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -1590,7 +1663,7 @@ const CreateBonds = () => {
               {!showAdvancedSettings && (
                 <div className="mt-2">
                   <p className="text-xs text-gray-400">
-                    Default Fee Split: 70% Maker / 30% Taker
+                    Default Fee Split: 70% Maker <span style={{ color: 'rgba(239, 68, 68, 0.7)' }}>({(0.7 * BOND_PURCHASE_FEE_PERCENTAGE).toFixed(2)}% fee)</span> / 30% Taker <span style={{ color: 'rgba(239, 68, 68, 0.5)' }}>({(0.3 * BOND_PURCHASE_FEE_PERCENTAGE).toFixed(2)}% fee)</span>
                   </p>
                 </div>
               )}
