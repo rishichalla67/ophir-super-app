@@ -280,5 +280,10 @@ export const tokenMappings = {
     symbol: 'inj',
     decimals: 6,
     chain: 'injective'
+  },
+  'factory/migaloo1zsptvkg5aeg4tjksgv7vp4x5s9p5euqrh9jl3sfdv48wtnrhftlszsvmu5/uwhalex': {
+    symbol: 'whalex',
+    decimals: 6,
+    chain: 'migaloo'
   }
 };

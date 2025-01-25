@@ -142,5 +142,5 @@ export const tokenImages = {
   bOsmo:
     "https://assets.coingecko.com/coins/images/37082/standard/bOSMO.png?1713251122",
   dgn: "https://assets.coingecko.com/coins/images/51986/standard/IMG_0773.jpg?1732293578",
-  drugs: "https://dojo.trading/images/tokens/drugs.jpg",
+  drugs: "https://dojo.trading/images/tokens/drugs.jpg"
 };
