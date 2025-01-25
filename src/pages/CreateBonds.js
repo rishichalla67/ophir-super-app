@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 // import WalletConnect from "./walletConnect";
 import { SigningCosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { daoConfig } from "../utils/daoConfig";
@@ -39,6 +39,12 @@ const MARKUP_RANGE = {
   min: -100, // -100% (discount)
   max: 100,  // +100% (premium)
   step: 1
+};
+
+// Add mapping for APY denoms
+const APY_DENOM_MAPPING = {
+  'ibc/F9905FB2922CEE27015C339B2B870FB854314AA1CBC2D3F56C5E8BA2691C3B61': 'terra16z3ksy6aqjkug8l3u48q0kvdaqk3dgaytl7ykt6vg2he9d6z9rgslr4k7l',
+  'ibc/4F5CB28CE3E351058D4CE671EAF935CA6D728C6DF34C1AC662B495310FECBBDA': 'terra1le46uu9qjk53aktjs8dev96sl9sd2ujvcpspk75pdeg0txfvhyuswm6653'
 };
 
 const PRESET_DURATIONS = [
@@ -441,6 +447,7 @@ const CreateBonds = () => {
     severity: "info",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [apyData, setApyData] = useState(null);
   const [formData, setFormData] = useState(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
@@ -529,6 +536,60 @@ const CreateBonds = () => {
     },
     {}
   );
+
+  // Filter denoms based on APY data
+  const getFilteredDenoms = useCallback(() => {
+    if (!apyData || !allowedDenoms) return allowedDenoms;
+
+    console.log('APY Data:', apyData); // Debug log
+    console.log('Allowed Denoms:', allowedDenoms); // Debug log
+
+    return allowedDenoms.map(denom => {
+      // Check if this denom has APY data using the mapping
+      const mappedDenom = APY_DENOM_MAPPING[denom];
+      const hasYield = mappedDenom ? !!apyData[mappedDenom] : !!apyData[denom];
+      const yieldData = mappedDenom ? apyData[mappedDenom] : apyData[denom];
+
+      return {
+        denom,
+        hasYield,
+        yieldData,
+        symbol: tokenMappings[denom]?.symbol || denom
+      };
+    }).sort((a, b) => {
+      // Sort by yield-bearing status first
+      if (a.hasYield && !b.hasYield) return -1;
+      if (!a.hasYield && b.hasYield) return 1;
+      
+      // Then sort by APY if both have yield
+      if (a.hasYield && b.hasYield) {
+        const aAPY = parseFloat(a.yieldData.APY);
+        const bAPY = parseFloat(b.yieldData.APY);
+        return bAPY - aAPY; // Higher APY first
+      }
+      
+      // Finally sort by symbol
+      return a.symbol.localeCompare(b.symbol);
+    }).map(({ denom }) => denom); // Just return the denom string
+  }, [apyData, allowedDenoms, tokenMappings]);
+
+  // Update getApyDataForDenom function to use the mapping
+  const getApyDataForDenom = useCallback((denom) => {
+    if (!apyData || !denom) return null;
+
+    // Check if we have a mapping for this denom
+    const mappedDenom = APY_DENOM_MAPPING[denom];
+    if (mappedDenom && apyData[mappedDenom]) {
+      return apyData[mappedDenom];
+    }
+
+    // If no mapping exists, try direct match
+    if (apyData[denom]) {
+      return apyData[denom];
+    }
+
+    return null;
+  }, [apyData]);
 
   const validateNumericInput = (value) => {
     // Allows positive numbers with optional decimals
@@ -1117,6 +1178,42 @@ const CreateBonds = () => {
   const [feeSplit, setFeeSplit] = useState(30);
   const feeSplitRef = React.useRef(null);
 
+  // Add useEffect to fetch APY data
+  useEffect(() => {
+    const fetchApyData = async () => {
+      try {
+        const response = await fetch('https://parallax-analytics.onrender.com/ophir/prices/apys');
+        const data = await response.json();
+        setApyData(data);
+      } catch (error) {
+        console.error('Error fetching APY data:', error);
+      }
+    };
+
+    fetchApyData();
+  }, []);
+
+  // Update the calculateExpectedYield function to use the new matching logic
+  const calculateExpectedYield = (tokenDenom, durationInMinutes) => {
+    if (!apyData || !tokenDenom || !durationInMinutes) return null;
+
+    const tokenData = getApyDataForDenom(tokenDenom);
+    if (!tokenData) return null;
+
+    const durationInDays = durationInMinutes / (24 * 60);
+    const dailyAPR = parseFloat(tokenData.dailyAPR);
+    const expectedYield = dailyAPR * durationInDays;
+
+    return {
+      dailyAPR: dailyAPR * 100,
+      expectedYield: expectedYield * 100,
+      yearlyAPR: parseFloat(tokenData.yearlyAPR) * 100,
+      APY: parseFloat(tokenData.APY) * 100,
+      exchangeRate: parseFloat(tokenData.exchangeRate),
+      gauge: tokenData.gauge
+    };
+  };
+
   return (
     <div className={`global-bg-new text-white min-h-screen w-full transition-all duration-300 ease-in-out ${
       isSidebarOpen ? 'md:pl-64' : ''
@@ -1368,9 +1465,72 @@ const CreateBonds = () => {
                     name="token_denom"
                     value={formData.token_denom}
                     onChange={handleInputChange}
-                    allowedDenoms={allowedDenoms}
+                    allowedDenoms={getFilteredDenoms()}
                     isTestnet={isTestnet}
+                    apyData={apyData}
                   />
+                  {formData.token_denom && (
+                    <>
+                      {(() => {
+                        const yieldData = getApyDataForDenom(formData.token_denom);
+                        if (!yieldData) return null;
+
+                        return (
+                          <div className="mt-2 p-2 rounded-md bg-gray-800/50 border border-gray-700">
+                            {/* <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-400">Token Type:</span>
+                              <span className="text-xs font-medium capitalize text-yellow-500">
+                                {yieldData.gauge} Gauge
+                              </span>
+                            </div> */}
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-400">Daily APR:</span>
+                              <span className="text-xs font-medium text-green-400">
+                                {(parseFloat(yieldData.dailyAPR) * 100).toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-400">Yearly APR:</span>
+                              <span className="text-xs font-medium text-green-400">
+                                {(parseFloat(yieldData.yearlyAPR) * 100).toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-400">APY:</span>
+                              <span className="text-xs font-medium text-green-400">
+                                {(parseFloat(yieldData.APY) * 100).toFixed(2)}%
+                              </span>
+                            </div>
+                            {(() => {
+                              // Calculate duration in minutes from start to maturity
+                              const startDate = new Date(`${formData.start_time}T${formData.start_time_hour}`);
+                              const maturityDate = new Date(`${formData.maturity_date}T${formData.maturity_date_hour}`);
+                              const durationInMinutes = (maturityDate - startDate) / (1000 * 60);
+                              
+                              const yieldInfo = calculateExpectedYield(formData.token_denom, durationInMinutes);
+                              
+                              if (yieldInfo) {
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-gray-700/50">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-gray-400">Expected Yield:</span>
+                                      <span className="text-xs font-medium text-green-400">
+                                        {yieldInfo.expectedYield.toFixed(2)}%
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-1">
+                                      Based on current rates over {Math.round(durationInMinutes / (24 * 60))} days until maturity
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
                 </div>
                 <div className="flex-1 mobile-full-width">
                   <label className="block text-sm font-medium pb-2">
@@ -1412,8 +1572,9 @@ const CreateBonds = () => {
                     name="purchasing_denom"
                     value={formData.purchasing_denom}
                     onChange={handleInputChange}
-                    allowedDenoms={allowedDenoms}
+                    allowedDenoms={getFilteredDenoms()}
                     isTestnet={isTestnet}
+                    apyData={apyData}
                   />
                 </div>
                 <div className="flex-1 mobile-full-width">

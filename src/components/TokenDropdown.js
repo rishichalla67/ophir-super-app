@@ -2,9 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import { tokenImages } from '../utils/tokenImages';
 import { tokenMappings } from '../utils/tokenMappings';
 
-const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTestnet = true }) => {
+const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTestnet = true, apyData }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Helper function to get APY data for a denom
+  const getApyDataForDenom = (denom) => {
+    if (!apyData || !denom) return null;
+
+    // Find matching APY denom
+    const matchingApyDenom = Object.keys(apyData).find(apyDenom => {
+      const normalizedApyDenom = apyDenom.toLowerCase();
+      const normalizedDenom = denom.toLowerCase();
+      return normalizedApyDenom === normalizedDenom || 
+             normalizedApyDenom.includes(normalizedDenom) || 
+             normalizedDenom.includes(normalizedApyDenom);
+    });
+
+    return matchingApyDenom ? apyData[matchingApyDenom] : null;
+  };
 
   // Filter tokens based on isTestnet flag and sort alphabetically by symbol
   const tokens = allowedDenoms
@@ -17,12 +33,30 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
         ? token?.chain === 'migaloo-testnet'
         : token?.chain !== 'migaloo-testnet';
     })
-    .map((denom) => ({
-      denom,
-      symbol: tokenMappings[denom]?.symbol || denom,
-      image: tokenImages[tokenMappings[denom]?.symbol] || '',
-    }))
-    .sort((a, b) => a.symbol.localeCompare(b.symbol)); // Sort alphabetically by symbol
+    .map((denom) => {
+      const yieldData = getApyDataForDenom(denom);
+      return {
+        denom,
+        symbol: tokenMappings[denom]?.symbol || denom,
+        image: tokenImages[tokenMappings[denom]?.symbol] || '',
+        yieldData
+      };
+    })
+    .sort((a, b) => {
+      // Sort yield-bearing tokens first
+      if (a.yieldData && !b.yieldData) return -1;
+      if (!a.yieldData && b.yieldData) return 1;
+      
+      // Then sort by APY if both have yield
+      if (a.yieldData && b.yieldData) {
+        const aAPY = parseFloat(a.yieldData.APY);
+        const bAPY = parseFloat(b.yieldData.APY);
+        return bAPY - aAPY; // Higher APY first
+      }
+      
+      // Finally sort by symbol
+      return a.symbol.localeCompare(b.symbol);
+    });
 
   // Find the selected token based on the current value
   const selectedToken = tokens.find((token) => token.denom === value);
@@ -43,6 +77,18 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
     };
   }, []);
 
+  const getTokenSymbol = (denom) => {
+    return tokenMappings[denom]?.symbol || denom;
+  };
+
+  const getTokenImage = (denom) => {
+    let token = tokenMappings[denom]?.symbol || denom;
+    if (token?.toLowerCase().includes('daoophir')) {
+      token = 'ophir';
+    }
+    return tokenImages[token];
+  };
+
   return (
     <div className="relative w-full" ref={dropdownRef}>
       <label className="block text-sm font-medium mb-1">{label}</label>
@@ -52,21 +98,28 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
         onClick={() => setIsOpen(!isOpen)}
       >
         {selectedToken ? (
-          <div className="flex items-center">
-            {selectedToken.image ? (
-              <img
-                src={selectedToken.image}
-                alt={selectedToken.symbol}
-                className="w-5 h-5 mr-2"
-              />
-            ) : (
-              <div className="w-5 h-5 mr-2 bg-gray-400 rounded-full flex items-center justify-center">
-                <span className="text-xs text-white">
-                  {selectedToken.symbol.charAt(0)}
-                </span>
-              </div>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center">
+              {selectedToken.image ? (
+                <img
+                  src={selectedToken.image}
+                  alt={selectedToken.symbol}
+                  className="w-5 h-5 mr-2"
+                />
+              ) : (
+                <div className="w-5 h-5 mr-2 bg-gray-400 rounded-full flex items-center justify-center">
+                  <span className="text-xs text-white">
+                    {selectedToken.symbol.charAt(0)}
+                  </span>
+                </div>
+              )}
+              <span>{selectedToken.symbol}</span>
+            </div>
+            {selectedToken.yieldData && (
+              <span className="text-sm text-green-400 ml-2">
+                {(parseFloat(selectedToken.yieldData.APY) * 100).toFixed(2)}% APY
+              </span>
             )}
-            <span>{selectedToken.symbol}</span>
           </div>
         ) : (
           <span>Select</span>
@@ -114,9 +167,16 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
                 )}
                 <span>{token.symbol}</span>
               </div>
-              <span className="hidden md:inline text-sm text-gray-400 capitalize truncate max-w-[120px]">
-                {tokenMappings[token.denom]?.chain || 'unknown'}
-              </span>
+              <div className="flex items-center gap-4">
+                <span className="hidden md:inline text-sm text-gray-400 capitalize truncate max-w-[120px]">
+                  {tokenMappings[token.denom]?.chain || 'unknown'}
+                </span>
+                {token.yieldData && (
+                  <span className="text-sm text-green-400">
+                    {(parseFloat(token.yieldData.APY) * 100).toFixed(2)}% APY
+                  </span>
+                )}
+              </div>
             </li>
           ))}
         </ul>
