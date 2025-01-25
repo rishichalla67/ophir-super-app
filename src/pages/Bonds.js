@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { SigningCosmWasmClient, CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { tokenMappings } from "../utils/tokenMappings";
@@ -84,6 +84,35 @@ const DiscountTooltip = ({ bondDenom }) => (
   </div>
 );
 
+const SearchBar = ({ value, onChange }) => (
+  <div className="flex items-center gap-4 mb-6">
+    <div className="relative flex-1">
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        placeholder="Search bonds..."
+        className="w-full bg-gray-800/50 text-white rounded-lg px-4 py-3 pl-10 
+          border border-gray-700 focus:border-yellow-500 focus:outline-none
+          transition duration-300"
+      />
+      <svg
+        className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+    </div>
+  </div>
+);
+
 const Bonds = () => {
   const { connectedWalletAddress, isLedgerConnected } = useWallet();
   const { isSidebarOpen } = useSidebar();
@@ -105,6 +134,7 @@ const Bonds = () => {
   const [statusFilter, setStatusFilter] = useState('active');
   const [denomFilter, setDenomFilter] = useState('all');
   const [showUserBondsOnly, setShowUserBondsOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   const [isLoadingUserBonds, setIsLoadingUserBonds] = useState(false);
   const maxRetries = 3;
@@ -435,10 +465,24 @@ const Bonds = () => {
       const matchesDenom = denomFilter === 'all' || bond.purchase_denom === denomFilter;
       const matchesUserBonds = !showUserBondsOnly || 
         userBonds.some(userBond => userBond.bond_id === bond.bond_id);
+      
+      // Add search query filtering
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = searchQuery === '' || 
+        bond.bond_name?.toLowerCase().includes(searchLower) ||
+        bond.bond_id?.toString().includes(searchLower) ||
+        getTokenSymbol(bond.token_denom)?.toLowerCase().includes(searchLower) ||
+        getTokenSymbol(bond.purchase_denom)?.toLowerCase().includes(searchLower) ||
+        bond.description?.toLowerCase().includes(searchLower);
 
-      return matchesStatus && matchesDenom && matchesUserBonds;
+      return matchesStatus && matchesDenom && matchesUserBonds && matchesSearch;
     });
-  }, [sortedBonds, statusFilter, denomFilter, showUserBondsOnly, userBonds, getBondStatus]);
+  }, [sortedBonds, statusFilter, denomFilter, showUserBondsOnly, searchQuery, userBonds, getBondStatus, getTokenSymbol]);
+
+  // Search handler
+  const handleSearch = useCallback((e) => {
+    setSearchQuery(e.target.value);
+  }, []);
 
   const formatAmount = (amount, isPrice = false) => {
     if (!amount) return '0';
@@ -934,159 +978,6 @@ const Bonds = () => {
     });
   };
 
-  // const handleRefreshBondGroup = async (bondId, purchases, event) => {
-  //   event.stopPropagation();
-    
-  //   try {
-  //     setRefreshingBonds(prev => ({ ...prev, [bondId]: true }));
-      
-  //     // Query the bond's NFT contract address
-  //     const bondQuery = { 
-  //       get_bond_offer: { 
-  //         bond_id: parseInt(bondId) 
-  //       } 
-  //     };
-  //     const bondData = await queryContract(bondQuery);
-  //     const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
-
-  //     if (!nftContractAddr) {
-  //       // If we can't get the contract address from the bond offer,
-  //       // try using the contract address from the first purchase
-  //       const firstPurchase = purchases[0];
-  //       if (firstPurchase?.contract_address) {
-  //         console.log('Using contract address from purchase:', firstPurchase.contract_address);
-  //         // Invalidate cache for all NFTs using the contract address from the purchase
-  //         for (const purchase of purchases) {
-  //           nftInfoCache.delete(firstPurchase.contract_address, purchase.nft_token_id);
-  //         }
-  //       } else {
-  //         throw new Error("Could not find NFT contract address for this bond");
-  //       }
-  //     } else {
-  //       // Use the contract address from the bond offer
-  //       console.log('Using contract address from bond offer:', nftContractAddr);
-  //       // Invalidate cache for all NFTs
-  //       for (const purchase of purchases) {
-  //         nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
-  //       }
-  //     }
-
-  //     // Refresh the data
-  //     await fetchUserBonds();
-      
-  //     showAlert("Bond data refreshed successfully!", "success");
-  //   } catch (error) {
-  //     console.error("Error refreshing bond data:", error);
-  //     showAlert("Failed to refresh bond data", "error");
-  //   } finally {
-  //     setRefreshingBonds(prev => ({ ...prev, [bondId]: false }));
-  //   }
-  // };
-
-  // const handleClaimAll = async (bondId, purchases, event) => {
-  //   event.preventDefault();
-  //   event.stopPropagation();
-
-  //   try {
-  //     setClaimingAllStates(prev => ({ ...prev, [bondId]: true }));
-
-  //     if (!connectedWalletAddress) {
-  //       showAlert("Please connect your wallet first", "error");
-  //       return;
-  //     }
-
-  //     const bond = bonds.find(b => b.bond_id === parseInt(bondId));
-  //     if (!bond) {
-  //       throw new Error("Bond not found");
-  //     }
-
-  //     // Filter only claimable purchases
-  //     const claimablePurchases = purchases.filter(purchase => {
-  //       return isClaimable(bond, purchase);
-  //     });
-
-  //     if (claimablePurchases.length === 0) {
-  //       showAlert("No claimable rewards found", "info");
-  //       return;
-  //     }
-
-  //     // Create array of instructions with proper structure
-  //     const instructions = claimablePurchases.map(purchase => ({
-  //       contractAddress: contractAddress,
-  //       msg: {
-  //         claim_rewards: {
-  //           bond_id: parseInt(bondId),
-  //           nft_token_id: purchase.nft_token_id
-  //         }
-  //       }
-  //     }));
-
-  //     const signer = await getSigner();
-  //     const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
-
-  //     // Increase gas per message significantly
-  //     const gasPerMsg = 500000; // Doubled from 250000 to 500000
-  //     const totalGas = Math.min(2000000, gasPerMsg * instructions.length); // Increased cap from 1M to 2M
-
-  //     const fee = {
-  //       amount: [{ denom: "uwhale", amount: "50000" }],
-  //       gas: totalGas.toString(),
-  //     };
-
-  //     // Execute all messages in a single transaction
-  //     const result = await client.executeMultiple(
-  //       connectedWalletAddress,
-  //       instructions,
-  //       fee,
-  //       "Claim All Bond Rewards"
-  //     );
-
-  //     if (result.transactionHash) {
-  //       // Query the bond's NFT contract address first
-  //       const bondQuery = { 
-  //         get_bond_offer: { 
-  //           bond_id: parseInt(bondId) 
-  //         } 
-  //       };
-  //       const bondData = await queryContract(bondQuery);
-  //       const nftContractAddr = bondData?.bond_offer?.nft_contract_addr;
-
-  //       // Find the first purchase to get the contract address as fallback
-  //       const firstPurchase = purchases[0];
-  //       const contractAddr = nftContractAddr || firstPurchase?.contract_address;
-
-  //       if (contractAddr) {
-  //         console.log('🗑️ Invalidating NFT cache for all purchases of bond:', bondId);
-  //         // Invalidate cache for all NFTs in this bond
-  //         purchases.forEach(purchase => {
-  //           nftInfoCache.delete(contractAddr, purchase.nft_token_id);
-  //         });
-  //       }
-
-  //       const baseTxnUrl = isTestnet
-  //         ? "https://ping.pfc.zone/narwhal-testnet/tx"
-  //         : "https://inbloc.org/migaloo/transactions";
-  //       const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
-        
-  //       showAlert(
-  //         `Successfully claimed rewards for ${claimablePurchases.length} bonds!`,
-  //         "success",
-  //         `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
-  //       );
-        
-  //       // Refresh data after a short delay
-  //       setTimeout(async () => {
-  //         await fetchData();
-  //         await fetchUserBonds();
-  //       }, 2000);
-  //     }
-  //   } catch (error) {
-  //     console.error("Error claiming all rewards:", error);
-  //     showAlert(`Error claiming rewards: ${error.message}`, "error");
-  //   } finally {
-  //     setClaimingAllStates(prev => ({ ...prev, [bondId]: false }));
-  //   }
-  // };
 
   // Add function to check if a bond has matching NFTs in user's collection
   const getBondNFTsInCollection = useCallback((contractAddr) => {
@@ -1196,307 +1087,32 @@ const Bonds = () => {
       // Then by bond name
       return a[1].bondName.localeCompare(b[1].bondName);
     });
-
-    // return (
-    //   <div className="mb-8">
-    //     <h2 className="text-xl font-semibold mb-4">Your Bonds</h2>
-    //     <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 
-    //       scrollbar-track-gray-800 pr-2">
-    //       <div className="space-y-3">
-    //         {sortedBondGroups.map(([bondId, { 
-    //           bondName, 
-    //           bondImage, 
-    //           purchases, 
-    //           hasClaimable, 
-    //           claimableCount,
-    //           totalPurchases,
-    //           claimedCount,
-    //           totalNFTsInCollection,
-    //           nftIds
-    //         }]) => {
-    //           const allClaimed = claimedCount === totalPurchases;
-              
-    //           // Calculate total amounts for this bond group
-    //           const totalAmount = purchases.reduce((sum, p) => sum + (parseInt(p.amount) || 0), 0);
-    //           const totalClaimedAmount = purchases.reduce((sum, p) => sum + (parseInt(p.claimed_amount) || 0), 0);
-              
-    //           // Get the bond details to find the token denom
-    //           const bond = bonds.find(b => b.bond_id === parseInt(bondId));
-    //           const tokenImage = bond ? getTokenImage(bond.token_denom) : null;
-              
-    //           return (
-    //             <div key={bondId} 
-    //               className="bg-gray-900/30 rounded-lg border border-gray-800 
-    //                 transition-all duration-300 hover:border-gray-700"
-    //             >
-    //               <div 
-    //                 className="p-4 flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer 
-    //                   hover:bg-gray-800/50 transition-colors relative gap-3"
-    //                 onClick={() => toggleGroup(bondId)}
-    //               >
-    //                 {/* Bond Name and Info */}
-    //                 <div className="flex items-center space-x-3">
-    //                   {bondImage && (
-    //                     <img 
-    //                       src={bondImage} 
-    //                       alt={bondName} 
-    //                       className="w-8 h-8 rounded-full object-cover"
-    //                       onError={(e) => {
-    //                         // Fallback to token image if NFT image fails to load
-    //                         const bond = bonds.find(b => b.bond_id === parseInt(bondId));
-    //                         if (bond?.backing_denom) {
-    //                           e.target.src = getTokenImage(bond.backing_denom);
-    //                         }
-    //                       }}
-    //                     />
-    //                   )}
-    //                   <div>
-    //                     <span className="font-medium">{bondName}</span>
-    //                     <div className="flex items-center space-x-2 mt-1 sm:mt-0">
-    //                       <span className="text-gray-400 text-sm">
-    //                         ({totalNFTsInCollection === 0 ? totalPurchases : totalNFTsInCollection} Bonds)
-    //                       </span>
-    //                       {!allClaimed && hasClaimable && (
-    //                         <div className="flex items-center space-x-1">
-    //                           <div className="w-2 h-2 rounded-full bg-green-500 
-    //                             animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
-    //                           />
-    //                           <span className="text-green-400 text-xs md:text-sm">
-    //                             {claimableCount}
-    //                           </span>
-    //                         </div>
-    //                       )}
-    //                     </div>
-    //                   </div>
-    //                 </div>
-
-    //                 {/* Stats and Actions */}
-    //                 <div className="flex items-center justify-between sm:justify-end space-x-4">
-    //                   <div className="flex items-center space-x-1.5">
-    //                     <ToggleableAmount 
-    //                       amount={totalClaimedAmount} 
-    //                       denom={bond?.token_denom} 
-    //                     />
-    //                     <span className="text-gray-400">/</span>
-    //                     <ToggleableAmount 
-    //                       amount={totalAmount} 
-    //                       denom={bond?.token_denom} 
-    //                     />
-    //                     {tokenImage && (
-    //                       <img 
-    //                         src={tokenImage} 
-    //                         alt={bond?.token_denom} 
-    //                         className="w-4 h-4 rounded-full"
-    //                       />
-    //                     )}
-    //                   </div>
-    //                   <div className="flex items-center space-x-2">
-    //                     <button
-    //                       onClick={(e) => handleRefreshBondGroup(bondId, purchases, e)}
-    //                       disabled={refreshingBonds[bondId]}
-    //                       className="p-1.5 rounded-md border border-gray-600 hover:border-gray-500
-    //                         transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-    //                         group relative"
-    //                       title="Refresh bond data"
-    //                     >
-    //                       {refreshingBonds[bondId] ? (
-    //                         <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-    //                       ) : (
-    //                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    //                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-    //                             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-    //                           />
-    //                         </svg>
-    //                       )}
-    //                     </button>
-    //                     <ChevronUpIcon 
-    //                       className={`w-5 h-5 transition-transform duration-300 
-    //                         ${expandedBondGroups.has(bondId) ? 'rotate-0' : 'rotate-180'}`}
-    //                     />
-    //                   </div>
-    //                 </div>
-    //               </div>
-                  
-    //               {expandedBondGroups.has(bondId) && (
-    //                 <div className="p-4 pt-0" onClick={() => handleBondClick(bond.bond_id)}>
-    //                   {claimableCount > 0 && (
-    //                     <div className="mb-4">
-    //                       <button
-    //                         onClick={(e) => handleClaimAll(bondId, purchases, e)}
-    //                         disabled={claimingAllStates[bondId]}
-    //                         className="w-full px-3 py-2 rounded-md border border-green-600 
-    //                           bg-green-500/20 text-green-400 hover:bg-green-500/30 hover:border-green-500
-    //                           transition duration-300 text-sm flex items-center justify-center space-x-2
-    //                           disabled:opacity-50 disabled:cursor-not-allowed"
-    //                       >
-    //                         {claimingAllStates[bondId] ? (
-    //                           <>
-    //                             <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-    //                             <span>Claiming {claimableCount} Rewards...</span>
-    //                           </>
-    //                         ) : (
-    //                           <>
-    //                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    //                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-    //                                 d="M5 13l4 4L19 7" />
-    //                             </svg>
-    //                             <span>Claim Available Rewards for {bondName} ({claimableCount})</span>
-    //                           </>
-    //                         )}
-    //                       </button>
-    //                     </div>
-    //                   )}
-    //                   <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 
-    //                     scrollbar-track-gray-800 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-    //                   >
-    //                     {purchases
-    //                       .sort((a, b) => {
-    //                         const bond = bonds.find(b => b.bond_id === a.bond_id);
-    //                         const isClaimableA = isClaimable(bond, a);
-    //                         const isClaimableB = isClaimable(bond, b);
-                            
-    //                         // Sort by claimable status first
-    //                         if (isClaimableA && !isClaimableB) return -1;
-    //                         if (!isClaimableA && isClaimableB) return 1;
-                            
-    //                         // Then by status (unclaimed before claimed)
-    //                         if (a.status !== b.status) {
-    //                           if (a.status === "Claimed") return 1;
-    //                           if (b.status === "Claimed") return -1;
-    //                         }
-                            
-    //                         // Finally by purchase time (newest first)
-    //                         return new Date(b.purchase_time) - new Date(a.purchase_time);
-    //                       })
-    //                       .map((purchase, index) => {
-    //                         const claimKey = `${purchase.bond_id}_${index}`;
-    //                         const isClaimingThis = claimingStates[claimKey];
-    //                         const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-    //                         const isClaimed = purchase.status === "Claimed" || 
-    //                           (purchase.claimed_amount && 
-    //                             parseInt(purchase.claimed_amount) >= parseInt(purchase.amount));
-    //                         const claimStartDate = convertContractTimeToDate(bond?.claim_start_time);
-    //                         const now = new Date();
-    //                         const canClaimNow = now >= claimStartDate;
-    //                         const isClaimable = canClaimNow && !isClaimed;
-
-    //                         return (
-    //                           <div 
-    //                             key={`${bondId}_${index}`}
-    //                             className={`bond-claim p-4 bg-gray-900/50 rounded-lg border border-gray-800 
-    //                               hover:border-gray-700 transition-all duration-300 backdrop-blur-sm 
-    //                               cursor-pointer flex flex-col relative
-    //                               ${isClaimed ? 'opacity-75' : ''}
-    //                               ${isClaimable ? 'shadow-[0_0_15px_-3px_rgba(34,197,94,0.3)]' : ''}`}
-    //                           >
-    //                             {/* Add ownership indicator */}
-    //                             <div className="absolute top-4 right-4 flex items-center space-x-1">
-    //                               {purchase.original_owner && purchase.original_owner !== connectedWalletAddress && (
-    //                                 <div className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs border border-purple-500/50">
-    //                                   Transferred
-    //                                 </div>
-    //                               )}
-    //                             </div>
-
-    //                             {isClaimable && (
-    //                               <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 
-    //                                 animate-pulse shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]"
-    //                               />
-    //                             )}
-    //                             <div className="flex justify-between items-start mb-4">
-    //                               <div className="flex items-center">
-    //                                 <span className="text-sm font-medium">NFT #{purchase.nft_token_id}</span>
-    //                               </div>
-    //                               <div className="flex items-center space-x-2">
-    //                                 {purchase.original_owner && purchase.original_owner !== connectedWalletAddress && (
-    //                                   <div className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs border border-purple-500/50">
-    //                                     Transferred
-    //                                   </div>
-    //                                 )}
-    //                                 <div className={`px-3 py-1 rounded-full text-xs ${
-    //                                   isClaimed ? 'bg-gray-500/20 text-gray-400' : 
-    //                                   isClaimable ? 'bg-green-500/20 text-green-400' :
-    //                                   'bg-yellow-500/20 text-yellow-400'
-    //                                 }`}>
-    //                                   {isClaimed ? 'Claimed' : 
-    //                                    isClaimable ? 'Ready to Claim' : 
-    //                                    'Pending'}
-    //                                 </div>
-    //                               </div>
-    //                             </div>
-                                
-    //                             <div className="space-y-3">
-    //                               <div className="flex justify-between items-center">
-    //                                 <span className="text-gray-400">Amount:</span>
-    //                                 <div className="flex flex-col items-end">
-    //                                   <div className="flex items-center gap-2">
-    //                                     <span className="text-lg font-medium">
-    //                                       <ToggleableAmount amount={purchase.amount} denom={bond?.token_denom} />
-    //                                     </span>
-    //                                     {bond?.token_denom && (
-    //                                       <img
-    //                                         src={getTokenImage(bond.token_denom)}
-    //                                         alt={getTokenSymbol(bond.token_denom)}
-    //                                         className="w-5 h-5 rounded-full"
-    //                                       />
-    //                                     )}
-    //                                   </div>
-    //                                   {purchase.claimed_amount && parseInt(purchase.claimed_amount) > 0 && (
-    //                                     <span className="text-sm text-gray-400">
-    //                                       Claimed: <ToggleableAmount amount={purchase.claimed_amount} denom={bond?.token_denom} /> / 
-    //                                       <ToggleableAmount amount={purchase.amount} denom={bond?.token_denom} />
-    //                                     </span>
-    //                                   )}
-    //                                 </div>
-    //                               </div>
-                                  
-    //                               <div className="flex justify-between items-center">
-    //                                 <span className="text-gray-400">Purchase Date:</span>
-    //                                 <span>{formatDate(purchase.purchase_time)}</span>
-    //                               </div>
-    //                             </div>
-
-    //                             {!isClaimed && (
-    //                               <div className="mt-4">
-    //                                 <button
-    //                                   onClick={(e) => handleClaim(purchase.bond_id, purchase.nft_token_id, index, e)}
-    //                                   disabled={isClaimingThis || !canClaimNow}
-    //                                   className="w-full landing-button px-4 py-2 rounded-md 
-    //                                     transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-    //                                     hover:bg-yellow-500 disabled:hover:bg-yellow-500/50"
-    //                                 >
-    //                                   {isClaimingThis ? (
-    //                                     <div className="flex items-center justify-center space-x-2">
-    //                                       <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-    //                                       <span>Claiming...</span>
-    //                                     </div>
-    //                                   ) : canClaimNow ? (
-    //                                     purchase.claimed_amount ? 'Claim' : 'Claim'
-    //                                   ) : (
-    //                                     `Claim available on ${formatDate(claimStartDate)}`
-    //                                   )}
-    //                                 </button>
-    //                               </div>
-    //                             )}
-    //                           </div>
-    //                         );
-    //                       })}
-    //                   </div>
-    //                 </div>
-    //               )}
-    //             </div>
-    //           );
-    //         })}
-    //       </div>
-    //     </div>
-    //   </div>
-    // );
   };
 
-  const FiltersSection = () => {
-    const hasActiveBonds = useMemo(() => {
-      return bonds.some(bond => getBondStatus(bond) === 'Active');
-    }, [bonds]);
+  // Move FiltersSection outside of Bonds component
+  const FiltersSection = memo(({ 
+    bonds, 
+    userBonds, 
+    filteredBonds,
+    statusFilter,
+    setStatusFilter,
+    denomFilter,
+    setDenomFilter,
+    showUserBondsOnly,
+    setShowUserBondsOnly,
+    getTokenSymbol,
+    getUniquePurchaseDenoms,
+    getBondStatus,
+    isClaimable,
+    handleClaimAllBonds
+  }) => {
+    const [showFilters, setShowFilters] = useState(false);
+    const [isClaimingAll, setIsClaimingAll] = useState(false);
+    const [claimProgress, setClaimProgress] = useState({
+      total: 0,
+      current: 0,
+      isActive: false
+    });
 
     // Calculate total claimable bonds across all groups
     const totalClaimableBonds = useMemo(() => {
@@ -1507,146 +1123,7 @@ const Bonds = () => {
         }
         return total;
       }, 0);
-    }, [userBonds, bonds]);
-
-    const [isClaimingAll, setIsClaimingAll] = useState(false);
-    const [claimProgress, setClaimProgress] = useState({
-      total: 0,
-      current: 0,
-      isActive: false
-    });
-
-    const handleClaimAllBonds = async () => {
-      try {
-        setIsClaimingAll(true);
-
-        if (!connectedWalletAddress) {
-          showAlert("Please connect your wallet first", "error");
-          return;
-        }
-
-        // Get all claimable purchases with proper validation
-        const claimablePurchases = userBonds.filter(purchase => {
-          const bond = bonds.find(b => b.bond_id === purchase.bond_id);
-          const isValidPurchase = isClaimable(bond, purchase);
-          console.log(`Purchase ${purchase.nft_token_id} claimable status:`, {
-            bondId: purchase.bond_id,
-            isValidPurchase,
-            amount: purchase.amount,
-            claimedAmount: purchase.claimed_amount,
-            status: purchase.status
-          });
-          return isValidPurchase;
-        });
-
-        if (claimablePurchases.length === 0) {
-          showAlert("No claimable rewards found", "info");
-          return;
-        }
-
-        // Set initial progress
-        setClaimProgress({
-          total: claimablePurchases.length,
-          current: 0,
-          isActive: true
-        });
-
-        // Create array of instructions with proper validation
-        const instructions = claimablePurchases.map(purchase => ({
-          contractAddress: contractAddress,
-          msg: {
-            claim_rewards: {
-              bond_id: parseInt(purchase.bond_id),
-              nft_token_id: purchase.nft_token_id
-            }
-          }
-        }));
-
-        const signer = await getSigner();
-        const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
-
-        // Increase gas limit for multiple transactions
-        const gasPerMsg = 750000; // Increased from 500000
-        const totalGas = Math.min(3000000, gasPerMsg * instructions.length); // Increased from 2000000
-
-        const fee = {
-          amount: [{ denom: "uwhale", amount: "75000" }], // Increased from 50000
-          gas: totalGas.toString(),
-        };
-
-        console.log('Executing claim all with:', {
-          instructions: instructions.length,
-          totalGas,
-          fee
-        });
-
-        const result = await client.executeMultiple(
-          connectedWalletAddress,
-          instructions,
-          fee,
-          "Claim All Available Bond Rewards"
-        );
-
-        if (result.transactionHash) {
-          // Update progress to complete
-          setClaimProgress(prev => ({
-            ...prev,
-            current: prev.total,
-          }));
-
-          // Invalidate cache for all claimed NFTs
-          for (const purchase of claimablePurchases) {
-            try {
-              const bondQuery = { 
-                get_bond_offer: { 
-                  bond_id: parseInt(purchase.bond_id) 
-                } 
-              };
-              const bondData = await queryContract(bondQuery);
-              const nftContractAddr = bondData?.bond_offer?.nft_contract_addr || purchase.contract_address;
-              
-              if (nftContractAddr) {
-                console.log(`Invalidating cache for NFT ${purchase.nft_token_id}`);
-                nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
-              }
-            } catch (error) {
-              console.warn(`Failed to invalidate cache for NFT ${purchase.nft_token_id}:`, error);
-            }
-          }
-
-          const baseTxnUrl = isTestnet
-            ? "https://ping.pfc.zone/narwhal-testnet/tx"
-            : "https://inbloc.org/migaloo/transactions";
-          const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
-          
-          showAlert(
-            `Successfully claimed all available rewards! (${claimablePurchases.length} bonds)`,
-            "success",
-            `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
-          );
-          
-          // Add delay before refreshing data
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Refresh data sequentially
-          await fetchData();
-          // await fetchUserBonds();
-        }
-      } catch (error) {
-        console.error("Error claiming all rewards:", error);
-        showAlert(`Error claiming rewards: ${error.message}`, "error");
-      } finally {
-        setIsClaimingAll(false);
-        // Reset progress after a delay
-        setTimeout(() => {
-          setClaimProgress({
-            total: 0,
-            current: 0,
-            isActive: false
-          });
-        }, 2000);
-      }
-    };
+    }, [userBonds, bonds, isClaimable]);
 
     return (
       <div className="mb-6 space-y-4">
@@ -1679,48 +1156,105 @@ const Bonds = () => {
           </button>
         )}
 
-        <div className="flex flex-wrap gap-4">
-          {/* Status filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
-              focus:border-yellow-200 focus:outline-none transition duration-300"
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="ended">Ended</option>
-            <option value="matured">Matured</option>
-            <option value="sold out">Sold Out</option>
-          </select>
+        <div className="flex items-center gap-4">
+          {/* Filters Dropdown Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2 bg-gray-800/50 text-white px-4 py-3 
+                rounded-lg border border-gray-700 hover:border-yellow-500 transition duration-300"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                />
+              </svg>
+              <span>Filters</span>
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${
+                  showFilters ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
 
-          {/* Denom filter */}
-          <select
-            value={denomFilter}
-            onChange={(e) => setDenomFilter(e.target.value)}
-            className="bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 focus:border-yellow-200 focus:outline-none"
-          >
-            <option value="all">All Payment Methods</option>
-            {getUniquePurchaseDenoms.map(denom => (
-              <option key={denom} value={denom}>
-                Buy with {getTokenSymbol(denom)}
-              </option>
-            ))}
-          </select>
+            {/* Filters Dropdown Content */}
+            {showFilters && (
+              <div className="absolute right-0 mt-2 w-72 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-50
+                sm:right-0 right-auto sm:left-auto left-0
+                sm:transform-none transform-gpu
+                max-w-[calc(100vw-2rem)]">
+                <div className="p-4 space-y-4">
+                  {/* Status filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
+                        focus:border-yellow-200 focus:outline-none transition duration-300"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="ended">Ended</option>
+                      <option value="matured">Matured</option>
+                      <option value="sold out">Sold Out</option>
+                    </select>
+                  </div>
 
-          {/* User bonds filter - only show if user has bonds */}
-          {userBonds.length > 0 && (
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showUserBondsOnly}
-                onChange={(e) => setShowUserBondsOnly(e.target.checked)}
-                className="form-checkbox h-4 w-4 text-yellow-500 rounded border-gray-600 focus:ring-yellow-500"
-              />
-              <span className="text-white">Show my bonds only</span>
-            </label>
-          )}
+                  {/* Denom filter */}
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Payment Method</label>
+                    <select
+                      value={denomFilter}
+                      onChange={(e) => setDenomFilter(e.target.value)}
+                      className="w-full bg-gray-700 text-white rounded-md px-3 py-2 border border-gray-600 
+                        focus:border-yellow-200 focus:outline-none transition duration-300"
+                    >
+                      <option value="all">All Payment Methods</option>
+                      {getUniquePurchaseDenoms.map(denom => (
+                        <option key={denom} value={denom}>
+                          Buy with {getTokenSymbol(denom)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* User bonds filter - only show if user has bonds */}
+                  {userBonds.length > 0 && (
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showUserBondsOnly}
+                        onChange={(e) => setShowUserBondsOnly(e.target.checked)}
+                        className="form-checkbox h-4 w-4 text-yellow-500 rounded border-gray-600 
+                          focus:ring-yellow-500"
+                      />
+                      <span className="text-white">Show my bonds only</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Filter stats */}
@@ -1729,7 +1263,7 @@ const Bonds = () => {
         </div>
       </div>
     );
-  };
+  });
 
   // Add this effect to handle the initial status filter
   useEffect(() => {
@@ -1795,6 +1329,113 @@ const Bonds = () => {
     } catch (error) {
       console.warn('Failed to fetch NFT collections, defaulting to purchased bonds:', error);
       setNftCollections([]);
+    }
+  };
+
+  // Add handleClaimAllBonds function
+  const handleClaimAllBonds = async () => {
+    try {
+      if (!connectedWalletAddress) {
+        showAlert("Please connect your wallet first", "error");
+        return;
+      }
+
+      // Get all claimable purchases with proper validation
+      const claimablePurchases = userBonds.filter(purchase => {
+        const bond = bonds.find(b => b.bond_id === purchase.bond_id);
+        const isValidPurchase = isClaimable(bond, purchase);
+        console.log(`Purchase ${purchase.nft_token_id} claimable status:`, {
+          bondId: purchase.bond_id,
+          isValidPurchase,
+          amount: purchase.amount,
+          claimedAmount: purchase.claimed_amount,
+          status: purchase.status
+        });
+        return isValidPurchase;
+      });
+
+      if (claimablePurchases.length === 0) {
+        showAlert("No claimable rewards found", "info");
+        return;
+      }
+
+      // Create array of instructions with proper validation
+      const instructions = claimablePurchases.map(purchase => ({
+        contractAddress: contractAddress,
+        msg: {
+          claim_rewards: {
+            bond_id: parseInt(purchase.bond_id),
+            nft_token_id: purchase.nft_token_id
+          }
+        }
+      }));
+
+      const signer = await getSigner();
+      const client = await SigningCosmWasmClient.connectWithSigner(rpc, signer);
+
+      // Increase gas limit for multiple transactions
+      const gasPerMsg = 750000; // Increased from 500000
+      const totalGas = Math.min(3000000, gasPerMsg * instructions.length); // Increased from 2000000
+
+      const fee = {
+        amount: [{ denom: "uwhale", amount: "75000" }], // Increased from 50000
+        gas: totalGas.toString(),
+      };
+
+      console.log('Executing claim all with:', {
+        instructions: instructions.length,
+        totalGas,
+        fee
+      });
+
+      const result = await client.executeMultiple(
+        connectedWalletAddress,
+        instructions,
+        fee,
+        "Claim All Available Bond Rewards"
+      );
+
+      if (result.transactionHash) {
+        // Invalidate cache for all claimed NFTs
+        for (const purchase of claimablePurchases) {
+          try {
+            const bondQuery = { 
+              get_bond_offer: { 
+                bond_id: parseInt(purchase.bond_id) 
+              } 
+            };
+            const bondData = await queryContract(bondQuery);
+            const nftContractAddr = bondData?.bond_offer?.nft_contract_addr || purchase.contract_address;
+            
+            if (nftContractAddr) {
+              console.log(`Invalidating cache for NFT ${purchase.nft_token_id}`);
+              nftInfoCache.delete(nftContractAddr, purchase.nft_token_id);
+            }
+          } catch (error) {
+            console.warn(`Failed to invalidate cache for NFT ${purchase.nft_token_id}:`, error);
+          }
+        }
+
+        const baseTxnUrl = isTestnet
+          ? "https://ping.pfc.zone/narwhal-testnet/tx"
+          : "https://inbloc.org/migaloo/transactions";
+        const txnUrl = `${baseTxnUrl}/${result.transactionHash}`;
+        
+        showAlert(
+          `Successfully claimed all available rewards! (${claimablePurchases.length} bonds)`,
+          "success",
+          `<a href="${txnUrl}" target="_blank">View Transaction ${result.transactionHash}</a>`
+        );
+        
+        // Add delay before refreshing data
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Refresh data sequentially
+        await fetchData();
+      }
+    } catch (error) {
+      console.error("Error claiming all rewards:", error);
+      showAlert(`Error claiming rewards: ${error.message}`, "error");
     }
   };
 
@@ -1896,7 +1537,23 @@ const Bonds = () => {
           </div>
         ) : (
           <>
-            <FiltersSection />
+            <SearchBar value={searchQuery} onChange={handleSearch} />
+            <FiltersSection 
+              bonds={bonds}
+              userBonds={userBonds}
+              filteredBonds={filteredBonds}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              denomFilter={denomFilter}
+              setDenomFilter={setDenomFilter}
+              showUserBondsOnly={showUserBondsOnly}
+              setShowUserBondsOnly={setShowUserBondsOnly}
+              getTokenSymbol={getTokenSymbol}
+              getUniquePurchaseDenoms={getUniquePurchaseDenoms}
+              getBondStatus={getBondStatus}
+              isClaimable={isClaimable}
+              handleClaimAllBonds={handleClaimAllBonds}
+            />
 
             <div className="hidden md:block">
               {renderBondTable()}
@@ -1906,7 +1563,7 @@ const Bonds = () => {
               {filteredBonds.map((bond) => (
                 <BondCard key={bond.bond_id} bond={bond} />
               ))}
-              {hasMoreBonds && (
+              {hasMoreBonds && filteredBonds.length > 0 && (
                 <div 
                   ref={observerTarget}
                   className="w-full py-4 flex justify-center"

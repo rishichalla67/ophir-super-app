@@ -76,14 +76,14 @@ const Sidebar = () => {
       icon: <FaHandshake className="mr-2" size={16} />,
       subItems: [
         { 
-          name: 'Browse', 
-          path: '/bonds',
-          icon: <FaSearch className="mr-2" size={14} />
-        },
-        { 
           name: 'My Bonds', 
           path: '/my-bonds',
           icon: <FaHandHoldingUsd className="mr-2" size={14} />
+        },
+        { 
+          name: 'Browse', 
+          path: '/bonds',
+          icon: <FaSearch className="mr-2" size={14} />
         },
         { 
           name: 'Resale', 
