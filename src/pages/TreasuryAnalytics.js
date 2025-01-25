@@ -28,11 +28,11 @@ const Modal = ({ isOpen, onClose, data }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {Object.entries(composition).map(([walletName, amount], index) => (
+                            {composition && Object.entries(composition).map(([walletName, amount], index) => (
                                 <tr key={index}>
                                     <td className="text-sm font-medium py-2 px-3">{walletName}</td>
-                                    <td className="text-sm py-2 px-3 text-right">{amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
-                                    <td className="text-sm py-2 px-3 text-right">{(amount * price).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
+                                    <td className="text-sm py-2 px-3 text-right">{amount ? amount.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0'}</td>
+                                    <td className="text-sm py-2 px-3 text-right">{amount && price ? (amount * price).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '$0'}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -47,11 +47,16 @@ const Modal = ({ isOpen, onClose, data }) => {
 };
 
 const formatNumber = (number, digits) => {
-    return number.toLocaleString('en-US', {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
+    if (number === null || number === undefined) return '0';
+    // If the number is a string with commas, remove them before converting
+    if (typeof number === 'string') {
+        number = number.replace(/,/g, '');
+    }
+    return Number(number).toLocaleString('en-US', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
     });
-  };
+};
 
 const prodUrl = 'https://parallax-analytics.onrender.com';
 const localUrl = 'http://localhost:225';
@@ -126,11 +131,24 @@ const AnalyticsDashboard = () => {
     const totalSupply = 1000000000;
 
     const formatNumberInBitcoin = (number) => {
-        let numericValue = typeof number === 'string' ? parseFloat(number.replace(/,/g, '')) : number;
-        if (isNaN(numericValue)) {
-            throw new Error('Invalid number input');
+        if (number === null || number === undefined) return '0';
+        // If the number is a string with commas, remove them before converting
+        if (typeof number === 'string') {
+            number = number.replace(/,/g, '');
         }
-        return formatNumber(numericValue / priceData['wBTC'], 4);
+        let numericValue = Number(number);
+        if (isNaN(numericValue)) {
+            return '0';
+        }
+        
+        // Check if wBTC price exists and is valid
+        const btcPrice = priceData?.wBTC || priceData?.['wbtc'];
+        if (!btcPrice || isNaN(btcPrice) || btcPrice === 0) {
+            console.log('Invalid or missing wBTC price:', btcPrice);
+            return '0';
+        }
+        
+        return formatNumber(numericValue / btcPrice, 4);
     }
 
     const calculateTotalValue = (redemptionValues, prices) => {
@@ -193,7 +211,7 @@ const AnalyticsDashboard = () => {
     };
 
     const fetchData = async () => {
-        setIsLoading(true); // Add this line
+        setIsLoading(true);
         const cacheKey = 'ophirDataCache';
         const cachedData = localStorage.getItem(cacheKey);
         const now = new Date();
@@ -206,7 +224,7 @@ const AnalyticsDashboard = () => {
                 setOphirStats(stats);
                 setOphirTreasury(treasury);
                 setPriceData(prices);
-                setIsLoading(false); // Add this line
+                setIsLoading(false);
                 return;
             }
         }
@@ -217,16 +235,21 @@ const AnalyticsDashboard = () => {
             const pricesResponse = await axios.get(`${prodUrl}/ophir/prices`);
             
             // Add debug logging
-            console.log('Price data:', pricesResponse.data);
+            console.log('Stats Response:', statsResponse.data);
+            console.log('Treasury Response:', treasuryResponse.data);
+            console.log('Prices Response:', pricesResponse.data);
             
-            // Ensure wBTC price exists
-            if (!pricesResponse.data.wBTC && !pricesResponse.data.wbtc) {
-                console.error('Missing wBTC price data');
-                showAlert('Missing Bitcoin price data', 'error');
+            // Ensure the data exists and has the expected format
+            if (!treasuryResponse.data || !statsResponse.data || !pricesResponse.data) {
+                console.error('Missing data in API response');
+                showAlert('Error loading data from API', 'error');
+                setIsLoading(false);
+                return;
             }
 
             setPriceData(pricesResponse.data);
-            getRedemptionPrice(pricesResponse.data);
+            await getRedemptionPrice(pricesResponse.data);
+            
             const dataToCache = {
                 stats: statsResponse.data,
                 treasury: treasuryResponse.data,
@@ -234,20 +257,25 @@ const AnalyticsDashboard = () => {
                 timestamp: now.getTime()
             };
 
-            const magicEdenResponse = await axios.get('https://api.coingecko.com/api/v3/nfts/runestone');
-            setRunestoneData(magicEdenResponse.data);
+            try {
+                const magicEdenResponse = await axios.get('https://api.coingecko.com/api/v3/nfts/runestone');
+                setRunestoneData(magicEdenResponse.data);
+            } catch (error) {
+                console.error('Error fetching Runestone data:', error);
+            }
     
             localStorage.setItem(cacheKey, JSON.stringify(dataToCache));
     
             setOphirStats(statsResponse.data);
             setOphirTreasury(treasuryResponse.data);
             setPriceData(pricesResponse.data);
-            setIsLoading(false); // Add this line
+            
         } catch (error) {
             console.error('Error fetching data:', error);
-            setIsLoading(false); // Add this line
+            showAlert(`Error fetching data: ${error.message}`, 'error');
+        } finally {
+            setIsLoading(false);
         }
-        
     };
     useEffect(() => {
         fetchData();
@@ -272,46 +300,49 @@ const AnalyticsDashboard = () => {
 
 
     function sortAssetsByValue(data, prices, order = 'descending') {
-        // Calculate total value for each asset
-        const calculatedValues = Object.entries(data).map(([key, asset]) => {
-            if (!asset || asset.balance === undefined || asset.rewards === undefined) {
-                console.warn(`Missing asset data for key: ${key}`, asset);
-                return null; // Skip this asset if it's missing required data
-            }
-    
-            const price = prices[key] || 0;
-            const totalValue = (parseFloat(asset.balance) + parseFloat(asset.rewards)) * price;
-    
-            // Exclude specific keys from truncation
-            const excludeTruncation = ['ophirRedemptionPrice', 'treasuryValueWithoutOphir', 'totalTreasuryValue'];
-            let truncatedKey = key;
-            if (!excludeTruncation.includes(key) && key.length > 15) {
-                truncatedKey = `${key.substring(0, 8)}...`;
-            }
-            
-            return { key: truncatedKey, originalKey: key, ...asset, totalValue };
-        }).filter(asset => asset && asset.totalValue > 0); // Filter out assets with a total value of 0 or missing data
-    
-        // Sort based on total value
-        calculatedValues.sort((a, b) => {
-          if (order === 'ascending') {
-            return a.totalValue - b.totalValue;
-          } else {
-            return b.totalValue - a.totalValue;
-          }
-        });
-    
-        // Convert back to original data format, preserving sorted order
-        const sortedData = {};
-        calculatedValues.forEach(asset => {
-          if (!asset) return; // Skip if asset is null
-          const { key, originalKey, totalValue, ...rest } = asset; // Exclude totalValue from final output
-          sortedData[key] = { ...rest, originalKey };
-        });
-    
-        return sortedData;
-    }
-    
+        // Special keys that should be excluded from sorting
+        const specialKeys = ['totalTreasuryValue', 'treasuryValueWithoutOphir', 'ophirRedemptionPrice'];
+        
+        // Calculate total value for each asset, excluding special keys
+        const calculatedValues = Object.entries(data)
+            .filter(([key]) => !specialKeys.includes(key)) // Filter out special keys
+            .map(([key, asset]) => {
+                if (!asset || asset.balance === undefined || asset.rewards === undefined) {
+                    return null; // Skip this asset if it's missing required data
+                }
+        
+                const price = prices[key] || 0;
+                const totalValue = (parseFloat(asset.balance) + parseFloat(asset.rewards)) * price;
+        
+                // Exclude specific keys from truncation
+                let truncatedKey = key;
+                if (key.length > 15) {
+                    truncatedKey = `${key.substring(0, 8)}...`;
+                }
+                
+                return { key: truncatedKey, originalKey: key, ...asset, totalValue };
+            }).filter(asset => asset && asset.totalValue > 0); // Filter out assets with a total value of 0 or missing data
+        
+            // Sort based on total value
+            calculatedValues.sort((a, b) => {
+                if (order === 'ascending') {
+                    return a.totalValue - b.totalValue;
+                } else {
+                    return b.totalValue - a.totalValue;
+                }
+            });
+        
+            // Convert back to original data format, preserving sorted order
+            const sortedData = {};
+            calculatedValues.forEach(asset => {
+                if (!asset) return; // Skip if asset is null
+                const { key, originalKey, totalValue, ...rest } = asset; // Exclude totalValue from final output
+                sortedData[key] = { ...rest, originalKey };
+            });
+        
+            return sortedData;
+        }
+        
 
     const getPercentageOfTotalOphirSupply = (value) => {
         return (value/totalSupply)*100;
@@ -432,66 +463,60 @@ const AnalyticsDashboard = () => {
                 <div className="p-3">
                     <div className="title text-3xl font-bold text-white">Ophir Statistics</div>
                     <div className="tot-treasury-wrapper">
-                            <div className="tot-treasury-div rounded-lg p-2 shadow-md min-w-[250px] m-2 flex flex-col items-center justify-center cursor-pointer" onClick={toggleBitcoinDenomination}>
-                                <img src="https://i.ibb.co/d5rJ2qd/7185535-yellow.png" alt="Icon" className="h-8 w-8 mb-1" />
-                                <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Total Treasury Value</div>
-                                {inBitcoin ? 
-                                    <div className="sm:text-xl text-md ">{formatNumberInBitcoin(ophirTreasury?.totalTreasuryValue)} BTC</div>
-                                    :
-                                    <div className="sm:text-xl text-md ">${formatNumber(ophirTreasury?.totalTreasuryValue,0)}</div>
-                                }
-                                {inBitcoin ? 
-                                    <div className="sm:text-md text-sm text-center mt-1"><a className="font-bold sm:text-sm text-xsm">W/O Ophir:</a> {formatNumberInBitcoin(ophirTreasury?.treasuryValueWithoutOphir)} BTC</div>
-                                    :
-                                    <div className="sm:text-md text-sm text-center mt-1"><a className="font-bold sm:text-sm text-xsm">W/O Ophir:</a> ${formatNumber(ophirTreasury?.treasuryValueWithoutOphir,0)}</div>
-                                }
-                                
-                            </div>
+                        <div className="tot-treasury-div rounded-lg p-2 shadow-md min-w-[250px] m-2 flex flex-col items-center justify-center cursor-pointer" onClick={toggleBitcoinDenomination}>
+                            <img src="https://i.ibb.co/d5rJ2qd/7185535-yellow.png" alt="Icon" className="h-8 w-8 mb-1" />
+                            <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Total Treasury Value</div>
+                            {inBitcoin ? 
+                                <div className="sm:text-xl text-md ">{ophirTreasury?.totalTreasuryValue ? formatNumberInBitcoin(ophirTreasury.totalTreasuryValue) : '0'} BTC</div>
+                                :
+                                <div className="sm:text-xl text-md ">${ophirTreasury?.totalTreasuryValue ? formatNumber(ophirTreasury.totalTreasuryValue, 0) : '0'}</div>
+                            }
+                            {inBitcoin ? 
+                                <div className="sm:text-md text-sm text-center mt-1"><a className="font-bold sm:text-sm text-xsm">W/O Ophir:</a> {ophirTreasury?.treasuryValueWithoutOphir ? formatNumberInBitcoin(ophirTreasury.treasuryValueWithoutOphir) : '0'} BTC</div>
+                                :
+                                <div className="sm:text-md text-sm text-center mt-1"><a className="font-bold sm:text-sm text-xsm">W/O Ophir:</a> ${ophirTreasury?.treasuryValueWithoutOphir ? formatNumber(ophirTreasury.treasuryValueWithoutOphir, 0) : '0'}</div>
+                            }
                         </div>
-                    <div className="
-                    grid 
-                    grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6
-                    ">
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                         {/* Ophir Price */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center">
                             <img src="https://raw.githubusercontent.com/cosmos/chain-registry/master/migaloo/images/ophir.png" alt="Icon" className="h-8 w-8 mb-2" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Price</div>
-                            <div className="sm:text-xl text-md">${formatNumber(ophirStats?.price, 5)}</div>
-                            <div className="sm:text-sm text-sm text-center text-slate-600" title="Redemption Price">RP: ${formatNumber(redemptionPrice, 4)}</div>
-
+                            <div className="sm:text-xl text-md">${ophirStats?.price ? formatNumber(ophirStats.price, 5) : '0'}</div>
+                            <div className="sm:text-sm text-sm text-center text-slate-600" title="Redemption Price">RP: ${formatNumber(redemptionPrice || 0, 4)}</div>
                         </div>
                         {/* Market Cap */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center">
                             <img src="https://i.ibb.co/d20VfyL/3313489-200-yellow.png" alt="Icon" className="h-8 w-8 mb-2" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Market Cap</div>
-                            <div className="sm:text-xl text-md" title="(ophir price) * (circulating supply)">${formatNumber(ophirStats?.marketCap,0)}</div>
+                            <div className="sm:text-xl text-md" title="(ophir price) * (circulating supply)">${ophirStats?.marketCap ? formatNumber(ophirStats.marketCap, 0) : '0'}</div>
                         </div>
                         {/* FDV */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center">
                             <img src="https://i.ibb.co/RpV2Lq9/70884-200-yellow.png" alt="Icon" className="h-8 w-8 mb-2" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">FDV</div>
-                            <div className="sm:text-xl text-md" title="(ophir price) * (total supply)">${formatNumber(ophirStats?.fdv,0)}</div>
+                            <div className="sm:text-xl text-md" title="(ophir price) * (total supply)">${ophirStats?.fdv ? formatNumber(ophirStats.fdv, 0) : '0'}</div>
                         </div>
                         {/* Ophir Mine */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center" title="Ophir that will be distributed to stakers...">
                             <img src="https://i.ibb.co/bQbQ8vs/5895891-yellow.png" alt="Icon" className="h-8 w-8 mb-1" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Mined Ophir</div>
-                            <div className="sm:text-xl text-md ">{formatNumber(ophirStats?.ophirInMine,0)}</div>
+                            <div className="sm:text-xl text-md ">{ophirStats?.ophirInMine ? formatNumber(ophirStats.ophirInMine, 0) : '0'}</div>
                         </div>
                         {/* Circulating Supply */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center">
                             <img src="https://i.ibb.co/wLDhcxv/3844310-200-yellow.png" alt="Icon" className="h-8 w-8 mb-2" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Circulating Supply</div>
-                            <div className="sm:text-xl text-md">{formatNumber(ophirStats?.circulatingSupply,0)}</div>
-                            <div className="sm:text-sm text-sm text-center text-slate-600" title="(circulating supply / total supply) * 100">{formatNumber(getPercentageOfTotalOphirSupply(ophirStats?.circulatingSupply),2)}%</div>
-
+                            <div className="sm:text-xl text-md">{ophirStats?.circulatingSupply ? formatNumber(ophirStats.circulatingSupply, 0) : '0'}</div>
+                            <div className="sm:text-sm text-sm text-center text-slate-600" title="(circulating supply / total supply) * 100">{ophirStats?.circulatingSupply ? formatNumber(getPercentageOfTotalOphirSupply(ophirStats.circulatingSupply), 2) : '0'}%</div>
                         </div>
                         {/* Staked Supply */}
                         <div className="stats-divs rounded-lg p-2 shadow-md min-w-[100px] m-2 flex flex-col items-center justify-center">
                             <img src="https://i.ibb.co/WnspwH3/904757-200-yellow.png" alt="Icon" className="h-8 w-8 mb-2" />
                             <div className="sm:text-2xl text-sm font-bold mb-1 text-center">Staked Supply</div>
-                            <div className="sm:text-xl text-md">{formatNumber(ophirStats?.stakedSupply,0)}</div>
-                            <div className="sm:text-sm text-sm text-center text-slate-600" title="(staked supply / total supply) * 100">{formatNumber(getPercentageOfTotalOphirSupply(ophirStats?.stakedSupply),2)}%</div>
+                            <div className="sm:text-xl text-md">{ophirStats?.stakedSupply ? formatNumber(ophirStats.stakedSupply, 0) : '0'}</div>
+                            <div className="sm:text-sm text-sm text-center text-slate-600" title="(staked supply / total supply) * 100">{ophirStats?.stakedSupply ? formatNumber(getPercentageOfTotalOphirSupply(ophirStats.stakedSupply), 2) : '0'}%</div>
                         </div>
                     </div>
                 </div>
