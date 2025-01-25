@@ -1105,6 +1105,26 @@ const BuyBonds = () => {
               </div>
             )}
 
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Maker Fee Rate:</p>
+              <div className="flex items-center justify-center">
+                <span className="text-sm md:text-xl font-bold">
+                  {bond?.maker_fee_rate ? `${(parseFloat(bond.maker_fee_rate) * 100).toFixed(2)}%` : 
+                   bond?.fee_rate ? `${(parseFloat(bond.fee_rate) * 0.7 * 100).toFixed(2)}%` : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
+              <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Taker Fee Rate:</p>
+              <div className="flex items-center justify-center">
+                <span className="text-sm md:text-xl font-bold">
+                  {bond?.taker_fee_rate ? `${(parseFloat(bond.taker_fee_rate) * 100).toFixed(2)}%` : 
+                   bond?.fee_rate ? `${(parseFloat(bond.fee_rate) * 0.3 * 100).toFixed(2)}%` : 'N/A'}
+                </span>
+              </div>
+            </div>
+
             {/* <div className="p-2 md:p-4 bond-buy-text-container bg-gray-900/50 rounded-lg">
               <p className="text-gray-400 text-xs mb-0.5 md:mb-1">Purchase End:</p>
               <p className="text-sm md:text-xl font-bold text-center">
