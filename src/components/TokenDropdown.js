@@ -116,7 +116,7 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
               <span>{selectedToken.symbol}</span>
             </div>
             {selectedToken.yieldData && (
-              <span className="text-sm text-green-400 ml-2">
+              <span className="hidden md:inline-block text-sm text-green-400 ml-2">
                 {(parseFloat(selectedToken.yieldData.APY) * 100).toFixed(2)}% APY
               </span>
             )}
@@ -165,14 +165,19 @@ const TokenDropdown = ({ name, value, onChange, label, allowedDenoms = [], isTes
                     </span>
                   </div>
                 )}
-                <span>{token.symbol}</span>
+                <span className="flex items-center">
+                  {token.symbol}
+                  {token.yieldData && (
+                    <span className="w-2 h-2 rounded-full bg-green-400 ml-2"></span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-4">
                 <span className="hidden md:inline text-sm text-gray-400 capitalize truncate max-w-[120px]">
                   {tokenMappings[token.denom]?.chain || 'unknown'}
                 </span>
                 {token.yieldData && (
-                  <span className="text-sm text-green-400">
+                  <span className="hidden md:inline-block text-sm text-green-400">
                     {(parseFloat(token.yieldData.APY) * 100).toFixed(2)}% APY
                   </span>
                 )}

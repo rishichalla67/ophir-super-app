@@ -44,7 +44,8 @@ const MARKUP_RANGE = {
 // Add mapping for APY denoms
 const APY_DENOM_MAPPING = {
   'ibc/F9905FB2922CEE27015C339B2B870FB854314AA1CBC2D3F56C5E8BA2691C3B61': 'terra16z3ksy6aqjkug8l3u48q0kvdaqk3dgaytl7ykt6vg2he9d6z9rgslr4k7l',
-  'ibc/4F5CB28CE3E351058D4CE671EAF935CA6D728C6DF34C1AC662B495310FECBBDA': 'terra1le46uu9qjk53aktjs8dev96sl9sd2ujvcpspk75pdeg0txfvhyuswm6653'
+  'ibc/4F5CB28CE3E351058D4CE671EAF935CA6D728C6DF34C1AC662B495310FECBBDA': 'terra1le46uu9qjk53aktjs8dev96sl9sd2ujvcpspk75pdeg0txfvhyuswm6653',
+  'factory/migaloo1zsptvkg5aeg4tjksgv7vp4x5s9p5euqrh9jl3sfdv48wtnrhftlszsvmu5/uwhalex': 'migaloo1zsptvkg5aeg4tjksgv7vp4x5s9p5euqrh9jl3sfdv48wtnrhftlszsvmu5'
 };
 
 const PRESET_DURATIONS = [
