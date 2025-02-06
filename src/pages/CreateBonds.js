@@ -49,25 +49,85 @@ const APY_DENOM_MAPPING = {
 };
 
 const PRESET_DURATIONS = [
-  { label: 'Quick Bond', minutes: { start: 5, end: 30, maturity: 180 } },
-  { label: '24h Bond', minutes: { start: 5, end: 1440, maturity: 180 } },
-  { label: '7d Bond', minutes: { start: 5, end: 10080, maturity: 7*24 } },
-  { label: '30d Bond', minutes: { start: 5, end: 43200, maturity: 30*24 } },
-  { label: '90d Bond', minutes: { start: 5, end: 129600, maturity: 90*24 } },
-  { label: '1y Bond', minutes: { start: 5, end: 525600, maturity: 365*24 } },
+  { 
+    label: 'Quick Bond', 
+    minutes: { 
+      start: 15,
+      purchaseDuration: 30, // 30 minutes for purchase
+      totalDuration: 180 // 3 hours total
+    }
+  },
+  { 
+    label: '24h Bond',
+    minutes: { 
+      start:15,
+      purchaseDuration: 288, // ~5 hours for purchase (20% of 24h)
+      totalDuration: 1440 // 24 hours total
+    }
+  },
+  { 
+    label: '7d Bond',
+    minutes: { 
+      start: 15,
+      purchaseDuration: 2016, // ~1.4 days for purchase (20% of 7d)
+      totalDuration: 10080 // 7 days total
+    }
+  },
+  { 
+    label: '30d Bond',
+    minutes: { 
+      start: 15,
+      purchaseDuration: 8640, // 6 days for purchase (20% of 30d)
+      totalDuration: 43200 // 30 days total
+    }
+  },
+  { 
+    label: '90d Bond',
+    minutes: { 
+      start: 15,
+      purchaseDuration: 25920, // 18 days for purchase (20% of 90d)
+      totalDuration: 129600 // 90 days total
+    }
+  },
+  { 
+    label: '1y Bond',
+    minutes: { 
+      start: 15,
+      purchaseDuration: 105120, // ~73 days for purchase (20% of 1y)
+      totalDuration: 525600 // 365 days total
+    }
+  },
 ];
 
-const calculateExpectedAmount = (totalSupply, price, purchasingDenom) => {
+const calculateExpectedAmount = (totalSupply, price, purchasingDenom, feeSplit = 30, showAdvancedSettings = false) => {
   if (!totalSupply || !price || !purchasingDenom) return null;
   
   const decimals = tokenMappings[purchasingDenom]?.decimals || 6;
   const rawAmount = parseFloat(totalSupply) * parseFloat(price);
-  const feeAmount = rawAmount * (BOND_PURCHASE_FEE_PERCENTAGE / 100); // Use the constant
-  const netAmount = rawAmount - feeAmount;
+  const totalFeeRate = BOND_PURCHASE_FEE_PERCENTAGE / 100;
+  
+  // If advanced settings are enabled, calculate fees based on the split
+  let makerFee = 0;
+  let takerFee = 0;
+  
+  if (showAdvancedSettings) {
+    // Calculate maker and taker portions of the fee
+    makerFee = rawAmount * totalFeeRate * ((100 - feeSplit) / 100);
+    takerFee = rawAmount * totalFeeRate * (feeSplit / 100);
+  } else {
+    // Default 70/30 split
+    makerFee = rawAmount * totalFeeRate * 0.7;
+    takerFee = rawAmount * totalFeeRate * 0.3;
+  }
+  
+  const totalFeeAmount = makerFee + takerFee;
+  const netAmount = rawAmount - makerFee; // Only subtract maker fee from net amount
   
   return {
     gross: rawAmount.toFixed(decimals),
-    fee: feeAmount.toFixed(decimals),
+    fee: totalFeeAmount.toFixed(decimals),
+    makerFee: makerFee.toFixed(decimals),
+    takerFee: takerFee.toFixed(decimals),
     net: netAmount.toFixed(decimals)
   };
 };
@@ -306,7 +366,8 @@ const BondTimelinePreview = ({ formData, setFormData, bondType }) => {
         type="datetime-local"
         value={date.time}
         onChange={(e) => handleDateChange(date.id, e.target.value)}
-        className="absolute opacity-0 w-0 h-0"
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0"
+        style={{ zIndex: 9999 }}
       />
     </div>
   );
@@ -1053,7 +1114,7 @@ const CreateBonds = () => {
   );
 
   const handlePresetDuration = (preset) => {
-    setSelectedPreset(preset.label); // Track which preset is selected
+    setSelectedPreset(preset.label);
     
     // Get current time in local timezone
     const now = new Date();
@@ -1061,34 +1122,17 @@ const CreateBonds = () => {
     now.setMinutes(now.getMinutes() + ADDITIONAL_MINUTES_BUFFER);
     
     if (preset.minutes) {
-      // Handle testing preset with minute-based durations
+      // Start time (with buffer)
       const startDate = new Date(now);
       startDate.setMinutes(startDate.getMinutes() + preset.minutes.start);
       
-      const endDate = new Date(now);
-      endDate.setMinutes(endDate.getMinutes() + preset.minutes.end);
-      
-      const maturityDate = new Date(now);
-      maturityDate.setMinutes(maturityDate.getMinutes() + preset.minutes.maturity);
-      
-      setFormData(prev => ({
-        ...prev,
-        start_time: startDate.toLocaleDateString('en-CA'),
-        start_time_hour: startDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
-        end_time: endDate.toLocaleDateString('en-CA'),
-        end_time_hour: endDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
-        maturity_date: maturityDate.toLocaleDateString('en-CA'),
-        maturity_date_hour: maturityDate.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5),
-      }));
-    } else {
-      // Handle day-based presets
-      const startDate = new Date(now);
-      
+      // Purchase end time (start time + purchase duration)
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + preset.days);
+      endDate.setMinutes(endDate.getMinutes() + preset.minutes.purchaseDuration);
       
-      const maturityDate = new Date(endDate);
-      maturityDate.setHours(maturityDate.getHours() + 1);
+      // Maturity time (start time + total duration)
+      const maturityDate = new Date(startDate);
+      maturityDate.setMinutes(maturityDate.getMinutes() + preset.minutes.totalDuration);
       
       setFormData(prev => ({
         ...prev,
@@ -1601,7 +1645,9 @@ const CreateBonds = () => {
                   const amounts = calculateExpectedAmount(
                     formData.total_supply,
                     formData.price,
-                    formData.purchasing_denom
+                    formData.purchasing_denom,
+                    feeSplit,
+                    showAdvancedSettings
                   );
                   const symbol = tokenMappings[formData.purchasing_denom]?.symbol || formData.purchasing_denom;
                   
@@ -1685,8 +1731,8 @@ const CreateBonds = () => {
                                 fontSize: '0.875rem'
                               }}>
                                 {showUsdAmounts.fee 
-                                  ? formatUsd(feeUsd * ((100 - feeSplit) / 100))
-                                  : `${(parseFloat(amounts.fee) * ((100 - feeSplit) / 100)).toFixed(6)} ${symbol}`
+                                  ? formatUsd(parseFloat(amounts.makerFee) * purchasingTokenPrice)
+                                  : `${amounts.makerFee} ${symbol}`
                                 }
                               </div>
                             </div>
@@ -1699,8 +1745,8 @@ const CreateBonds = () => {
                                 fontSize: '0.875rem'
                               }}>
                                 {showUsdAmounts.fee 
-                                  ? formatUsd(feeUsd * (feeSplit / 100))
-                                  : `${(parseFloat(amounts.fee) * (feeSplit / 100)).toFixed(6)} ${symbol}`
+                                  ? formatUsd(parseFloat(amounts.takerFee) * purchasingTokenPrice)
+                                  : `${amounts.takerFee} ${symbol}`
                                 }
                               </div>
                             </div>
