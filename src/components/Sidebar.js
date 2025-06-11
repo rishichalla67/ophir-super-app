@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown, FaTelegram, FaTwitter, FaGithub, FaBook, FaTools } from 'react-icons/fa'; // Make sure to install react-icons
+import { FaBars, FaTimes, FaChevronDown, FaChevronUp, FaHome, FaChartBar, FaExchangeAlt, FaHandHoldingUsd, FaStore, FaHandshake, FaInfoCircle, FaChartLine, FaHistory, FaSearch, FaUserShield, FaCrown, FaTelegram, FaTwitter, FaGithub, FaBook, FaTools, FaServer, FaShieldAlt } from 'react-icons/fa'; // Make sure to install react-icons
 import { useSidebar } from '../context/SidebarContext';
 import { useWallet } from '../context/WalletContext';
 import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
@@ -112,20 +112,36 @@ const Sidebar = () => {
       path: '/wasmdev', 
       icon: <FaTools className="mr-2" size={16} /> 
     },
+    {
+      name: 'VALIDATOR',
+      icon: <FaHandshake className="mr-2" size={16} />,
+      subItems: [
+        { 
+          name: 'OphirDao Terra RPC', 
+          url: 'https://terra-rpc.ophirdao.com',
+          icon: <FaServer className="mr-2" size={14} />
+        },
+        { 
+          name: 'OphirDao Terra Validator', 
+          url: 'https://www.mintscan.io/terra/validators/terravaloper1swfpsl9ctturq2dgmngmtdyhdtsjny4z0j9fjv',
+          icon: <FaShieldAlt className="mr-2" size={14} />
+        }
+      ],
+    },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  const handleItemClick = (path) => {
-    if (path === '/about') {
-      window.open('https://x.com/Ophir_DAO', '_blank');
-      return;
-    }
-    
+  const handleItemClick = (item) => {
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
-    navigate(path);
+
+    if (item.url) {
+      window.open(item.url, '_blank');
+    } else if (item.path) {
+      navigate(item.path);
+    }
   };
 
   const toggleDropdown = (e, name) => {
@@ -206,7 +222,7 @@ const Sidebar = () => {
                         {item.subItems.map((subItem) => (
                           <li key={subItem.name} className="mb-1 sm:mb-2">
                             <button
-                              onClick={() => handleItemClick(subItem.path)}
+                              onClick={() => handleItemClick(subItem)}
                               className="button-sidebar pt-4 sm:text-xs hover:text-ophir-gold transition-colors duration-200 flex items-center justify-start w-full pl-6"
                             >
                               <span className="flex items-center">
@@ -225,7 +241,7 @@ const Sidebar = () => {
                 ) : (
                   <div className="pr-4">
                     <button
-                      onClick={() => handleItemClick(item.path)}
+                      onClick={() => handleItemClick(item)}
                       className="button-sidebar text-sm sm:text-base hover:text-ophir-gold flex items-center justify-start w-full"
                     >
                       <span className="flex items-center">
